@@ -26,6 +26,8 @@ jobs:
   build-and-test:
     name: Build & Test Node Microservice
     runs-on: ubuntu-latest
+    outputs:
+      has_gcp: ${{ steps.check-gcp.outputs.has_gcp }}
     defaults:
       run:
         working-directory: node
@@ -61,10 +63,21 @@ jobs:
         run: |
           docker build -t tomo-node:${{ github.sha }} -f Dockerfile .
 
+      - id: check-gcp
+        name: Check GCP Credentials
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -n "$GCP_SA_KEY" ]; then
+            echo "has_gcp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_gcp=false" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy-gcp:
     name: Deploy to GCP K3s
     needs: build-and-test
-    if: ${{ secrets.GCP_SA_KEY != '' && secrets.GCP_PROJECT_ID != '' }}
+    if: needs.build-and-test.outputs.has_gcp == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
