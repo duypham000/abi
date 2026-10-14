@@ -1,0 +1,17 @@
+.canvas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.canvas-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 40px 0;
+  text-align: center;
+  color: var(--text-muted, #71717a);
+  font-size: 0.9rem;
+}

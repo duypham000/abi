@@ -1,0 +1,150 @@
+.appbar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  width: 100%;
+  flex-shrink: 0;
+  user-select: none;
+  position: relative;
+  z-index: 50;
+
+  &--light {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e4e4e7;
+    color: #18181b;
+  }
+
+  &--dark {
+    background-color: #18181b;
+    border-bottom: 1px solid #3f3f46;
+    color: #fafafa;
+  }
+}
+
+.appbar-left {
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+  min-width: 48px;
+}
+
+.appbar-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.appbar-title {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
+.appbar-right {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.appbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+  }
+
+  .appbar--dark &:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 0 8px;
+}
+
+.appbar-offline-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f59e0b;
+  color: #ffffff;
+  letter-spacing: 0.03em;
+  margin-left: 8px;
+}
+
+// Window controls must stay visible at every width — a narrow DESKTOP window
+// (login, doc popup, …) is not mobile, so we never hide them by viewport width.
+// Safe-area padding (mobile notch / curved corners) is still applied; the vars
+// resolve to 0 on desktop.
+@media (max-width: 767px) {
+  .appbar {
+    height: calc(40px + var(--safe-top, 0px));
+    padding-top: var(--safe-top, 0px);
+  }
+
+  .appbar-left {
+    padding-left: calc(4px + var(--safe-left, 0px));
+  }
+
+  .appbar-right {
+    padding-right: var(--safe-right, 0px);
+  }
+}
+
+/* ── Traffic-light window controls ────────────────────────────────────────── */
+.window-btn {
+  /* Coloured dot */
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: filter 0.12s, transform 0.1s;
+
+  /* Icon hidden by default — revealed on group hover */
+  svg {
+    width: 6px;
+    height: 6px;
+    opacity: 0;
+    color: rgba(0, 0, 0, 0.55);
+    transition: opacity 0.12s;
+    pointer-events: none;
+    flex-shrink: 0;
+  }
+
+  /* Show all icons when cursor enters the control group */
+  .window-controls:hover & svg { opacity: 1; }
+
+  &:hover { filter: brightness(0.85); transform: scale(1.1); }
+  &:active { filter: brightness(0.7); transform: scale(0.95); }
+
+  /* Per-button colours (macOS palette) */
+  &--close    { background: #ff5f57; }
+  &--minimize { background: #febc2e; }
+  &--maximize { background: #28c840; }
+}

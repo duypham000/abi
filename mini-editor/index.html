@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Tomo</title>
+    <!--
+      The branded loading screen lives in a dedicated splash window (splash.html).
+      This entry serves the main window and every popup, which must NOT show a
+      loading screen. We only paint a neutral theme-matched background to avoid a
+      white flash during the few ms it takes MainGate to hydrate auth from the
+      local store; React replaces #root once it mounts.
+    -->
+    <script>
+      // The search overlay loads in its own transparent, frameless Tauri window.
+      // Tag it before first paint so the boot background stays see-through instead
+      // of flashing the opaque theme color the main window uses.
+      if (location.pathname.replace(/\/+$/, "") === "/search") {
+        document.documentElement.classList.add("win-search");
+      }
+    </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #ffffff;
+      }
+      #boot-bg {
+        position: fixed;
+        inset: 0;
+        background: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not(.force-light),
+        html:not(.force-light) body,
+        html:not(.force-light) #boot-bg {
+          background: #0b0f11;
+        }
+      }
+      /* The search window must composite its scrim over the live desktop. */
+      html.win-search,
+      html.win-search body,
+      html.win-search #boot-bg {
+        background: transparent !important;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root">
+      <div id="boot-bg" data-tauri-drag-region></div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

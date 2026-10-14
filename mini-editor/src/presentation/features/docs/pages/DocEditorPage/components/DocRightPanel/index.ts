@@ -1,0 +1,1 @@
+export { DocRightPanel } from "./DocRightPanel";

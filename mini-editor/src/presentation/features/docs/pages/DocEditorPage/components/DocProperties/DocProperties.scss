@@ -1,0 +1,170 @@
+.doc-properties {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+// ── Section header ────────────────────────────────────────────────────
+
+.doc-properties__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+}
+
+.doc-properties__header-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary, #18181b);
+
+  .theme-dark & {
+    color: #f4f4f5;
+  }
+}
+
+.doc-properties__header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, #71717a);
+  border-radius: 4px;
+  font-size: 11px;
+  transition: background-color 0.12s, color 0.12s;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--text-primary, #18181b);
+
+    .theme-dark & {
+      background: rgba(255, 255, 255, 0.08);
+      color: #f4f4f5;
+    }
+  }
+
+  // Rotate chevron when expanded
+  .rotated {
+    transform: rotate(180deg);
+  }
+}
+
+// ── Fixed properties collapse ─────────────────────────────────────────
+
+.doc-properties__fixed {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 600px;
+  transition: max-height 0.2s ease, opacity 0.15s ease;
+  opacity: 1;
+
+  &--collapsed {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+// ── Static value display ──────────────────────────────────────────────
+
+.doc-prop-date {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary, #18181b);
+
+  .theme-dark & {
+    color: #e4e4e7;
+  }
+}
+
+.doc-prop-text {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary, #18181b);
+
+  .theme-dark & {
+    color: #e4e4e7;
+  }
+}
+
+// ── Add property ─────────────────────────────────────────────────────
+
+.doc-properties__add-form {
+  padding: 4px 16px;
+}
+
+.doc-properties__add-input {
+  width: 100%;
+  font-size: 0.8125rem;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary, #18181b);
+  padding: 4px 6px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--accent, #6c6cff);
+
+  .theme-dark & {
+    color: #e4e4e7;
+  }
+
+  &::placeholder {
+    color: var(--text-muted, #a1a1aa);
+  }
+}
+
+.doc-properties__add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 16px;
+  background: transparent;
+  border: none;
+  font-size: 0.8125rem;
+  color: var(--text-muted, #71717a);
+  cursor: pointer;
+  transition: color 0.12s, background-color 0.12s;
+  text-align: left;
+
+  &:hover {
+    color: var(--text-primary, #18181b);
+    background: rgba(0, 0, 0, 0.03);
+
+    .theme-dark & {
+      color: #f4f4f5;
+      background: rgba(255, 255, 255, 0.04);
+    }
+  }
+}
+
+// ── Footer toggle ─────────────────────────────────────────────────────
+
+.doc-properties__toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 16px;
+  margin-top: 4px;
+  background: transparent;
+  border: none;
+  font-size: 0.8125rem;
+  color: var(--text-muted, #71717a);
+  cursor: pointer;
+  transition: color 0.12s;
+
+  &:hover {
+    color: var(--text-primary, #18181b);
+
+    .theme-dark & {
+      color: #f4f4f5;
+    }
+  }
+}

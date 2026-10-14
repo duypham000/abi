@@ -1,0 +1,55 @@
+/* WorkspaceStatusBar — VS Code-style 24 px strip */
+
+.workspace-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  flex-shrink: 0;
+  background: var(--gl-accent, #6c6cff);
+  color: #ffffff;
+  font-size: 11px;
+  padding: 0 8px;
+  user-select: none;
+}
+
+.wsb-left,
+.wsb-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wsb-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.9;
+  padding: 0 4px;
+  border-radius: 3px;
+
+  &--muted { opacity: 0.7; }
+}
+
+.wsb-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: background 0.1s;
+  outline: none;
+
+  &:hover { background: rgba(255, 255, 255, 0.15); }
+
+  &.is-active {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+  }
+}

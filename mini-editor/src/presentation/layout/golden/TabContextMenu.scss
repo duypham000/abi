@@ -1,0 +1,66 @@
+.tab-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 220px;
+  padding: 4px 0;
+  background: var(--gl-tab-active-bg, #ffffff);
+  border: 1px solid var(--gl-header-border, #d8d8d8);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  user-select: none;
+
+  /* dark theme picks up vars from .workspace-shell.theme-dark */
+  .workspace-shell.theme-dark & {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  &__item {
+    display: block;
+    width: 100%;
+    padding: 6px 16px;
+    text-align: left;
+    font-size: 12.5px;
+    font-family: inherit;
+    color: var(--gl-tab-active-fg, #1f1f1f);
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 0;
+    transition: background 0.08s;
+
+    &:hover:not(:disabled) {
+      background: var(--gl-tab-hover-bg, #e0e0e0);
+    }
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+
+    &--pin {
+      color: var(--gl-accent, #6c6cff);
+    }
+  }
+
+  &__sep {
+    height: 1px;
+    background: var(--gl-header-border, #d8d8d8);
+    margin: 4px 0;
+  }
+}
+
+/* Pinned tab styling */
+.lm_header .lm_tab.gl-tab--pinned {
+  padding-right: 14px;
+
+  &::after {
+    content: "📌";
+    font-size: 10px;
+    margin-left: 4px;
+    opacity: 0.75;
+  }
+
+  .lm_close_tab {
+    display: none !important;
+  }
+}

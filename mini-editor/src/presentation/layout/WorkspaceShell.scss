@@ -1,0 +1,112 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Design tokens — aligned to the app's existing palette
+   ───────────────────────────────────────────────────────────────────────── */
+.workspace-shell {
+  /* Shell */
+  --ws-bg:  #f4f4f5;
+  --ws-fg:  #18181b;
+
+  /* Activity bar */
+  --ab-bg:             #ffffff;
+  --ab-border:         #e4e4e7;
+  --ab-icon-fg:        #71717a;
+  --ab-icon-active-fg: #18181b;
+  --ab-active-ind:     #6c6cff;
+  --ab-hover-bg:       rgba(0, 0, 0, 0.05);
+  --ab-avatar-bg:      #6c6cff;
+
+  /* GL panel chrome */
+  --gl-header-bg:       #f0f0f0;
+  --gl-header-border:   #d8d8d8;
+  --gl-tab-inactive-bg: #ececec;
+  --gl-tab-hover-bg:    #e0e0e0;
+  --gl-tab-active-bg:   #ffffff;
+  --gl-tab-inactive-fg: #8c8c8c;
+  --gl-tab-active-fg:   #1f1f1f;
+  --gl-tab-active-line: #6c6cff;
+  --gl-content-bg:      #ffffff;
+  --gl-splitter:        #e4e4e7;
+  --gl-splitter-hover:  #6c6cff;
+  --gl-accent:          #6c6cff;
+  --gl-float-shadow:    0 4px 16px rgba(0, 0, 0, 0.08);
+  --gl-dropzone-bg:     rgba(108, 108, 255, 0.08);
+  --gl-dropzone-border: #6c6cff;
+
+  &.theme-dark {
+    --ws-bg:  #18181b;
+    --ws-fg:  #fafafa;
+
+    --ab-bg:             #27272a;
+    --ab-border:         #3f3f46;
+    --ab-icon-fg:        #a1a1aa;
+    --ab-icon-active-fg: #fafafa;
+    --ab-active-ind:     #818cf8;
+    --ab-hover-bg:       rgba(255, 255, 255, 0.08);
+    --ab-avatar-bg:      #818cf8;
+
+    --gl-header-bg:       #252526;
+    --gl-header-border:   #3c3c3c;
+    --gl-tab-inactive-bg: #2d2d2d;
+    --gl-tab-hover-bg:    #2a2d2e;
+    --gl-tab-active-bg:   #1e1e1e;
+    --gl-tab-inactive-fg: rgba(255, 255, 255, 0.4);
+    --gl-tab-active-fg:   #ffffff;
+    --gl-tab-active-line: #818cf8;
+    --gl-content-bg:      #18181b;
+    --gl-splitter:        #3f3f46;
+    --gl-splitter-hover:  #818cf8;
+    --gl-accent:          #818cf8;
+    --gl-float-shadow:    0 8px 32px rgba(0, 0, 0, 0.50);
+    --gl-dropzone-bg:     rgba(129, 140, 248, 0.15);
+    --gl-dropzone-border: #818cf8;
+  }
+}
+
+/* ── Shell layout ─────────────────────────────────────────────────────────── */
+.workspace-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;   /* lock the shell — no page-level scroll */
+  background: var(--ws-bg);
+  color: var(--ws-fg);
+  font-family: inherit;
+}
+
+/* Explicit slot order so flex never reorders these */
+.workspace-shell > .appbar              { order: 0; flex-shrink: 0; }
+.workspace-shell > .workspace-body      { order: 1; }
+.workspace-shell > .workspace-statusbar { order: 2; flex-shrink: 0; }
+
+/* ── Horizontal body row ──────────────────────────────────────────────────── */
+.workspace-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 0%;         /* grow to fill, shrink if needed, base 0 so status bar always wins */
+  min-height: 0;        /* lets children shrink below content size */
+  overflow: hidden;
+}
+
+/* ── Main editor column (GL + bottom panel) ───────────────────────────────── */
+.workspace-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── GL host ──────────────────────────────────────────────────────────────── */
+.gl-host {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  /* GL renders absolutely-positioned children inside here.
+     contain:strict tells the browser this box is both a containing block
+     and a clipping boundary, so GL pixels never bleed into the status bar. */
+  position: relative;
+  overflow: hidden;
+  contain: strict;
+}

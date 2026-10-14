@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Tomo</title>
+    <!--
+      Dedicated auth entry (login/register/verify) — separate from the main app.
+      The window is created hidden and revealed via `coord_ready` after first
+      paint, so a neutral background is enough (no white flash).
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #74b9ff;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #0b0f11;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="login-root"></div>
+    <script type="module" src="/src/login/login.tsx"></script>
+  </body>
+</html>

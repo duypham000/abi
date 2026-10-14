@@ -1,0 +1,263 @@
+.doc-editor-toolbar {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 16px;
+  gap: 4px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color, #e4e4e7);
+  background: var(--card-bg, #ffffff);
+}
+
+.doc-editor-toolbar-icon {
+  font-size: 16px;
+  color: var(--text-muted, #71717a);
+  flex-shrink: 0;
+}
+
+.doc-editor-toolbar-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  padding: 0 6px !important;
+  height: 32px !important;
+
+  input {
+    font-size: 0.9375rem !important;
+    font-weight: 600 !important;
+  }
+}
+
+.doc-editor-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  border-radius: 6px;
+  transition: background-color 0.12s ease;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+  }
+
+  .theme-dark &:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+
+    &:hover {
+      background: transparent;
+    }
+  }
+
+  &--active {
+    background-color: rgba(108, 108, 255, 0.12);
+    color: var(--accent, #6c6cff);
+
+    .theme-dark & {
+      background-color: rgba(108, 108, 255, 0.2);
+    }
+  }
+}
+
+.toolbar-btn-icon {
+  font-size: 16px;
+
+  &--starred {
+    color: var(--accent, #6c6cff);
+  }
+}
+
+// Settings popover panel
+.editor-settings-panel {
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.editor-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-settings-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted, #71717a);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.editor-settings-radio-group {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 4px;
+
+  .ant-radio-button-wrapper {
+    border-radius: 6px !important;
+    font-size: 0.8125rem;
+    height: 30px;
+    line-height: 28px;
+    padding: 0 10px;
+
+    &::before {
+      display: none !important;
+    }
+  }
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-color, #e4e4e7);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+@keyframes statusSlideIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+@keyframes statusSlideOut {
+  from { opacity: 1; transform: translateY(0)    scale(1);    }
+  to   { opacity: 0; transform: translateY(-6px) scale(0.95); }
+}
+
+@keyframes statusPop {
+  0%   { transform: scale(1);    }
+  40%  { transform: scale(1.08); }
+  100% { transform: scale(1);    }
+}
+
+.toolbar-draft-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f59e0b22;
+  color: #d97706;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.toolbar-autosave {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: var(--text-muted, #71717a);
+  white-space: nowrap;
+  padding: 0 6px;
+  flex-shrink: 0;
+
+  &--in {
+    animation: statusSlideIn 0.15s ease forwards;
+  }
+
+  &--active {
+    // pop when switching from saving → success/error
+    animation: statusPop 0.2s ease;
+  }
+
+  &--out {
+    animation: statusSlideOut 0.2s ease forwards;
+  }
+
+  &--success {
+    color: #16a34a;
+  }
+
+  &--error {
+    color: #dc2626;
+  }
+
+  &--clickable {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: inherit;
+    font-family: inherit;
+    padding: 0 6px;
+    border-radius: 6px;
+
+    &:hover {
+      background: rgba(220, 38, 38, 0.08);
+    }
+  }
+}
+
+.toolbar-save-btn {
+  position: relative;
+
+  &--dirty {
+    color: #f97316;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+
+    &:hover {
+      background: transparent;
+    }
+  }
+
+  &__dot {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #f97316;
+    pointer-events: none;
+  }
+}
+
+.editor-settings-autosave-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-settings-autosave-label {
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #52525b);
+}
+
+// Global popover override — keep it compact
+.editor-settings-popover {
+  .ant-popover-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color, #e4e4e7);
+    margin-bottom: 4px;
+  }
+
+  .ant-popover-inner {
+    padding: 14px 16px;
+  }
+}

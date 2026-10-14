@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": true,
+    // Pass the proven yjs .js modules through to dist/ untouched — no rewrite to
+    // TypeScript, no type-checking of their JSDoc. New code (translate, api) is .ts.
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["src/**/*"]
+}

@@ -1,0 +1,450 @@
+/* AFFiNE-style code block — custom BlockNote spec
+   Header (language select, Code/Preview tabs, Copy, Ask AI, more menu),
+   line-number gutter, shiki overlay highlighting, light/dark theme. */
+
+:root {
+  --affine-background-primary-color: #ffffff;
+  --affine-background-code-block: #f7f8fa;
+  --affine-code-border: rgba(15, 23, 42, 0.06);
+  --affine-code-header-bg: rgba(255, 255, 255, 0.6);
+  --affine-font-code-family: "JetBrains Mono", "Fira Code", "Cascadia Code",
+    "Consolas", monospace;
+  --affine-line-height: 1.6;
+  --affine-text-primary: #1f2328;
+  --affine-text-secondary: #6b7280;
+  --affine-text-tertiary: #9ca3af;
+  --affine-code-hover-bg: rgba(15, 23, 42, 0.06);
+  --affine-code-popover-bg: #ffffff;
+  --affine-code-popover-border: rgba(15, 23, 42, 0.08);
+  --affine-code-popover-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  --affine-code-scrollbar-color: #cbd5e1;
+  --affine-ask-ai-color: #7c3aed;
+  --affine-danger-color: #dc2626;
+  --affine-accent: #2563eb;
+}
+
+[data-theme="dark"],
+.theme-dark,
+[data-color-scheme="dark"] {
+  --affine-background-primary-color: #1e1f24;
+  --affine-background-code-block: #1e1f24;
+  --affine-code-border: rgba(255, 255, 255, 0.08);
+  --affine-code-header-bg: rgba(255, 255, 255, 0.02);
+  --affine-text-primary: #e5e7eb;
+  --affine-text-secondary: #9ca3af;
+  --affine-text-tertiary: #6b7280;
+  --affine-code-hover-bg: rgba(255, 255, 255, 0.06);
+  --affine-code-popover-bg: #2a2b32;
+  --affine-code-popover-border: rgba(255, 255, 255, 0.08);
+  --affine-code-popover-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --affine-code-scrollbar-color: #4b5563;
+  --affine-ask-ai-color: #a78bfa;
+  --affine-danger-color: #f87171;
+  --affine-accent: #60a5fa;
+}
+
+/* Root wrapper */
+.cbx-root {
+  position: relative;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--affine-background-code-block);
+  overflow: hidden;
+  font-family: var(--affine-font-code-family);
+  transition: border-color 0.15s;
+}
+.cbx-root:hover,
+.cbx-root--active { border-color: var(--affine-code-border); }
+
+/* Reset BlockNote core's default codeBlock wrapper styling.
+   BlockNote core/src/editor/Block.css:408 paints this element with
+   background:#161616, color:white, border-radius:8px, and applies
+   padding:24px to the inner <pre>. We render our own .cbx-root so the
+   outer wrapper must be fully transparent and flush. */
+.bn-block-content[data-content-type="codeBlock"] {
+  background-color: transparent !important;
+  color: inherit !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+.bn-block-content[data-content-type="codeBlock"] > pre,
+.bn-block-content[data-content-type="codeBlock"] > div {
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+}
+.bn-block-content[data-content-type="codeBlock"] > div > select {
+  display: none !important;
+}
+
+/* Header */
+.cbx-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 6px 10px;
+  border-bottom: 1px solid var(--affine-code-border);
+  background: var(--affine-code-header-bg);
+  font-size: 12px;
+  color: var(--affine-text-secondary);
+  user-select: none;
+}
+.cbx-spacer { flex: 1; }
+
+/* Generic buttons */
+.cbx-btn,
+.cbx-icon-btn,
+.cbx-lang-btn,
+.cbx-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--affine-text-secondary);
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+}
+.cbx-btn:hover,
+.cbx-icon-btn:hover,
+.cbx-lang-btn:hover { background: var(--affine-code-hover-bg); color: var(--affine-text-primary); }
+.cbx-icon-btn { padding: 4px; }
+.cbx-icon-btn--active { color: var(--affine-text-primary); background: var(--affine-code-hover-bg); }
+.cbx-ask-ai { color: var(--affine-ask-ai-color); }
+.cbx-ask-ai:hover { color: var(--affine-ask-ai-color); background: rgba(124, 58, 237, 0.08); }
+
+/* Hide header action buttons until the block is hovered or a popover/menu is open.
+   The language label and Mermaid Code/Preview tabs stay visible at all times. */
+.cbx-header > .cbx-btn,
+.cbx-header > .cbx-icon-btn,
+.cbx-header > .cbx-more > .cbx-icon-btn {
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+.cbx-root:hover .cbx-header > .cbx-btn,
+.cbx-root:hover .cbx-header > .cbx-icon-btn,
+.cbx-root:hover .cbx-header > .cbx-more > .cbx-icon-btn,
+.cbx-root--active .cbx-header > .cbx-btn,
+.cbx-root--active .cbx-header > .cbx-icon-btn,
+.cbx-root--active .cbx-header > .cbx-more > .cbx-icon-btn,
+.cbx-header > .cbx-btn:focus-visible,
+.cbx-header > .cbx-icon-btn:focus-visible,
+.cbx-header > .cbx-more > .cbx-icon-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Language select.
+   Popover is portaled to <body> with position:fixed (JS supplies top/left/width
+   /maxHeight) so it escapes .cbx-root's `overflow: hidden` and is never clipped
+   on short code blocks. */
+.cbx-lang { position: relative; }
+.cbx-lang-btn { font-weight: 500; }
+.cbx-lang-popover {
+  position: fixed;
+  z-index: 50;
+  width: 220px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--affine-code-popover-bg);
+  border: 1px solid var(--affine-code-popover-border);
+  border-radius: 8px;
+  box-shadow: var(--affine-code-popover-shadow);
+  overflow: hidden;
+}
+.cbx-lang-search {
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 1px solid var(--affine-code-border);
+  background: transparent;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--affine-text-primary);
+  outline: none;
+}
+.cbx-lang-list { overflow-y: auto; padding: 4px; }
+.cbx-lang-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--affine-text-primary);
+  cursor: pointer;
+}
+.cbx-lang-item:hover { background: var(--affine-code-hover-bg); }
+.cbx-lang-item--active { background: var(--affine-code-hover-bg); font-weight: 600; }
+.cbx-lang-empty { padding: 12px; text-align: center; color: var(--affine-text-tertiary); font-size: 12px; }
+
+/* Tabs (Code / Preview) */
+.cbx-tabs {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--affine-code-hover-bg);
+}
+.cbx-tab { padding: 3px 10px; border-radius: 4px; }
+.cbx-tab--active {
+  background: var(--affine-code-popover-bg);
+  color: var(--affine-text-primary);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+/* More menu — portaled to <body>, position:fixed supplied by JS (see .cbx-lang-popover). */
+.cbx-more { position: relative; }
+.cbx-more-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 180px;
+  padding: 4px;
+  overflow-y: auto;
+  background: var(--affine-code-popover-bg);
+  border: 1px solid var(--affine-code-popover-border);
+  border-radius: 8px;
+  box-shadow: var(--affine-code-popover-shadow);
+}
+.cbx-more-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--affine-text-primary);
+  cursor: pointer;
+}
+.cbx-more-item:hover { background: var(--affine-code-hover-bg); }
+.cbx-more-item--danger { color: var(--affine-danger-color); }
+.cbx-more-sep { height: 1px; margin: 4px 6px; background: var(--affine-code-border); }
+
+/* Body */
+.cbx-body {
+  display: flex;
+  position: relative;
+  font-family: var(--affine-font-code-family);
+  font-size: 13px;
+  line-height: var(--affine-line-height);
+  color: var(--affine-text-primary);
+}
+
+/* Line gutter */
+.cbx-gutter {
+  flex: 0 0 auto;
+  padding: 14px 8px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  user-select: none;
+  color: var(--affine-text-tertiary);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.cbx-gutter > span { display: block; }
+
+/* Code area */
+.cbx-pre {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  background: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--affine-code-scrollbar-color) transparent;
+}
+.cbx-pre::-webkit-scrollbar { height: 6px; }
+.cbx-pre::-webkit-scrollbar-thumb {
+  background: var(--affine-code-scrollbar-color);
+  border-radius: 3px;
+}
+
+.cbx-overlay {
+  position: absolute;
+  inset: 14px 16px auto 16px;
+  pointer-events: none;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre;
+}
+.cbx-overlay pre,
+.cbx-overlay code {
+  background: transparent !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  white-space: pre !important;
+}
+.cbx-overlay .shiki,
+.cbx-overlay .shiki span {
+  background: transparent !important;
+}
+
+/* InlineContent (editable text, transparent over the overlay) */
+.cbx-inline-content {
+  position: relative;
+  display: block;
+  white-space: pre;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: transparent;
+  caret-color: var(--affine-text-primary);
+  outline: none;
+  background: transparent;
+}
+.cbx-inline-content::selection { background: rgba(37, 99, 235, 0.25); color: transparent; }
+.cbx-inline-content *::selection { background: rgba(37, 99, 235, 0.25); color: transparent; }
+
+/* Wrap mode */
+.cbx-root[data-wrap="true"] .cbx-pre,
+.cbx-root[data-wrap="true"] .cbx-overlay,
+.cbx-root[data-wrap="true"] .cbx-overlay pre,
+.cbx-root[data-wrap="true"] .cbx-overlay code,
+.cbx-root[data-wrap="true"] .cbx-inline-content {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Collapsed mode — gradient fade */
+.cbx-root[data-collapsed="true"] .cbx-body {
+  max-height: calc(8 * var(--affine-line-height) * 1em + 28px);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}
+
+/* Mermaid preview */
+.cbx-mermaid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--affine-background-code-block);
+  padding: 12px 16px 4px;
+}
+.cbx-mermaid-viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: var(--affine-background-primary-color, #fff);
+  border: 1px solid var(--affine-border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 8px;
+}
+.cbx-mermaid-svg {
+  display: inline-block;
+}
+.cbx-mermaid-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--affine-border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 6px;
+  padding: 2px;
+  backdrop-filter: blur(6px);
+}
+[data-theme="dark"] .cbx-mermaid-controls,
+.theme-dark .cbx-mermaid-controls,
+[data-color-scheme="dark"] .cbx-mermaid-controls {
+  background: rgba(40, 40, 40, 0.85);
+}
+.cbx-mermaid-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--affine-text-primary);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+.cbx-mermaid-ctrl-btn:hover {
+  background: var(--affine-hover-color, rgba(0, 0, 0, 0.06));
+}
+.cbx-mermaid-resize {
+  height: 8px;
+  margin-top: 4px;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.cbx-mermaid-resize::after {
+  content: "";
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--affine-border-color, rgba(0, 0, 0, 0.18));
+}
+.cbx-mermaid-resize:hover::after {
+  background: var(--affine-text-secondary, rgba(0, 0, 0, 0.4));
+}
+.cbx-mermaid-error {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 6px;
+  color: var(--affine-danger-color);
+  font-size: 12px;
+  font-family: var(--affine-font-code-family);
+  white-space: pre-wrap;
+  width: 100%;
+}
+
+/* Caption */
+.cbx-caption {
+  padding: 6px 16px 10px;
+  display: flex;
+  justify-content: center;
+}
+.cbx-caption-input {
+  width: 100%;
+  max-width: 80%;
+  border: none;
+  outline: none;
+  background: transparent;
+  text-align: center;
+  font-family: inherit;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--affine-text-secondary);
+}
+.cbx-caption-input::placeholder { color: var(--affine-text-tertiary); }

@@ -1,0 +1,254 @@
+/* Custom inputs styling */
+.figma-input,
+.figma-input.ant-input,
+.figma-input.ant-input-affix-wrapper {
+  height: 48px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  border: 1px solid #ececed;
+  padding: 12px 16px;
+  font-size: 16px;
+  line-height: 24px;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  box-shadow: none !important;
+}
+
+/* Ensure the wrapper inputs are transparent and borderless */
+.figma-input.ant-input-affix-wrapper > input.ant-input {
+  background-color: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  height: auto !important;
+  font-size: 16px !important;
+  color: inherit !important;
+}
+
+.figma-input::placeholder {
+  color: #a0a0a5;
+}
+
+.figma-input:hover,
+.figma-input.ant-input:hover,
+.figma-input.ant-input-affix-wrapper:hover {
+  border-color: #c5c5c7 !important;
+}
+
+.figma-input:focus,
+.figma-input.ant-input:focus,
+.figma-input.ant-input-affix-wrapper-focused,
+.figma-input.ant-input-affix-wrapper:focus {
+  border-color: #c5c5c7 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.figma-input.error,
+.figma-input.ant-input.error,
+.figma-input.ant-input-affix-wrapper.error,
+.figma-input.ant-input-status-error {
+  border-color: #ef4444 !important;
+}
+
+.figma-input.error:focus,
+.figma-input.ant-input.error:focus,
+.figma-input.ant-input-affix-wrapper.error:focus,
+.figma-input.ant-input-status-error:focus,
+.figma-input.ant-input-status-error-focused {
+  border-color: #ef4444 !important;
+  box-shadow: none !important;
+}
+
+/* Antd input eye toggle button color */
+.figma-input .ant-input-password-icon {
+  color: #a0a0a5;
+  transition: color 0.15s ease-in-out;
+}
+.figma-input .ant-input-password-icon:hover {
+  color: #636369;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.force-light) {
+    .figma-input,
+    .figma-input.ant-input,
+    .figma-input.ant-input-affix-wrapper {
+      background-color: #192023 !important;
+      border-color: #2e3b40 !important;
+      color: #f3f4f6 !important;
+    }
+    .figma-input:hover,
+    .figma-input.ant-input:hover,
+    .figma-input.ant-input-affix-wrapper:hover {
+      border-color: #4a5c64 !important;
+    }
+    .figma-input:focus,
+    .figma-input.ant-input:focus,
+    .figma-input.ant-input-affix-wrapper-focused,
+    .figma-input.ant-input-affix-wrapper:focus {
+      border-color: #889ba4 !important;
+    }
+    .figma-input.error,
+    .figma-input.ant-input.error,
+    .figma-input.ant-input-affix-wrapper.error,
+    .figma-input.ant-input-status-error {
+      border-color: #ef4444 !important;
+    }
+    .figma-input .ant-input-password-icon {
+      color: #889ba4 !important;
+    }
+  }
+}
+
+/* Disabled/Read-only Figma Input wrapper */
+.figma-input-readonly {
+  height: 48px;
+  border-radius: 12px;
+  background-color: #f5f5f5;
+  border: 1px solid #ececed;
+  padding: 12px 16px;
+  font-size: 16px;
+  line-height: 24px;
+  color: #a0a0a5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.force-light) .figma-input-readonly {
+    background-color: #192023;
+    border-color: #2e3b40;
+    color: #636369;
+  }
+}
+
+/* Custom button styles */
+.figma-btn-primary {
+  height: 48px;
+  border-radius: 12px;
+  background-color: #3c3c43;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+  border: none;
+  width: 100%;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.figma-btn-primary:hover:not(:disabled) {
+  background-color: #2c2c30;
+}
+
+.figma-btn-primary:active:not(:disabled) {
+  background-color: #1c1c1f;
+}
+
+.figma-btn-primary:disabled {
+  background-color: #c5c5c7;
+  color: #ffffff;
+  cursor: not-allowed;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.force-light) {
+    .figma-btn-primary {
+      background-color: #e5e7eb;
+      color: #111827;
+    }
+    .figma-btn-primary:hover:not(:disabled) {
+      background-color: #f3f4f6;
+    }
+    .figma-btn-primary:disabled {
+      background-color: #2e3b40;
+      color: #636369;
+    }
+  }
+}
+
+/* Social Buttons */
+.figma-btn-social {
+  height: 48px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  border: 1px solid #ececed;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+  width: 100%;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.figma-btn-social:hover {
+  background-color: #fafafa;
+  border-color: #c5c5c7;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.force-light) {
+    .figma-btn-social {
+      background-color: #192023;
+      border-color: #2e3b40;
+      color: #f3f4f6;
+    }
+    .figma-btn-social:hover {
+      background-color: #222b2e;
+      border-color: #4a5c64;
+    }
+  }
+}
+
+/* Custom Checkbox override */
+.figma-checkbox-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.figma-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid #c5c5c7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.figma-checkbox.checked {
+  background-color: #3c3c43;
+  border-color: #3c3c43;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.force-light) {
+    .figma-checkbox {
+      border-color: #2e3b40;
+    }
+    .figma-checkbox.checked {
+      background-color: #e5e7eb;
+      border-color: #e5e7eb;
+    }
+  }
+}

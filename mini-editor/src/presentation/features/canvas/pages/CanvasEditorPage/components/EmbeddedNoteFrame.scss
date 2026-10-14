@@ -1,0 +1,40 @@
+.embedded-note-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px 12px;
+
+  &--loading {
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted, #71717a);
+    font-size: 0.875rem;
+  }
+}
+
+.embedded-note-frame__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted, #71717a);
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.embedded-note-frame__textarea {
+  flex: 1;
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  font-family: inherit;
+  background: transparent;
+  color: var(--text-primary, #18181b);
+
+  &::placeholder {
+    color: var(--text-muted, #71717a);
+  }
+}

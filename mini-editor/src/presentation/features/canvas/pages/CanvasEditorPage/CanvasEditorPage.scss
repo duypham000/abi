@@ -1,0 +1,204 @@
+.canvas-editor-page-container {
+  container-type: inline-size;
+  height: 100%;
+  width: 100%;
+}
+
+.canvas-editor-main {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.canvas-editor-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted, #71717a);
+}
+
+.canvas-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color, #e4e4e7);
+  background: var(--card-bg, #ffffff);
+  flex-shrink: 0;
+}
+
+.canvas-editor-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.canvas-editor-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.canvas-editor-save-status {
+  font-size: 0.75rem;
+  color: var(--text-muted, #71717a);
+  min-width: 60px;
+  text-align: right;
+}
+
+.canvas-editor-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+
+  .excalidraw {
+    width: 100%;
+    height: 100%;
+  }
+
+  .excalidraw .excalidraw-hyperlinkContainer {
+    display: none !important;
+  }
+
+  &.is-alt-pass-through .embedded-frame-chrome {
+    pointer-events: none;
+  }
+}
+
+.tomo-toolbar {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--island-bg-color, #fff);
+  border-radius: var(--border-radius-lg, 8px);
+  box-shadow: var(--shadow-island, 0 1px 4px rgba(0, 0, 0, 0.12));
+
+  &__btn {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--icon-fill-color, #1b1b1f);
+    border-radius: var(--border-radius-lg, 8px);
+    cursor: pointer;
+    transition: background-color 0.12s ease, color 0.12s ease;
+
+    &:hover {
+      background: var(--button-hover-bg, #e9ecef);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary, #6965db);
+      outline-offset: 1px;
+    }
+
+    &--active,
+    &--active:hover {
+      background: var(--color-primary-light, #ebebff);
+      color: var(--color-primary, #6965db);
+    }
+  }
+
+  &__icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  &__shortcut {
+    position: absolute;
+    right: 4px;
+    bottom: 2px;
+    font-size: 8px;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--keybinding-color, #868e96);
+    pointer-events: none;
+  }
+}
+
+/* --- Mobile / Touch optimizations --- */
+.canvas-editor-container {
+  &.is-navigate-active {
+    .embedded-frame-chrome {
+      pointer-events: none !important;
+    }
+  }
+}
+
+.canvas-editor-main {
+  @container (max-width: 767px) {
+    padding: 0 !important;
+  }
+}
+
+@container (max-width: 767px) {
+  .canvas-editor-header {
+    padding: 6px 12px;
+    height: 36px;
+
+    .canvas-editor-title {
+      font-size: 0.875rem;
+    }
+    .canvas-editor-save-status {
+      font-size: 0.7rem;
+    }
+  }
+}
+
+.canvas-mobile-mode-toggle {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 9999px;
+  padding: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  gap: 4px;
+
+  .theme-dark & {
+    background: rgba(39, 39, 42, 0.85);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .toggle-btn {
+    border: none;
+    background: transparent;
+    padding: 8px 16px;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-muted, #71717a);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &:hover {
+      color: var(--text-primary, #18181b);
+      .theme-dark & {
+        color: #fafafa;
+      }
+    }
+
+    &.active {
+      background: var(--color-primary, #6965db);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(105, 101, 219, 0.4);
+    }
+  }
+}

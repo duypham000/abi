@@ -1,0 +1,62 @@
+.doc-popup-layout {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: #ffffff;
+
+  @media (prefers-color-scheme: dark) {
+    background: #18181b;
+    color: #fafafa;
+  }
+
+  &--mini {
+    height: 40px;
+  }
+}
+
+.doc-popup-body {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: row;
+
+  // Force editor to use full available width (no page centering)
+  --doc-editor-max-width: 100%;
+
+  // Compact padding for small window
+  .doc-editor-body {
+    padding: 12px 0;
+
+    .bn-editor {
+      padding: 0 12px;
+    }
+  }
+}
+
+.doc-popup-editor-area {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #ffffff;
+
+  @media (prefers-color-scheme: dark) {
+    background: #18181b;
+  }
+}
+
+
+.doc-popup-loading {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}

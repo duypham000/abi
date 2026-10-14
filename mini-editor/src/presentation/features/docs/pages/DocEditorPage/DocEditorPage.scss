@@ -1,0 +1,40 @@
+.doc-editor-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.doc-editor-content {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  position: relative;
+}
+
+.doc-editor-editor-area {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+
+  .theme-dark & {
+    background: var(--card-bg, #18181b);
+  }
+}
+
+.doc-editor-saving {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 10;
+  font-size: 0.75rem;
+  color: var(--text-muted, #71717a);
+  background: var(--card-bg, #ffffff);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color, #e4e4e7);
+  pointer-events: none;
+}

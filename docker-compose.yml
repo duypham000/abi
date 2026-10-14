@@ -1,0 +1,88 @@
+services:
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: tomo-postgres-db
+    environment:
+      POSTGRES_USER: tomo_user
+      POSTGRES_PASSWORD: tomo_password
+      POSTGRES_DB: tomo_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tomo_user -d tomo_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  redis-db:
+    image: redis:7-alpine
+    container_name: tomo-redis-db
+    restart: always
+
+  go-backend:
+    build:
+      context: ./go
+      dockerfile: Dockerfile
+    container_name: tomo-backend-app
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_ENV=production
+      - SERVER_PORT=8080
+      - DB_DRIVER=postgres
+      - DB_DSN=host=postgres-db user=tomo_user password=tomo_password dbname=tomo_db port=5432 sslmode=disable TimeZone=UTC
+      - JWT_SECRET=docker-production-jwt-secret-key-32chars
+      - YJS_SECRET=tomo-local-dev-yjs-token-secret-2026
+      - CORS_ALLOWED_ORIGINS=*
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    restart: always
+
+  node-api:
+    build:
+      context: ./node
+      dockerfile: Dockerfile
+    container_name: tomo-node-api
+    ports:
+      - "8006:8006"
+    environment:
+      - YHUB_ROLE=api
+      - PORT=8006
+      - OTEL_SDK_DISABLED=true
+      - CORS_ORIGIN=*
+      - DEFAULT_SOURCE_LANG=en
+      - DEFAULT_TARGET_LANG=vi
+      - AUTH_PERM_CALLBACK=http://go-backend:8080/api/v1/yjs/auth/perm
+      - YJS_JAVA_BASE_URL=http://go-backend:8080/api/v1
+    depends_on:
+      - go-backend
+    restart: always
+
+  node-yjs:
+    build:
+      context: ./node
+      dockerfile: Dockerfile
+    container_name: tomo-node-yjs
+    ports:
+      - "1234:1234"
+    environment:
+      - YHUB_ROLE=server
+      - PORT=1234
+      - OTEL_SDK_DISABLED=true
+      - REDIS=redis://redis-db:6379
+      - REDIS_PREFIX=yhub
+      - AUTH_PERM_CALLBACK=http://go-backend:8080/api/v1/yjs/auth/perm
+      - YJS_JAVA_BASE_URL=http://go-backend:8080/api/v1
+      - YJS_SERVICE_SHARED_SECRET=tomo-local-dev-yjs-token-secret-2026
+      - AUTH_PUBLIC_KEY={"kty":"EC","x":"aUfgT3waVAQ-qprg-mzNcGIjXGc6808bgnIPeGQBAbcLInPgVaYCTFo2OB1yBmv_","y":"5gv7QwZ_D8AGw8Je0Gay8zDZhBux7oDocND2cCN4H9Z77Vdr1G2ANM98x0bO7um5","crv":"P-384","key_ops":["verify"]}
+    depends_on:
+      - go-backend
+      - redis-db
+    restart: always
+
+volumes:
+  postgres_data:

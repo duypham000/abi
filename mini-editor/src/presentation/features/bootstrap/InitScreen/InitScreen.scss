@@ -1,0 +1,174 @@
+$accent: #6c6cff;
+
+.init-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  color: #0f0f0f;
+  user-select: none;
+  // Never scroll: the splash window is sized to fit; clip any overflow so the
+  // app bar / close button can't be pushed off-screen or overlapped.
+  overflow: hidden;
+
+  @media (prefers-color-scheme: dark) {
+    background: #0b0f11;
+    color: #f6f6f6;
+  }
+
+  // ---- app bar (drag region + close-to-tray) ----
+  &__titlebar {
+    position: relative;
+    z-index: 1; // stay above the centered body so the close button is always clickable
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    height: 40px;
+    padding: 0 6px;
+    flex-shrink: 0;
+  }
+
+  &__close {
+    width: 36px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #71717a;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: #e81123;
+      color: #ffffff;
+    }
+  }
+
+  // ---- centered content ----
+  &__body {
+    flex: 1;
+    min-height: 0; // allow the flex child to shrink instead of overflowing the bar
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    padding: 24px 24px 40px;
+  }
+
+  &__brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__logo {
+    width: 56px;
+    height: auto;
+    filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.12));
+  }
+
+  &__name {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  &__status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  &__step {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-muted, #71717a);
+
+    @media (prefers-color-scheme: dark) {
+      color: #a1a1aa;
+    }
+  }
+
+  // ---- rotating tips ----
+  &__tip {
+    min-height: 20px;
+    max-width: 360px;
+    text-align: center;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #8a8a93;
+
+    @media (prefers-color-scheme: dark) {
+      color: #8b8b94;
+    }
+  }
+
+  &__tip-text {
+    display: inline-block;
+    animation: init-tip-in 0.45s ease-out both;
+  }
+
+  &__tip-label {
+    display: inline-block;
+    margin-right: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: $accent;
+    background: color-mix(in srgb, #{$accent} 14%, transparent);
+  }
+
+  // ---- error state ----
+  &__error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+    max-width: 360px;
+  }
+
+  &__error-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+
+  &__error-desc {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    color: #8a8a93;
+
+    @media (prefers-color-scheme: dark) {
+      color: #8b8b94;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+  }
+}
+
+@keyframes init-tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

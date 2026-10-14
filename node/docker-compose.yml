@@ -1,0 +1,16 @@
+services:
+  node-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tomo-node-api
+    ports:
+      - "8006:8006"
+    environment:
+      - YHUB_ROLE=api
+      - PORT=8006
+      - OTEL_SDK_DISABLED=true
+      - CORS_ORIGIN=*
+      - DEFAULT_SOURCE_LANG=en
+      - DEFAULT_TARGET_LANG=vi
+    restart: always

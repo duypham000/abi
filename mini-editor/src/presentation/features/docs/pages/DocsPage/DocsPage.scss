@@ -1,0 +1,112 @@
+.docs-page-content {
+  max-width: 1200px;
+}
+
+.docs-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.docs-page-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.docs-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.docs-page-search {
+  margin-bottom: 16px;
+
+  &__input {
+    width: 100%;
+    max-width: 400px;
+    padding: 8px 12px;
+    border: 1px solid #d4d4d8;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: #fff;
+    color: #18181b;
+    outline: none;
+    box-sizing: border-box;
+
+    &::placeholder {
+      color: #a1a1aa;
+    }
+
+    &:focus {
+      border-color: #6c6cff;
+    }
+  }
+}
+
+.docs-new-btn {
+  padding: 8px 16px;
+  background: #6c6cff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: #5555dd;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.docs-import-btn {
+  padding: 8px 16px;
+  background: transparent;
+  color: #6c6cff;
+  border: 1px solid #6c6cff;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: #6c6cff;
+    color: #fff;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.docs-reindex-btn {
+  padding: 8px 16px;
+  background: transparent;
+  color: #71717a;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    color: #18181b;
+    border-color: #a1a1aa;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}

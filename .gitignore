@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build and distribution
+dist/
+dist-ssr/
+build/
+target/
+mini-editor/src-tauri/target/
+mini-editor/src-tauri/gen/schemas/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Environment files
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# IDE and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.stackdump
+
+# Android signing
+*.jks
+*.keystore
+keystore.properties
+.generated-password.txt

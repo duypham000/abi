@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tomo Translate — API Tester</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e3e6ea;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --accent: #1a73e8;
+    --accent-soft: #e8f0fe;
+    --chip: #f1f3f4;
+    --green: #137333;
+    --amber: #b06000;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .controls { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  input, select {
+    font-size: 15px; padding: 9px 11px; border: 1px solid var(--border);
+    border-radius: 8px; background: #fff; color: var(--text); outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  button {
+    font-size: 15px; font-weight: 600; padding: 10px 18px; border: none;
+    border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer;
+    transition: background .15s;
+  }
+  button:hover { background: #1666cc; }
+  button:disabled { background: #9bb8e6; cursor: not-allowed; }
+  .row2 { display: flex; gap: 14px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  .api-line { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 240px; }
+  .api-line input { flex: 1; font-size: 13px; color: var(--muted); }
+  .swap { background: var(--chip); color: var(--text); padding: 9px 12px; }
+  .swap:hover { background: #e4e7ea; }
+  .hint { font-size: 12px; color: var(--muted); }
+  .samples { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .samples button {
+    background: var(--chip); color: var(--text); font-weight: 500;
+    font-size: 13px; padding: 5px 12px; border-radius: 999px;
+  }
+  .samples button:hover { background: #e4e7ea; }
+
+  .status { font-size: 13px; margin: 4px 2px 0; min-height: 18px; }
+  .status.err { color: #b00020; }
+  .status.ok { color: var(--green); }
+
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 9px;
+    border-radius: 999px; vertical-align: middle; margin-left: 8px;
+  }
+  .badge.fresh { background: var(--accent-soft); color: var(--accent); }
+  .badge.cached { background: #fef7e0; color: var(--amber); }
+
+  .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
+  .main-trans { font-size: 30px; font-weight: 500; }
+  .main-orig { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .meta { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+  .pos { font-style: italic; font-weight: 600; color: var(--accent); margin: 14px 0 6px; }
+  .pos:first-of-type { margin-top: 0; }
+  .terms { display: flex; flex-wrap: wrap; gap: 6px; }
+  .term {
+    background: var(--accent-soft); color: var(--accent); border-radius: 6px;
+    padding: 3px 10px; font-size: 14px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  td.word { font-weight: 600; white-space: nowrap; width: 1%; }
+  td.rev { color: var(--muted); }
+  .score { color: #9aa0a6; font-size: 12px; }
+
+  ol.defs { margin: 0; padding-left: 20px; }
+  ol.defs li { margin-bottom: 8px; }
+  .def-ex { color: var(--muted); font-style: italic; font-size: 13px; }
+
+  .syn-cluster { margin-bottom: 8px; }
+  .reg { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--amber); margin-right: 6px; }
+  .syn-words { color: var(--text); font-size: 14px; }
+
+  ul.examples { margin: 0; padding-left: 18px; }
+  ul.examples li { margin-bottom: 5px; color: #3c4043; }
+
+  .empty { color: #9aa0a6; font-style: italic; font-size: 14px; }
+  details { margin-top: 6px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+  pre.raw {
+    background: #0f172a; color: #cbd5e1; padding: 12px; border-radius: 8px;
+    overflow: auto; font-size: 12px; max-height: 320px; margin-top: 8px;
+  }
+  .count { font-weight: 400; color: var(--muted); font-size: 12px; }
+  @media (max-width: 640px) {
+    .controls { grid-template-columns: 1fr 1fr; }
+    .controls .field.q { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Tomo Translate — API Tester</h1>
+  <div class="sub">Standalone tester for <code>GET /api/translate</code>. Exercises every feature: main translation, dictionary/other translations, synonyms, definitions, examples, and the cache flag.</div>
+
+  <div class="panel">
+    <div class="controls">
+      <div class="field q">
+        <label for="q">Word / phrase</label>
+        <input id="q" type="text" placeholder="e.g. run" value="run" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="sl">From</label>
+        <select id="sl"></select>
+      </div>
+      <button class="swap" id="swap" title="Swap languages">⇄</button>
+      <div class="field">
+        <label for="tl">To</label>
+        <select id="tl"></select>
+      </div>
+    </div>
+
+    <div class="row2">
+      <button id="go">Translate</button>
+      <div class="api-line">
+        <span class="hint">Base URL</span>
+        <input id="base" type="text" value="http://localhost:8006" spellcheck="false" />
+      </div>
+    </div>
+
+    <div class="samples" id="samples"></div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+<script>
+  const LANGS = [
+    ["en","English"],["vi","Vietnamese"],["ja","Japanese"],["ko","Korean"],
+    ["zh-CN","Chinese (Simplified)"],["fr","French"],["de","German"],
+    ["es","Spanish"],["ru","Russian"],["th","Thai"],["auto","Auto-detect"]
+  ];
+  const SAMPLES = [
+    ["run","en","vi"],["happy","en","vi"],["book","en","vi"],
+    ["generous","en","vi"],["hello world","en","vi"],["xin chào","vi","en"]
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+
+  function fillLangs() {
+    for (const sel of [$("sl"), $("tl")]) {
+      LANGS.forEach(([v, n]) => sel.appendChild(el("option", null, esc(n))).value = v);
+    }
+    $("sl").value = "en"; $("tl").value = "vi";
+  }
+
+  function renderSamples() {
+    SAMPLES.forEach(([q, sl, tl]) => {
+      const b = el("button", null, esc(q));
+      b.onclick = () => { $("q").value = q; $("sl").value = sl; $("tl").value = tl; translate(); };
+      $("samples").appendChild(b);
+    });
+  }
+
+  function section(title, countText) {
+    const p = el("div", "panel");
+    const t = el("div", "section-title", esc(title) + (countText ? ' <span class="count">' + esc(countText) + '</span>' : ''));
+    p.appendChild(t);
+    return p;
+  }
+
+  function render(data) {
+    const out = $("result");
+    out.innerHTML = "";
+
+    // 1. Main translation
+    const head = el("div", "panel");
+    const badge = data.cached
+      ? '<span class="badge cached">CACHED</span>'
+      : '<span class="badge fresh">FRESH</span>';
+    head.appendChild(el("div", "main-trans", esc(data.mainTranslation || "—") + badge));
+    head.appendChild(el("div", "main-orig", esc(data.originalText || "")));
+    head.appendChild(el("div", "meta",
+      `${esc(data.sourceLang)} → ${esc(data.targetLang)} · detected: ${esc(data.detectedSourceLanguage || "—")}`));
+    out.appendChild(head);
+
+    // 2. Dictionary / other translations
+    const dict = section("Other translations · dictionary", data.dictionary.length + " part(s) of speech");
+    if (!data.dictionary.length) dict.appendChild(el("div", "empty", "No dictionary data (typical for phrases)."));
+    data.dictionary.forEach(g => {
+      dict.appendChild(el("div", "pos", esc(g.partOfSpeech || "—")));
+      const terms = el("div", "terms");
+      g.terms.forEach(t => terms.appendChild(el("span", "term", esc(t))));
+      dict.appendChild(terms);
+      if (g.entries && g.entries.length) {
+        const tbl = el("table");
+        g.entries.forEach(e => {
+          const tr = el("tr");
+          tr.appendChild(el("td", "word", esc(e.word)));
+          const rev = (e.reverseTranslations || []).map(esc).join(", ");
+          const sc = e.score != null ? ` <span class="score">(${e.score.toFixed(3)})</span>` : "";
+          tr.appendChild(el("td", "rev", rev + sc));
+          tbl.appendChild(tr);
+        });
+        dict.appendChild(tbl);
+      }
+    });
+    out.appendChild(dict);
+
+    // 3. Synonyms
+    const syn = section("Synonyms", data.synonyms.length ? data.synonyms.reduce((n,g)=>n+g.clusters.length,0) + " cluster(s)" : "");
+    if (!data.synonyms.length) syn.appendChild(el("div", "empty", "No synonyms for this entry."));
+    data.synonyms.forEach(g => {
+      syn.appendChild(el("div", "pos", esc(g.partOfSpeech || "—")));
+      g.clusters.forEach(c => {
+        const reg = c.register ? `<span class="reg">${esc(c.register)}</span>` : "";
+        syn.appendChild(el("div", "syn-cluster", reg + `<span class="syn-words">${c.synonyms.map(esc).join(", ")}</span>`));
+      });
+    });
+    out.appendChild(syn);
+
+    // 4. Definitions
+    const defs = section("Definitions", "");
+    if (!data.definitions.length) defs.appendChild(el("div", "empty", "No definitions for this entry."));
+    data.definitions.forEach(g => {
+      defs.appendChild(el("div", "pos", esc(g.partOfSpeech || "—")));
+      const ol = el("ol", "defs");
+      g.items.forEach(d => {
+        const li = el("li", null, esc(d.definition));
+        if (d.example) li.appendChild(el("div", "def-ex", "“" + esc(d.example) + "”"));
+        ol.appendChild(li);
+      });
+      defs.appendChild(ol);
+    });
+    out.appendChild(defs);
+
+    // 5. Examples
+    const ex = section("Examples", data.examples.length + " sentence(s)");
+    if (!data.examples.length) ex.appendChild(el("div", "empty", "No example sentences."));
+    if (data.examples.length) {
+      const ul = el("ul", "examples");
+      data.examples.forEach(x => ul.appendChild(el("li", null, esc(x))));
+      ex.appendChild(ul);
+    }
+    out.appendChild(ex);
+
+    // Raw JSON
+    const rawPanel = el("div", "panel");
+    const det = el("details");
+    det.appendChild(el("summary", null, "Raw JSON response"));
+    det.appendChild(el("pre", "raw", esc(JSON.stringify(data, null, 2))));
+    rawPanel.appendChild(det);
+    out.appendChild(rawPanel);
+  }
+
+  async function translate() {
+    const q = $("q").value.trim();
+    if (!q) { setStatus("Enter a word or phrase.", "err"); return; }
+    const base = $("base").value.trim().replace(/\/$/, "");
+    const sl = $("sl").value, tl = $("tl").value;
+    const url = `${base}/api/translate?q=${encodeURIComponent(q)}&sl=${sl}&tl=${tl}`;
+    $("apiUrl") && ($("apiUrl").value = url);
+
+    $("go").disabled = true;
+    setStatus("Loading…", "");
+    const t0 = performance.now();
+    try {
+      const res = await fetch(url);
+      const ms = Math.round(performance.now() - t0);
+      const body = await res.json();
+      if (!res.ok) {
+        setStatus(`HTTP ${res.status} — ${body.error || "error"}`, "err");
+        $("result").innerHTML = "";
+      } else {
+        render(body);
+        setStatus(`HTTP 200 · ${ms} ms · ${body.cached ? "served from cache" : "fetched from Google"}`, "ok");
+      }
+    } catch (e) {
+      setStatus(`Request failed: ${e.message}. Is the server running on ${base}? (npm run dev)`, "err");
+    } finally {
+      $("go").disabled = false;
+    }
+  }
+
+  function setStatus(msg, cls) { const s = $("status"); s.textContent = msg; s.className = "status " + (cls || ""); }
+
+  $("go").onclick = translate;
+  $("q").addEventListener("keydown", e => { if (e.key === "Enter") translate(); });
+  $("swap").onclick = () => {
+    const a = $("sl").value, b = $("tl").value;
+    if (a === "auto") return;
+    $("sl").value = b; $("tl").value = a;
+  };
+
+  fillLangs();
+  renderSamples();
+  // auto-run once on load
+  window.addEventListener("DOMContentLoaded", translate);
+</script>
+</body>
+</html>

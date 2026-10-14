@@ -1,0 +1,33 @@
+diff --git a/dist/lit.d.ts b/dist/lit.d.ts
+index 3a469d2b02bee8731ae2d5cc68eac7d85a36db00..1fb4c88d2e272728b2ec39b766b755169b173f0c 100644
+--- a/dist/lit.d.ts
++++ b/dist/lit.d.ts
+@@ -3792,4 +3792,4 @@ export declare const ZoomUpIcon: ({ width, height, style }?: {
+     style?: string;
+ }) => TemplateResult<1>;
+ 
+-export { }
++export { CheckBoxCheckSolidIcon as CheckBoxCkeckSolidIcon };
+diff --git a/dist/lit.js b/dist/lit.js
+index 269785e1260bb0ea6a5fbdac14ede36cbc4aee78..0a6e648aaa33e57acf2fbdf3c0a568de2ef4887e 100644
+--- a/dist/lit.js
++++ b/dist/lit.js
+@@ -8217,4 +8217,5 @@ exports.ZendeskIcon = Zendesk;
+ exports.ZipIcon = Zip;
+ exports.ZoomDownIcon = ZoomDown;
+ exports.ZoomUpIcon = ZoomUp;
++exports.CheckBoxCkeckSolidIcon = CheckBoxCheckSolid;
+ //# sourceMappingURL=lit.js.map
+diff --git a/dist/lit.mjs b/dist/lit.mjs
+index fd396fd8341fd2601805ae9c06cea25a5fda6a5f..ea66d65bf2b00336116fdbbf42fdf941fe0dfac6 100644
+--- a/dist/lit.mjs
++++ b/dist/lit.mjs
+@@ -8215,6 +8215,7 @@ export {
+   Zendesk as ZendeskIcon,
+   Zip as ZipIcon,
+   ZoomDown as ZoomDownIcon,
+-  ZoomUp as ZoomUpIcon
++  ZoomUp as ZoomUpIcon,
++  CheckBoxCheckSolid as CheckBoxCkeckSolidIcon
+ };
+ //# sourceMappingURL=lit.mjs.map
