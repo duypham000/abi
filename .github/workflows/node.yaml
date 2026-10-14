@@ -9,6 +9,7 @@ on:
       - 'release/*'
     paths:
       - 'node/**'
+      - '.github/workflows/node.yaml'
   workflow_dispatch:
 
 concurrency:

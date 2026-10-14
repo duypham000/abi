@@ -12,6 +12,7 @@ on:
       - 'mini-editor-v*'
     paths:
       - 'mini-editor/**'
+      - '.github/workflows/mini-editor.yaml'
   workflow_dispatch:
 
 permissions:

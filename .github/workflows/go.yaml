@@ -9,6 +9,7 @@ on:
       - 'release/*'
     paths:
       - 'go/**'
+      - '.github/workflows/go.yaml'
   workflow_dispatch:
 
 concurrency:
