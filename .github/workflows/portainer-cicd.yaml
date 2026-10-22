@@ -57,10 +57,10 @@ jobs:
               - 'docker-compose.yml'
 
   # ---------------------------------------------------------------------------
-  # Job 2: Build & Push Go Backend (Chỉ build Docker image, không chạy test)
+  # Job 2: Build & Push Go Backend Multi-Arch (linux/amd64, linux/arm64)
   # ---------------------------------------------------------------------------
   build-go:
-    name: Build & Push Go Image
+    name: Build & Push Go Image (Multi-Arch)
     needs: detect-changes
     if: needs.detect-changes.outputs.go == 'true'
     runs-on: ubuntu-latest
@@ -72,6 +72,9 @@ jobs:
         id: repo-owner
         run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
+      - name: Set up QEMU for multi-architecture builds
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -82,11 +85,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push Go Docker Image
+      - name: Build and Push Go Docker Image (amd64 + arm64)
         uses: docker/build-push-action@v6
         with:
           context: ./go
           file: ./go/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/tomo-backend:latest
@@ -95,10 +99,10 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ---------------------------------------------------------------------------
-  # Job 3: Build & Push Node Microservice (Chỉ build Docker image, không chạy test)
+  # Job 3: Build & Push Node Microservice Multi-Arch (linux/amd64, linux/arm64)
   # ---------------------------------------------------------------------------
   build-node:
-    name: Build & Push Node Image
+    name: Build & Push Node Image (Multi-Arch)
     needs: detect-changes
     if: needs.detect-changes.outputs.node == 'true'
     runs-on: ubuntu-latest
@@ -110,6 +114,9 @@ jobs:
         id: repo-owner
         run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
+      - name: Set up QEMU for multi-architecture builds
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -120,11 +127,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push Node Docker Image
+      - name: Build and Push Node Docker Image (amd64 + arm64)
         uses: docker/build-push-action@v6
         with:
           context: ./node
           file: ./node/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/tomo-node:latest
