@@ -23,9 +23,7 @@ services:
     restart: always
 
   go-backend:
-    build:
-      context: ./go
-      dockerfile: Dockerfile
+    image: ghcr.io/duypham000/tomo-backend:latest
     container_name: tomo-backend-app
     ports:
       - "8080:8080"
@@ -45,9 +43,7 @@ services:
     restart: always
 
   node-api:
-    build:
-      context: ./node
-      dockerfile: Dockerfile
+    image: ghcr.io/duypham000/tomo-node:latest
     container_name: tomo-node-api
     ports:
       - "8006:8006"
@@ -65,9 +61,7 @@ services:
     restart: always
 
   node-yjs:
-    build:
-      context: ./node
-      dockerfile: Dockerfile
+    image: ghcr.io/duypham000/tomo-node:latest
     container_name: tomo-node-yjs
     ports:
       - "1234:1234"

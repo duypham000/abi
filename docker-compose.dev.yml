@@ -1,0 +1,17 @@
+# Development override file
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+services:
+  go-backend:
+    build:
+      context: ./go
+      dockerfile: Dockerfile
+
+  node-api:
+    build:
+      context: ./node
+      dockerfile: Dockerfile
+
+  node-yjs:
+    build:
+      context: ./node
+      dockerfile: Dockerfile

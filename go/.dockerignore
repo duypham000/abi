@@ -1,0 +1,6 @@
+.git
+.github
+*.exe
+tomo-server
+.env.local
+.DS_Store
