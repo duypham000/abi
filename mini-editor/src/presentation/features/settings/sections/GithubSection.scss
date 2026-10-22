@@ -1,0 +1,176 @@
+.github-section {
+  .github-profile-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0;
+
+    .github-avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 2px solid var(--border-color, #e2e8f0);
+      object-fit: cover;
+    }
+
+    .github-info {
+      flex: 1;
+
+      .github-name {
+        font-weight: 600;
+        font-size: 1rem;
+        color: var(--text-color, #1e293b);
+      }
+
+      .github-username {
+        font-size: 0.85rem;
+        color: var(--text-muted, #64748b);
+      }
+
+      .github-scopes {
+        margin-top: 6px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+
+        .scope-badge {
+          display: inline-block;
+          font-size: 0.725rem;
+          background: rgba(37, 99, 235, 0.1);
+          color: #2563eb;
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-weight: 500;
+        }
+      }
+    }
+  }
+
+  .github-input-group {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: center;
+
+    .github-input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color, #cbd5e1);
+      background: var(--bg-card, #ffffff);
+      color: var(--text-color, #0f172a);
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.2s;
+
+      &:focus {
+        border-color: #2563eb;
+      }
+    }
+
+    .github-select {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color, #cbd5e1);
+      background: var(--bg-card, #ffffff);
+      color: var(--text-color, #0f172a);
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.2s;
+
+      &:focus {
+        border-color: #2563eb;
+      }
+    }
+
+    .github-repo-search-select {
+      flex: 1;
+      min-width: 260px;
+
+      .ant-select-selector {
+        border-radius: 6px !important;
+        border-color: var(--border-color, #cbd5e1) !important;
+        background: var(--bg-card, #ffffff) !important;
+        color: var(--text-color, #0f172a) !important;
+        min-height: 38px !important;
+        display: flex !important;
+        align-items: center !important;
+      }
+
+      .ant-select-selection-item,
+      .ant-select-selection-placeholder {
+        line-height: 36px !important;
+      }
+    }
+  }
+
+  .github-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: var(--text-muted, #64748b);
+    cursor: pointer;
+  }
+
+  .repo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  .workspace-path-code {
+    display: block;
+    font-family: monospace;
+    font-size: 0.775rem;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 6px 10px;
+    border-radius: 4px;
+    word-break: break-all;
+    margin-top: 6px;
+  }
+
+  .settings-btn-danger {
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background 0.2s;
+
+    &:hover:not(:disabled) {
+      background: #dc2626;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  .create-repo-form {
+    background: var(--bg-surface, #f8fafc);
+    border: 1px dashed var(--border-color, #cbd5e1);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .form-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+  }
+}

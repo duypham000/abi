@@ -22,6 +22,15 @@ import { Loading } from "@/presentation/components/ui/Loading/Loading";
 import { DocRevisionPanel } from "./components/DocRevisionPanel/DocRevisionPanel";
 import { FindReplaceBar } from "./components/FindReplaceBar/FindReplaceBar";
 import { useFindAndReplace } from "./hooks/useFindAndReplace";
+import { DocGitHistoryDrawer } from "@/presentation/features/git/components/DocGitHistoryDrawer";
+import { GitConflictModal } from "@/presentation/features/git/components/GitConflictModal";
+import {
+  useSaveGitFileMutation,
+  useGetWorkspaceManifestQuery,
+  useGetFileHistoryQuery,
+  useCheckFileStatusMutation,
+  usePullRepoMutation,
+} from "@/infrastructure/api/githubApi";
 import "./DocEditorPage.scss";
 
 export interface EditorSettings {
@@ -89,8 +98,8 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
     isLoading,
     isFetching,
     saveStatus,
-    handleBlocksChange,
-    handleTitleChange,
+    handleBlocksChange: baseHandleBlocksChange,
+    handleTitleChange: baseHandleTitleChange,
     handleMetadataChange,
     handleSeriesIdChange,
     triggerSave,
@@ -109,6 +118,189 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [isRevisionPanelOpen, setIsRevisionPanelOpen] = useState(false);
+  const [isGitHistoryOpen, setIsGitHistoryOpen] = useState(false);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [saveGitFile, { isLoading: isSavingGit }] = useSaveGitFileMutation();
+  const [checkFileStatus, { isLoading: isCheckingGit }] = useCheckFileStatusMutation();
+  const [pullRepo, { isLoading: isPullingGit }] = usePullRepoMutation();
+
+  const [gitFileStatus, setGitFileStatus] = useState<"clean" | "modified" | "untracked" | "conflict" | "behind">("clean");
+  const [hasGitChanges, setHasGitChanges] = useState(false);
+  const [hasConflict, setHasConflict] = useState(false);
+  const [remoteUpdated, setRemoteUpdated] = useState(false);
+
+  const checkStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const gitFilePath = `docs/doc-${docId}.json`;
+
+  const { data: manifest } = useGetWorkspaceManifestQuery();
+  const { data: fileHistory } = useGetFileHistoryQuery(gitFilePath, { skip: !docId });
+
+  const isDocOnGit = useMemo(() => {
+    if (!docId) return false;
+    const inManifest = manifest?.items?.some(
+      (item) => item.id === `doc-${docId}` || item.path === gitFilePath
+    );
+    const hasHistory = Array.isArray(fileHistory) && fileHistory.length > 0;
+    return Boolean(inManifest || hasHistory || gitFileStatus !== "untracked");
+  }, [manifest, fileHistory, docId, gitFilePath, gitFileStatus]);
+
+  const checkCurrentFileStatus = useCallback(
+    async (currentContent?: unknown, currentTitle?: string) => {
+      if (!docId) return;
+      try {
+        let contentData = currentContent;
+        if (contentData === undefined) {
+          try {
+            contentData = JSON.parse(doc?.content || "[]");
+          } catch {
+            contentData = doc?.content;
+          }
+        }
+        const payload = {
+          id: doc?.id ?? docId,
+          title: currentTitle ?? doc?.title,
+          slug: `doc-${docId}`,
+          status: doc?.status,
+          metadata: doc?.metadata,
+          content: contentData,
+        };
+        const res = await checkFileStatus({
+          file_path: gitFilePath,
+          content: JSON.stringify(payload),
+        }).unwrap();
+
+        setGitFileStatus(res.status);
+        setHasGitChanges(Boolean(res.has_changes));
+        setHasConflict(Boolean(res.has_conflict));
+        setRemoteUpdated(Boolean(res.remote_updated));
+      } catch (err) {
+        console.warn("[DocEditor] checkFileStatus error:", err);
+      }
+    },
+    [docId, doc?.id, doc?.title, doc?.content, doc?.status, doc?.metadata, gitFilePath, checkFileStatus]
+  );
+
+  const handleBlocksChange = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (blocks: any[]) => {
+      baseHandleBlocksChange(blocks);
+      if (checkStatusTimerRef.current) clearTimeout(checkStatusTimerRef.current);
+      checkStatusTimerRef.current = setTimeout(() => {
+        checkCurrentFileStatus(blocks);
+      }, 500);
+    },
+    [baseHandleBlocksChange, checkCurrentFileStatus]
+  );
+
+  const handleTitleChange = useCallback(
+    (newTitle: string) => {
+      baseHandleTitleChange(newTitle);
+      if (checkStatusTimerRef.current) clearTimeout(checkStatusTimerRef.current);
+      checkStatusTimerRef.current = setTimeout(() => {
+        checkCurrentFileStatus(undefined, newTitle);
+      }, 500);
+    },
+    [baseHandleTitleChange, checkCurrentFileStatus]
+  );
+
+  useEffect(() => {
+    if (doc?.id) {
+      checkCurrentFileStatus();
+    }
+  }, [doc?.id, checkCurrentFileStatus]);
+
+  const handlePullGit = async () => {
+    try {
+      const res = await pullRepo({}).unwrap();
+      if (res.hasConflicts || res.has_conflict) {
+        message.warning("Đã kéo từ Git nhưng có xung đột!");
+        setShowConflictModal(true);
+      } else {
+        message.success("Đã đồng bộ nội dung mới nhất từ Git!");
+        checkCurrentFileStatus();
+      }
+    } catch (err: unknown) {
+      const errMsg = (err as { data?: { message?: string } })?.data?.message;
+      message.error(errMsg ? `Pull từ Git thất bại: ${errMsg}` : "Pull từ Git thất bại");
+    }
+  };
+
+  const handleSaveToGit = async () => {
+    if (!doc) return;
+    try {
+      await triggerSave();
+      let contentData: unknown = editorRef.current?.document ?? doc.content;
+      if (typeof contentData === "string") {
+        try {
+          contentData = JSON.parse(contentData || "[]");
+        } catch {
+          // keep as string
+        }
+      }
+      const payload = {
+        id: doc.id,
+        title: doc.title,
+        slug: `doc-${doc.id}`,
+        status: doc.status,
+        metadata: doc.metadata,
+        content: contentData,
+        saved_at: new Date().toISOString(),
+      };
+      const commitMsg = isDocOnGit
+        ? `Update ${doc.title || `doc-${doc.id}`}`
+        : `Add ${doc.title || `doc-${doc.id}`} to Git workspace`;
+
+      await saveGitFile({
+        path: gitFilePath,
+        content: payload,
+        auto_commit: true,
+        auto_push: true,
+        message: commitMsg,
+      }).unwrap();
+
+      message.success(
+        isDocOnGit
+          ? `Đã lưu và commit lên GitHub: ${gitFilePath}`
+          : `Đã lưu và đẩy lên GitHub: ${gitFilePath}`
+      );
+      checkCurrentFileStatus(contentData, doc.title);
+    } catch (err) {
+      const errMsg = (err as { data?: { message?: string } })?.data?.message;
+      message.error(errMsg ? `Failed to push to GitHub: ${errMsg}` : "Failed to push to GitHub");
+    }
+  };
+
+  const handleSaveAndCommitShortcut = useCallback(async () => {
+    if (hasConflict || gitFileStatus === "conflict") {
+      message.warning("Phát hiện xung đột Git trên file này — Mở hộp thoại giải quyết.");
+      setShowConflictModal(true);
+      return;
+    }
+    if (remoteUpdated || gitFileStatus === "behind") {
+      message.info("Nội dung trên Git đã được cập nhật — Đang kéo (pull) về...");
+      await handlePullGit();
+      return;
+    }
+    if (gitFileStatus === "clean" && !hasGitChanges && !isDirty) {
+      message.info("Tài liệu đã được lưu và đồng bộ với Git (không có thay đổi mới).");
+      return;
+    }
+    await handleSaveToGit();
+  }, [hasConflict, gitFileStatus, remoteUpdated, hasGitChanges, isDirty, handleSaveToGit, handlePullGit]);
+
+  const handleRestoreGitSnapshot = (snapshotContent: string) => {
+    try {
+      const parsed = JSON.parse(snapshotContent);
+      if (parsed.content) {
+        const strContent = typeof parsed.content === "string" ? parsed.content : JSON.stringify(parsed.content);
+        handleBlocksChange(parseInitialBlocks(strContent));
+        message.success("Restored content from Git snapshot");
+      }
+    } catch {
+      message.error("Could not parse snapshot content as JSON");
+    }
+  };
 
   const docMeta = useMemo(() => parseDocMetadata(doc?.metadata ?? null), [doc?.metadata]);
   const initialBlocks = useMemo(() => parseInitialBlocks(doc?.content), [doc?.id]);
@@ -124,7 +316,12 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        handleSaveAndCommitShortcut();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
         triggerSave();
         return;
@@ -149,7 +346,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [triggerSave, editor]);
+  }, [triggerSave, handleSaveAndCommitShortcut, editor]);
 
   function handleBack() {
     if (panelMode) {
@@ -440,6 +637,16 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
           onViewInfo={handleViewInfo}
           onViewTableOfContents={handleViewTableOfContents}
           onViewHistoryVersion={handleViewHistoryVersion}
+          onViewGitHistory={() => setIsGitHistoryOpen(true)}
+          onSaveToGit={handleSaveToGit}
+          isOnGit={isDocOnGit}
+          isSavingGit={isSavingGit || isCheckingGit || isPullingGit}
+          gitFileStatus={gitFileStatus}
+          hasGitChanges={hasGitChanges}
+          hasConflict={hasConflict}
+          remoteUpdated={remoteUpdated}
+          onPull={handlePullGit}
+          onResolveConflict={() => setShowConflictModal(true)}
           onDuplicate={handleDuplicate}
           onImport={() => setImportModalOpen(true)}
           onExport={() => setExportModalOpen(true)}
@@ -519,6 +726,20 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
         editor={editor}
         getCaptureElement={() => editorAreaRef.current}
       />
+      <DocGitHistoryDrawer
+        filePath={gitFilePath}
+        open={isGitHistoryOpen}
+        onClose={() => setIsGitHistoryOpen(false)}
+        onRestoreSnapshot={handleRestoreGitSnapshot}
+      />
+      {showConflictModal && (
+        <GitConflictModal
+          onClose={() => {
+            setShowConflictModal(false);
+            checkCurrentFileStatus();
+          }}
+        />
+      )}
     </>
   );
 

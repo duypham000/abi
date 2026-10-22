@@ -27,6 +27,8 @@ import {
   useCreateDocMutation,
   useLazyGetDocByIdQuery,
 } from "@/infrastructure/api/docsApi";
+import { useGitTrackedEntities } from "@/presentation/hooks/useGitTrackedEntities";
+import { EntityGitBadge } from "@/presentation/components/EntityGitBadge";
 import type { DocDto } from "@/core/interfaces/docs";
 import "./SeriesDetailPanel.scss";
 
@@ -197,6 +199,7 @@ function DocGridCard({
   onOpen: () => void;
   onRemove: () => void;
 }) {
+  const { isDocOnGit, getDocGitStatus } = useGitTrackedEntities();
   const date = doc.lastSync
     ? new Date(doc.lastSync).toLocaleDateString(undefined, { month: "short", day: "numeric" })
     : "";
@@ -214,7 +217,10 @@ function DocGridCard({
       <div className="sdp-grid-card__icon">
         <FileTextIcon size={18} />
       </div>
-      <div className="sdp-grid-card__title">{doc.title || "Untitled"}</div>
+      <div className="sdp-grid-card__title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.title || "Untitled"}</span>
+        <EntityGitBadge isOnGit={isDocOnGit(doc.id)} gitStatus={getDocGitStatus(doc.id)} size={11} />
+      </div>
       {doc.plainText && (
         <div className="sdp-grid-card__preview">{doc.plainText.slice(0, 80)}</div>
       )}
@@ -238,6 +244,7 @@ function DocListRow({
   onOpen: () => void;
   onRemove: () => void;
 }) {
+  const { isDocOnGit, getDocGitStatus } = useGitTrackedEntities();
   const date = doc.lastSync
     ? new Date(doc.lastSync).toLocaleDateString(undefined, { month: "short", day: "numeric" })
     : "";
@@ -246,6 +253,7 @@ function DocListRow({
     <div className="sdp-list-row" onClick={onOpen}>
       <FileTextIcon size={13} className="sdp-list-row__icon" />
       <span className="sdp-list-row__title">{doc.title || "Untitled"}</span>
+      <EntityGitBadge isOnGit={isDocOnGit(doc.id)} gitStatus={getDocGitStatus(doc.id)} size={11} />
       {date && <span className="sdp-list-row__date">{date}</span>}
       <button
         className="sdp-list-row__remove"

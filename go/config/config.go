@@ -19,6 +19,9 @@ type Config struct {
 	JWTRefreshTTL      time.Duration
 	YjsSecret          string
 	CORSAllowedOrigins []string
+	GitHubAPIBaseURL   string
+	CacheTTLHours      int
+	WorkspaceRoot      string
 }
 
 func LoadConfig() *Config {
@@ -53,6 +56,9 @@ func LoadConfig() *Config {
 		JWTRefreshTTL:      time.Duration(getEnvAsInt("JWT_REFRESH_TTL_DAYS", 7)) * 24 * time.Hour,
 		YjsSecret:          getEnv("YJS_SECRET", "dev-yjs-token-secret-tomo"),
 		CORSAllowedOrigins: corsOrigins,
+		GitHubAPIBaseURL:   getEnv("GITHUB_API_BASE_URL", "https://api.github.com"),
+		CacheTTLHours:      getEnvAsInt("CACHE_TTL_HOURS", 24),
+		WorkspaceRoot:      getEnv("WORKSPACE_ROOT", "./data/workspaces"),
 	}
 }
 

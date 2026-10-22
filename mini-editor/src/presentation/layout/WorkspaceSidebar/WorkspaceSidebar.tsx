@@ -13,6 +13,7 @@ import { FeaturesPanel } from "./FeaturesPanel";
 import { DocsPanel } from "./DocsPanel";
 import { SeriesPanel } from "./SeriesPanel";
 import { DemoPanel } from "./DemoPanel";
+import { GitPanel } from "./GitPanel";
 import "./WorkspaceSidebar.scss";
 
 // ── Main sidebar ───────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ export function WorkspaceSidebar({ activeSidebar }: { activeSidebar: SidebarKey 
         {activeSidebar === "features" && <FeaturesPanel />}
         {activeSidebar === "docs"     && <DocsPanel />}
         {activeSidebar === "series"   && <SeriesPanel />}
+        {activeSidebar === "git"      && <GitPanel />}
         {activeSidebar === "demo"     && <DemoPanel />}
       </div>
     </aside>

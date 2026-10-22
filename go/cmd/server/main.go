@@ -15,6 +15,7 @@ import (
 	"tomo-backend/internal/infrastructure/security"
 	"tomo-backend/internal/modules/auth"
 	"tomo-backend/internal/modules/docs"
+	"tomo-backend/internal/modules/github"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,6 +40,7 @@ func main() {
 	// 5. Initialize Modular Monolith Modules
 	authModule := auth.InitModule(db, jwtManager)
 	docsModule := docs.InitModule(db, cfg.YjsSecret)
+	githubModule := github.InitModule(db, cfg.GitHubAPIBaseURL, cfg.WorkspaceRoot, cfg.CacheTTLHours)
 
 	// 6. Setup Gin HTTP Router
 	if cfg.Environment == "production" {
@@ -82,6 +84,7 @@ func main() {
 	{
 		authModule.RegisterRoutes(v1, jwtManager)
 		docsModule.RegisterRoutes(v1, jwtManager)
+		githubModule.RegisterRoutes(v1, jwtManager)
 	}
 
 	// Legacy endpoint compatibility (/api/v1/base/docs...)

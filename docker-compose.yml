@@ -37,6 +37,8 @@ services:
       - JWT_SECRET=docker-production-jwt-secret-key-32chars
       - YJS_SECRET=tomo-local-dev-yjs-token-secret-2026
       - CORS_ALLOWED_ORIGINS=*
+    volumes:
+      - tomo_workspace_data:/app/data
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -86,3 +88,4 @@ services:
 
 volumes:
   postgres_data:
+  tomo_workspace_data:

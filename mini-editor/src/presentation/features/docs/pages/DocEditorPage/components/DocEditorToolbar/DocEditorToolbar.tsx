@@ -27,6 +27,10 @@ import {
   ThunderboltOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  BranchesOutlined,
+  CloudUploadOutlined,
+  WarningOutlined,
+  CloudDownloadOutlined,
 } from "@ant-design/icons";
 import type { EditorSettings } from "@/presentation/features/docs/pages/DocEditorPage/DocEditorPage";
 import type { SaveStatus } from "../../../../hooks/useDocEditor";
@@ -61,6 +65,16 @@ interface DocEditorToolbarProps {
   onViewInfo: () => void;
   onViewTableOfContents: () => void;
   onViewHistoryVersion: () => void;
+  onViewGitHistory?: () => void;
+  onSaveToGit?: () => void;
+  isOnGit?: boolean;
+  isSavingGit?: boolean;
+  gitFileStatus?: "clean" | "modified" | "untracked" | "conflict" | "behind";
+  hasGitChanges?: boolean;
+  hasConflict?: boolean;
+  remoteUpdated?: boolean;
+  onPull?: () => void;
+  onResolveConflict?: () => void;
   onDuplicate: () => void;
   onImport: () => void;
   onExport: () => void;
@@ -139,6 +153,16 @@ export function DocEditorToolbar({
   onViewInfo,
   onViewTableOfContents,
   onViewHistoryVersion,
+  onViewGitHistory,
+  onSaveToGit,
+  isOnGit = false,
+  isSavingGit = false,
+  gitFileStatus = "clean",
+  hasGitChanges = false,
+  hasConflict = false,
+  remoteUpdated = false,
+  onPull,
+  onResolveConflict,
   onDuplicate,
   onImport,
   onExport,
@@ -148,6 +172,51 @@ export function DocEditorToolbar({
   const [localTitle, setLocalTitle] = useState(title);
   const isFocusedRef = useRef(false);
   const { displayed: displayedStatus, phase } = useSaveStatusDisplay(saveStatus);
+
+  const isGitSaving = isSavingGit || saveStatus === "saving";
+
+  let gitIcon = <BranchesOutlined className="toolbar-btn-icon" />;
+  let gitClass = "toolbar-git-btn--clean";
+  let gitTooltip = "";
+  let isGitDisabled = false;
+  let handleGitAction = onSaveToGit;
+
+  if (isGitSaving) {
+    gitIcon = <LoadingOutlined className="toolbar-btn-icon" spin />;
+    gitTooltip = isSavingGit ? "Đang lưu & đẩy lên GitHub…" : "Đang lưu tài liệu…";
+    isGitDisabled = true;
+  } else if (saveStatus === "error") {
+    gitTooltip = "Lưu tài liệu thất bại — Vui lòng thử lại";
+    isGitDisabled = true;
+  } else if (hasConflict || gitFileStatus === "conflict") {
+    gitIcon = <WarningOutlined className="toolbar-btn-icon" />;
+    gitClass = "toolbar-git-btn--conflict";
+    gitTooltip = "Phát hiện xung đột Git trên file này — Nhấn để giải quyết";
+    handleGitAction = onResolveConflict || onSaveToGit;
+    isGitDisabled = false;
+  } else if (remoteUpdated || gitFileStatus === "behind") {
+    gitIcon = <CloudDownloadOutlined className="toolbar-btn-icon" />;
+    gitClass = "toolbar-git-btn--behind";
+    gitTooltip = "Nội dung trên Git đã được cập nhật — Nhấn để Pull về";
+    handleGitAction = onPull || onSaveToGit;
+    isGitDisabled = false;
+  } else if (!isOnGit || gitFileStatus === "untracked") {
+    gitIcon = <CloudUploadOutlined className="toolbar-btn-icon" />;
+    gitClass = "toolbar-git-btn--untracked";
+    gitTooltip = "Save and Push lên GitHub (Ctrl+Shift+S)";
+    isGitDisabled = Boolean(isDraft && saveStatus === "idle");
+  } else if (hasGitChanges || gitFileStatus === "modified") {
+    gitIcon = <BranchesOutlined className="toolbar-btn-icon" />;
+    gitClass = "toolbar-git-btn--modified";
+    gitTooltip = "Save and Commit lên Git (Ctrl+Shift+S)";
+    isGitDisabled = Boolean(isDraft && saveStatus === "idle");
+  } else {
+    // Clean / No changes -> disable commit button as requested
+    gitIcon = <BranchesOutlined className="toolbar-btn-icon" />;
+    gitClass = "toolbar-git-btn--clean";
+    gitTooltip = "Save and Commit (Ctrl+Shift+S) — Đã đồng bộ với Git";
+    isGitDisabled = true;
+  }
 
   useEffect(() => {
     if (!isFocusedRef.current) {
@@ -207,6 +276,25 @@ export function DocEditorToolbar({
       icon: <HistoryOutlined />,
       onClick: onViewHistoryVersion,
     },
+    ...(onViewGitHistory ? [{
+      key: "view-git-history",
+      label: "View Git history",
+      icon: <BranchesOutlined />,
+      onClick: onViewGitHistory,
+    }] : []),
+    ...(onSaveToGit ? [{
+      key: "save-to-git",
+      label: hasConflict
+        ? "Resolve Git Conflict"
+        : remoteUpdated
+        ? "Pull changes from Git"
+        : isOnGit
+        ? "Commit nhanh lên Git"
+        : "Push to GitHub",
+      icon: gitIcon,
+      disabled: isGitDisabled,
+      onClick: handleGitAction,
+    }] : []),
     { type: "divider" },
     {
       key: "duplicate",
@@ -445,6 +533,19 @@ export function DocEditorToolbar({
             <InfoCircleOutlined className="toolbar-btn-icon" />
           </button>
         </Tooltip>
+
+        {onSaveToGit && (
+          <Tooltip title={gitTooltip}>
+            <button
+              className={`toolbar-btn toolbar-git-btn ${gitClass}`}
+              onClick={handleGitAction}
+              disabled={isGitDisabled}
+              aria-label={gitTooltip}
+            >
+              {gitIcon}
+            </button>
+          </Tooltip>
+        )}
 
         <Dropdown menu={{ items: menuItems }} trigger={["click"]} placement="bottomRight">
           <Tooltip title="More actions">

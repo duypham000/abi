@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-export type SidebarKey = "features" | "docs" | "series" | "demo";
+export type SidebarKey = "features" | "docs" | "series" | "demo" | "git";
 
 /**
  * Connectivity state machine:
