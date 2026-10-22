@@ -16,7 +16,7 @@ on:
       force_build_all:
         description: 'Force build all services regardless of changes'
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -49,10 +49,8 @@ jobs:
           filters: |
             go:
               - 'go/**'
-              - '.github/workflows/portainer-cicd.yaml'
             node:
               - 'node/**'
-              - '.github/workflows/portainer-cicd.yaml'
             compose:
               - 'docker-compose.yml'
 
