@@ -4,7 +4,7 @@ FROM golang:alpine AS builder
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache build-base
+RUN apk add --no-cache build-base ca-certificates git tzdata
 
 # Cache dependencies
 COPY go.mod go.sum ./

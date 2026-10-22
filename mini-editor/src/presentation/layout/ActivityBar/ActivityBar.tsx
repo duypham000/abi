@@ -12,6 +12,7 @@ import {
   BookOpenIcon,
   SettingsIcon,
   GripVerticalIcon,
+  GitBranchIcon,
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useGoldenLayout } from "../golden/GoldenLayoutContext";
@@ -48,10 +49,11 @@ function useDragHandle(type: string) {
 
 // ── Nav items (sidebar toggles) ───────────────────────────────────────────
 const NAV_ITEMS: { icon: React.ReactNode; label: string; sidebarKey: SidebarKey }[] = [
-  { icon: <LayoutGridIcon size={20} />,    label: "Features", sidebarKey: "features" },
-  { icon: <FileTextIcon size={20} />,      label: "Docs",     sidebarKey: "docs" },
-  { icon: <BookOpenIcon size={20} />,      label: "Series",   sidebarKey: "series" },
-  { icon: <FlaskConicalIcon size={20} />,  label: "Demo",     sidebarKey: "demo" },
+  { icon: <LayoutGridIcon size={20} />,    label: "Features",       sidebarKey: "features" },
+  { icon: <FileTextIcon size={20} />,      label: "Docs",           sidebarKey: "docs" },
+  { icon: <BookOpenIcon size={20} />,      label: "Series",         sidebarKey: "series" },
+  { icon: <GitBranchIcon size={20} />,     label: "Source Control", sidebarKey: "git" },
+  { icon: <FlaskConicalIcon size={20} />,  label: "Demo",           sidebarKey: "demo" },
 ];
 
 // ── Sidebar nav item ──────────────────────────────────────────────────────

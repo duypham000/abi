@@ -10,6 +10,7 @@ import AccountSection from "@/presentation/features/settings/sections/AccountSec
 import ShortcutSection from "@/presentation/features/settings/sections/ShortcutSection";
 import AboutSection from "@/presentation/features/settings/sections/AboutSection";
 import SearchSection from "@/presentation/features/settings/sections/SearchSection";
+import GithubSection from "@/presentation/features/settings/sections/GithubSection";
 
 import { isMobile } from "@/infrastructure/platform";
 import { MobileShell } from "@/presentation/layout/MobileShell";
@@ -27,6 +28,7 @@ function App() {
             <Route index element={<Navigate to="/settings/general" replace />} />
             <Route path="general" element={<GeneralSection />} />
             <Route path="account" element={<AccountSection />} />
+            <Route path="github" element={<GithubSection />} />
             <Route path="shortcut" element={<ShortcutSection />} />
             <Route path="search" element={<SearchSection />} />
             <Route path="about" element={<AboutSection />} />

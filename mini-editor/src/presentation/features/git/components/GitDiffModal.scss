@@ -1,0 +1,94 @@
+.git-diff-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+
+  .git-diff-modal {
+    background: var(--bg-surface, #ffffff);
+    width: 90vw;
+    max-width: 900px;
+    max-height: 85vh;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-color, #cbd5e1);
+
+    .git-diff-header {
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color, #cbd5e1);
+      background: var(--bg-card, #f8fafc);
+
+      .header-title-group {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        .diff-file-path {
+          font-weight: 600;
+          font-size: 0.95rem;
+          color: var(--text-color, #0f172a);
+          font-family: monospace;
+        }
+
+        .diff-stats {
+          display: flex;
+          gap: 6px;
+          font-size: 0.8rem;
+          font-weight: 600;
+
+          .diff-ins {
+            color: #16a34a;
+          }
+
+          .diff-dels {
+            color: #dc2626;
+          }
+        }
+      }
+
+      .btn-close {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 4px;
+        color: var(--text-muted, #64748b);
+        border-radius: 4px;
+
+        &:hover {
+          color: var(--text-color, #0f172a);
+          background: rgba(0, 0, 0, 0.05);
+        }
+      }
+    }
+
+    .git-diff-body {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      background: var(--bg-main, #ffffff);
+
+      .diff-empty {
+        padding: 40px;
+        text-align: center;
+        color: var(--text-muted, #64748b);
+        font-size: 0.85rem;
+      }
+
+      .git-visual-diff-viewer {
+        flex: 1;
+      }
+    }
+  }
+}

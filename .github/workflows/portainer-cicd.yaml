@@ -1,0 +1,193 @@
+name: Portainer Stack CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+      - 'release/*'
+    paths:
+      - 'go/**'
+      - 'node/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/portainer-cicd.yaml'
+  workflow_dispatch:
+    inputs:
+      force_build_all:
+        description: 'Force build all services regardless of changes'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: portainer-cicd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Phát hiện thay đổi trong các thư mục tương ứng
+  # ---------------------------------------------------------------------------
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go == 'true' || inputs.force_build_all == true }}
+      node: ${{ steps.filter.outputs.node == 'true' || inputs.force_build_all == true }}
+      compose: ${{ steps.filter.outputs.compose == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            go:
+              - 'go/**'
+            node:
+              - 'node/**'
+            compose:
+              - 'docker-compose.yml'
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Build & Push Go Backend (Chỉ chạy khi thư mục go/ có thay đổi)
+  # ---------------------------------------------------------------------------
+  build-go:
+    name: Build & Push Go Image
+    needs: detect-changes
+    if: needs.detect-changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Normalize repository owner to lowercase
+        id: repo-owner
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: go/go.sum
+
+      - name: Run Go Unit Tests
+        working-directory: go
+        run: |
+          go mod download
+          go test -v ./...
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Go Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./go
+          file: ./go/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tomo-backend:latest
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tomo-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Build & Push Node Microservice (Chỉ chạy khi thư mục node/ có thay đổi)
+  # ---------------------------------------------------------------------------
+  build-node:
+    name: Build & Push Node Image
+    needs: detect-changes
+    if: needs.detect-changes.outputs.node == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Normalize repository owner to lowercase
+        id: repo-owner
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: node/package-lock.json
+
+      - name: Install dependencies & run tests
+        working-directory: node
+        run: |
+          npm ci
+          npm test
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Node Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./node
+          file: ./node/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tomo-node:latest
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tomo-node:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Job 4: Kích hoạt Portainer Stack Webhook (Kéo image mới & khởi động lại)
+  # ---------------------------------------------------------------------------
+  trigger-portainer:
+    name: Trigger Portainer Redeploy
+    needs: [detect-changes, build-go, build-node]
+    if: |
+      always() &&
+      !cancelled() &&
+      !contains(needs.*.result, 'failure') &&
+      (needs.detect-changes.outputs.go == 'true' || needs.detect-changes.outputs.node == 'true' || needs.detect-changes.outputs.compose == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Portainer Stack Webhook
+        env:
+          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+        run: |
+          if [ -z "$PORTAINER_WEBHOOK_URL" ]; then
+            echo "::error::PORTAINER_WEBHOOK_URL secret chưa được cấu hình trong GitHub Repository Secrets!"
+            exit 1
+          fi
+
+          echo "Bắt đầu gọi Portainer Stack Webhook..."
+          RESPONSE=$(curl -k -s -w "\nHTTP_STATUS:%{http_code}" -X POST "$PORTAINER_WEBHOOK_URL")
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
+
+          echo "Response Body: $BODY"
+          echo "HTTP Status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Kích hoạt Portainer Stack redeploy thành công!"
+          else
+            echo "::error::Gọi Webhook thất bại với mã lỗi HTTP $HTTP_STATUS: $BODY"
+            exit 1
+          fi

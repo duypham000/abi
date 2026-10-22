@@ -5,6 +5,8 @@ import { useDocPopup } from "@/presentation/hooks/useDocPopup";
 import { PopupWindowIcon } from "@/presentation/components/icons";
 import { useGoldenLayout } from "@/presentation/layout/golden/GoldenLayoutContext";
 import { PANEL_TYPES } from "@/presentation/layout/golden/panelRegistry";
+import { useGitTrackedEntities } from "@/presentation/hooks/useGitTrackedEntities";
+import { EntityGitBadge } from "@/presentation/components/EntityGitBadge";
 import "./DocCard.scss";
 
 interface DocCardProps {
@@ -17,6 +19,7 @@ export default function DocCard({ doc, onDelete, isDeleting }: DocCardProps) {
   const navigate = useNavigate();
   const { openDocPopup } = useDocPopup();
   const { layout, openPanel } = useGoldenLayout();
+  const { isDocOnGit, getDocGitStatus } = useGitTrackedEntities();
 
   const formattedDate = doc.lastSync
     ? new Date(doc.lastSync).toLocaleDateString(undefined, {
@@ -33,7 +36,8 @@ export default function DocCard({ doc, onDelete, isDeleting }: DocCardProps) {
     }>
       <div className="doc-card-body">
         <h3 className="doc-card-title">
-          {doc.title || "Untitled"}
+          <span className="doc-card-title-text">{doc.title || "Untitled"}</span>
+          <EntityGitBadge isOnGit={isDocOnGit(doc.id)} gitStatus={getDocGitStatus(doc.id)} size={12} />
           {doc.seriesName && (
             <span className="doc-card-badge doc-card-badge--series">
               {doc.seriesName}

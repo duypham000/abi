@@ -10,14 +10,16 @@ import AccountSection from "../../sections/AccountSection";
 import ShortcutSection from "../../sections/ShortcutSection";
 import AboutSection from "../../sections/AboutSection";
 import SearchSection from "../../sections/SearchSection";
+import GithubSection from "../../sections/GithubSection";
 import "./SettingsPage.scss";
 
-type SettingsSection = "general" | "account" | "shortcut" | "search" | "about";
+type SettingsSection = "general" | "account" | "github" | "shortcut" | "search" | "about";
 
 function SectionContent({ section }: { section: SettingsSection }) {
   switch (section) {
     case "general": return <GeneralSection />;
     case "account": return <AccountSection />;
+    case "github": return <GithubSection />;
     case "shortcut": return <ShortcutSection />;
     case "search": return <SearchSection />;
     case "about": return <AboutSection />;
@@ -44,6 +46,7 @@ export default function SettingsPage({ panelMode, initialSection }: SettingsPage
   const sections = [
     { path: "general", label: "General" },
     { path: "account", label: "Account" },
+    { path: "github", label: "GitHub" },
     { path: "shortcut", label: "Shortcut" },
     ...(user?.role === "ADMIN" ? [{ path: "search", label: "Search" }] : []),
     { path: "about", label: "About" },

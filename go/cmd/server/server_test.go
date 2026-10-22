@@ -14,6 +14,7 @@ import (
 	"tomo-backend/internal/modules/auth"
 	"tomo-backend/internal/modules/auth/domain"
 	"tomo-backend/internal/modules/docs"
+	"tomo-backend/internal/modules/github"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,14 +23,17 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
 	cfg := &config.Config{
-		ServerPort:    "8080",
-		DBDriver:      "sqlite",
-		DBDsn:         "file::memory:?cache=shared",
-		JWTSecret:     "integration-test-secret-2026",
-		JWTAccessTTL:  1 * time.Hour,
-		JWTRefreshTTL: 24 * time.Hour,
-		YjsSecret:     "integration-yjs-secret-2026",
-		Environment:   "test",
+		ServerPort:       "8080",
+		DBDriver:         "sqlite",
+		DBDsn:            "file::memory:?cache=shared",
+		JWTSecret:        "integration-test-secret-2026",
+		JWTAccessTTL:     1 * time.Hour,
+		JWTRefreshTTL:    24 * time.Hour,
+		YjsSecret:        "integration-yjs-secret-2026",
+		Environment:      "test",
+		GitHubAPIBaseURL: "https://api.github.com",
+		WorkspaceRoot:    t.TempDir(),
+		CacheTTLHours:    24,
 	}
 
 	db, err := database.InitDB(cfg)
@@ -40,6 +44,7 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	jwtManager := security.NewJWTManager(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	authModule := auth.InitModule(db, jwtManager)
 	docsModule := docs.InitModule(db, cfg.YjsSecret)
+	githubModule := github.InitModule(db, cfg.GitHubAPIBaseURL, cfg.WorkspaceRoot, cfg.CacheTTLHours)
 
 	router := gin.Default()
 	router.GET("/healthz", func(c *gin.Context) {
@@ -50,6 +55,7 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	{
 		authModule.RegisterRoutes(v1, jwtManager)
 		docsModule.RegisterRoutes(v1, jwtManager)
+		githubModule.RegisterRoutes(v1, jwtManager)
 	}
 
 	return router

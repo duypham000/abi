@@ -6,6 +6,8 @@ import { useDocs } from "@/presentation/features/docs/hooks/useDocs";
 import { useSearchDocsQuery, useCreateDocMutation } from "@/infrastructure/api/docsApi";
 import type { DocDto } from "@/core/interfaces/docs";
 import { getRecent, addRecent, type RecentEntry } from "@/presentation/features/docs/utils/recentDocs";
+import { useGitTrackedEntities } from "@/presentation/hooks/useGitTrackedEntities";
+import { EntityGitBadge } from "@/presentation/components/EntityGitBadge";
 import "./DocsPanel.scss";
 
 export function DocsPanel() {
@@ -13,6 +15,7 @@ export function DocsPanel() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [recent, setRecent] = useState<RecentEntry[]>(getRecent);
+  const { isDocOnGit, getDocGitStatus } = useGitTrackedEntities();
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), 300);
@@ -89,6 +92,7 @@ export function DocsPanel() {
               >
                 <FileTextIcon size={13} className="docs-panel__row-icon" />
                 <span className="docs-panel__row-name">{r.title || "Untitled"}</span>
+                <EntityGitBadge isOnGit={isDocOnGit(r.id)} gitStatus={getDocGitStatus(r.id)} />
               </button>
             ))}
           </div>
@@ -127,6 +131,7 @@ export function DocsPanel() {
               >
                 <FileTextIcon size={13} className="docs-panel__row-icon" />
                 <span className="docs-panel__row-name">{doc.title || "Untitled"}</span>
+                <EntityGitBadge isOnGit={isDocOnGit(doc.id)} gitStatus={getDocGitStatus(doc.id)} />
               </button>
             ))}
         </div>

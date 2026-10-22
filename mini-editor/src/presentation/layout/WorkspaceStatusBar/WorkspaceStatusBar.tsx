@@ -3,17 +3,26 @@
  * Shows: panel count · saving state indicator · panel toggle button.
  */
 import { useDispatch, useSelector } from "react-redux";
-import { PanelBottomIcon, SaveIcon } from "lucide-react";
-import { togglePanel } from "@/presentation/store/appSlice";
-import type { RootState } from "@/presentation/store";
+import { PanelBottomIcon, SaveIcon, GitBranch } from "lucide-react";
+import { togglePanel, toggleActiveSidebar } from "@/presentation/store/appSlice";
+import type { RootState, AppDispatch } from "@/presentation/store";
 import { useGoldenLayout } from "../golden/GoldenLayoutContext";
 import { walkComponents } from "../golden/GoldenLayoutHost";
+import { useGetGithubUserQuery, useGetGitDiffQuery } from "@/infrastructure/api/githubApi";
 import "./WorkspaceStatusBar.scss";
 
 export function WorkspaceStatusBar() {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const panelOpen = useSelector((s: RootState) => s.app.panelOpen);
+  const activeSidebar = useSelector((s: RootState) => s.app.activeSidebar);
   const { layout } = useGoldenLayout();
+
+  const { data: user } = useGetGithubUserQuery();
+  const activeRepoOwner = user?.activeRepoOwner || user?.active_repo_owner || "";
+  const activeRepoName = user?.activeRepoName || user?.active_repo_name || "";
+  const activeRepoBranch = user?.activeRepoBranch || user?.active_repo_branch || "main";
+  const hasGit = user?.connected && !!activeRepoName;
+  const { data: diffData } = useGetGitDiffQuery(undefined, { skip: !hasGit });
 
   let panelCount = 0;
   if (layout?.rootItem) {
@@ -24,8 +33,29 @@ export function WorkspaceStatusBar() {
 
   return (
     <div className="workspace-statusbar" role="status" aria-label="Status bar">
-      {/* Left: panel count + save state */}
+      {/* Left: Git branch + panel count + save state */}
       <div className="wsb-left">
+        {hasGit && (
+          <button
+            className={`wsb-btn${activeSidebar === "git" ? " is-active" : ""}`}
+            title={`Git Repository: ${activeRepoOwner}/${activeRepoName} (${activeRepoBranch}) — click to toggle Source Control`}
+            onClick={() => dispatch(toggleActiveSidebar("git"))}
+          >
+            <GitBranch size={11} />
+            <span>{activeRepoBranch}</span>
+            {diffData && (((diffData.aheadCommits || diffData.ahead_commits) ?? 0) > 0 || ((diffData.behindCommits || diffData.behind_commits) ?? 0) > 0) && (
+              <span style={{ fontSize: "10px", opacity: 0.85 }}>
+                ↑{(diffData.aheadCommits || diffData.ahead_commits) ?? 0} ↓{(diffData.behindCommits || diffData.behind_commits) ?? 0}
+              </span>
+            )}
+            {diffData && (diffData.files?.length ?? 0) > 0 && (
+              <span style={{ fontSize: "10px", fontWeight: 700, color: "#fef08a" }}>
+                *{diffData.files?.length}
+              </span>
+            )}
+          </button>
+        )}
+
         <span className="wsb-item" title="Open panels">
           {panelCount} {panelCount === 1 ? "panel" : "panels"}
         </span>
