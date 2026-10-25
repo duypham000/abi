@@ -4,6 +4,7 @@ export {
   useLoginMutation,
   useRegisterMutation,
   useLogoutMutation,
+  useGetMeQuery,
 } from "./authApi";
 export {
   docsApi,

@@ -28,9 +28,18 @@ export const authApi = baseApi.injectEndpoints({
         method: "POST",
       }),
     }),
+    getMe: builder.query<UserDto, void>({
+      query: () => "/auth/me",
+      providesTags: ["User"],
+    }),
   }),
   overrideExisting: false,
 });
 
-export const { useLoginMutation, useRegisterMutation, useLogoutMutation } =
-  authApi;
+export const {
+  useLoginMutation,
+  useRegisterMutation,
+  useLogoutMutation,
+  useGetMeQuery,
+} = authApi;
+
