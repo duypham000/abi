@@ -15,6 +15,7 @@ interface AppState {
   theme: "light";
   sidebarOpen: boolean;
   activeSidebar: SidebarKey | null;
+  lastActiveSidebar: SidebarKey;
   panelOpen: boolean;
   pageTitle: string;
   connectivity: Connectivity;
@@ -22,8 +23,9 @@ interface AppState {
 
 const initialState: AppState = {
   theme: "light",
-  sidebarOpen: true,
+  sidebarOpen: false,
   activeSidebar: null,
+  lastActiveSidebar: "docs",
   panelOpen: false,
   pageTitle: "Dashboard",
   connectivity: typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "online",
@@ -33,13 +35,48 @@ const appSlice = createSlice({
   name: "app",
   initialState,
   reducers: {
-    toggleSidebar(state) { state.sidebarOpen = !state.sidebarOpen; },
-    setSidebarOpen(state, action: PayloadAction<boolean>) { state.sidebarOpen = action.payload; },
+    toggleSidebar(state) {
+      if (state.activeSidebar !== null) {
+        state.lastActiveSidebar = state.activeSidebar;
+        state.activeSidebar = null;
+        state.sidebarOpen = false;
+      } else {
+        state.activeSidebar = state.lastActiveSidebar || "docs";
+        state.sidebarOpen = true;
+      }
+    },
+    setSidebarOpen(state, action: PayloadAction<boolean>) {
+      state.sidebarOpen = action.payload;
+      if (action.payload) {
+        if (state.activeSidebar === null) {
+          state.activeSidebar = state.lastActiveSidebar || "docs";
+        }
+      } else {
+        if (state.activeSidebar !== null) {
+          state.lastActiveSidebar = state.activeSidebar;
+          state.activeSidebar = null;
+        }
+      }
+    },
     setActiveSidebar(state, action: PayloadAction<SidebarKey | null>) {
+      if (action.payload !== null) {
+        state.lastActiveSidebar = action.payload;
+        state.sidebarOpen = true;
+      } else {
+        state.sidebarOpen = false;
+      }
       state.activeSidebar = action.payload;
     },
     toggleActiveSidebar(state, action: PayloadAction<SidebarKey>) {
-      state.activeSidebar = state.activeSidebar === action.payload ? null : action.payload;
+      if (state.activeSidebar === action.payload) {
+        state.lastActiveSidebar = action.payload;
+        state.activeSidebar = null;
+        state.sidebarOpen = false;
+      } else {
+        state.lastActiveSidebar = action.payload;
+        state.activeSidebar = action.payload;
+        state.sidebarOpen = true;
+      }
     },
     togglePanel(state) { state.panelOpen = !state.panelOpen; },
     setPanelOpen(state, action: PayloadAction<boolean>) { state.panelOpen = action.payload; },

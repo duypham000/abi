@@ -23,12 +23,15 @@ const fastify = Fastify({
 
 await fastify.register(cors, { origin: config.corsOrigin });
 
-// Liveness check (not rate limited — k8s probes hit this directly on the pod).
+// Liveness check (support both root /health and prefixed /node/health)
 fastify.get('/health', async () => ({ status: 'ok' }));
+fastify.get('/node/health', async () => ({ status: 'ok' }));
 
-// Mounted at /api/v1 so the in-app path equals the public Kong path
-// (api.tomoo.uk/api/v1/translate) — Kong forwards with strip-path:false, no rewrite.
+// Translate routes (support both standard /api/v1 and prefixed /node/api/v1, /node/v1, /node)
 await fastify.register(translateRoutes, { prefix: '/api/v1' });
+await fastify.register(translateRoutes, { prefix: '/node/api/v1' });
+await fastify.register(translateRoutes, { prefix: '/node/v1' });
+await fastify.register(translateRoutes, { prefix: '/node' });
 
 try {
   await fastify.listen({ port: config.port, host: '0.0.0.0' });

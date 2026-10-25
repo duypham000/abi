@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useGoldenLayout } from "@/presentation/layout/golden/GoldenLayoutContext";
 import { PANEL_TYPES } from "@/presentation/layout/golden/panelRegistry";
 import { useSelector } from "react-redux";
 import { Excalidraw, Sidebar as ExcalidrawSidebar } from "@excalidraw/excalidraw";
-import { FileTextOutlined, FormOutlined } from "@ant-design/icons";
+import {
+  FileTextOutlined,
+  FormOutlined,
+  SaveOutlined,
+  CloudUploadOutlined,
+} from "@ant-design/icons";
+import { Button, Tooltip, message } from "antd";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
 import { nanoid } from "nanoid";
@@ -14,7 +20,16 @@ import { Loading } from "@/presentation/components/ui/Loading/Loading";
 import Sidebar from "@/presentation/features/dashboard/components/Sidebar";
 import { useCreateNoteMutation } from "@/infrastructure/api/notesApi";
 import { useTouchDevice } from "@/presentation/hooks/useTouchDevice";
-import { useCanvasEditor } from "../../hooks/useCanvasEditor";
+import {
+  useSaveGitFileMutation,
+  useCheckFileStatusMutation,
+  usePullRepoMutation,
+  useGetWorkspaceManifestQuery,
+  useGetFileHistoryQuery,
+  useGetGithubUserQuery,
+} from "@/infrastructure/api/githubApi";
+import type { CanvasScene } from "@/core/interfaces/canvas";
+import { useCanvasEditor, sanitizeAppState } from "../../hooks/useCanvasEditor";
 import { useCanvasUiStore } from "../../store/canvasUiStore";
 import { EmbeddedDocFrame } from "./components/EmbeddedDocFrame";
 import { EmbeddedNoteFrame } from "./components/EmbeddedNoteFrame";
@@ -41,8 +56,15 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   const { openPanel } = useGoldenLayout();
   const { theme } = useSelector((state: RootState) => state.app);
 
-  const { canvas, isLoading, saveStatus, initialScene, handleSceneChange } =
-    useCanvasEditor(canvasId);
+  const {
+    canvas,
+    isLoading,
+    saveStatus,
+    initialScene,
+    handleSceneChange,
+    triggerSave,
+    getLatestScene,
+  } = useCanvasEditor(canvasId);
   const isTouch = useTouchDevice();
   const [canvasMode, setCanvasMode] = useState<"navigate" | "edit">(isTouch ? "navigate" : "edit");
 
@@ -54,6 +76,177 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   const [excalidrawAPIState, _setExcalidrawAPIState] = useState<ExcalidrawImperativeAPI | null>(null);
   const api = excalidrawAPIState;
 
+  const { data: user } = useGetGithubUserQuery();
+  const [saveGitFile, { isLoading: isSavingGit }] = useSaveGitFileMutation();
+  const [checkFileStatus] = useCheckFileStatusMutation();
+  const [pullRepo] = usePullRepoMutation();
+
+  const [gitFileStatus, setGitFileStatus] = useState<"clean" | "modified" | "untracked" | "conflict" | "behind">("clean");
+  const [hasGitChanges, setHasGitChanges] = useState(false);
+  const [hasConflict, setHasConflict] = useState(false);
+  const [remoteUpdated, setRemoteUpdated] = useState(false);
+
+  const checkStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const gitFilePath = `canvases/canvas-${canvasId}.json`;
+
+  const { data: manifest } = useGetWorkspaceManifestQuery();
+  const { data: fileHistory } = useGetFileHistoryQuery(gitFilePath, { skip: !canvasId });
+
+  const isCanvasOnGit = useMemo(() => {
+    if (!canvasId) return false;
+    const inManifest = manifest?.items?.some(
+      (item) => item.id === `canvas-${canvasId}` || item.path === gitFilePath
+    );
+    const hasHistory = Array.isArray(fileHistory) && fileHistory.length > 0;
+    return Boolean(inManifest || hasHistory || gitFileStatus !== "untracked");
+  }, [manifest, fileHistory, canvasId, gitFilePath, gitFileStatus]);
+
+  const getCurrentScene = useCallback((): CanvasScene => {
+    if (api) {
+      const elements = api.getSceneElements();
+      const appState = api.getAppState() as Record<string, unknown>;
+      const files = api.getFiles() as Record<string, unknown>;
+      return {
+        elements,
+        appState: sanitizeAppState(appState),
+        files,
+      };
+    }
+    return getLatestScene();
+  }, [api, getLatestScene]);
+
+  const checkCurrentFileStatus = useCallback(
+    async (currentScene?: CanvasScene, currentTitle?: string) => {
+      if (!canvasId) return;
+      try {
+        const sceneData = currentScene ?? getCurrentScene();
+        const payload = {
+          id: canvas?.id ?? canvasId,
+          title: currentTitle ?? canvas?.title ?? "Untitled Canvas",
+          slug: `canvas-${canvasId}`,
+          status: canvas?.status ?? 1,
+          metadata: canvas?.metadata ?? null,
+          scene: sceneData,
+        };
+        const res = await checkFileStatus({
+          file_path: gitFilePath,
+          content: JSON.stringify(payload),
+        }).unwrap();
+
+        setGitFileStatus(res.status);
+        setHasGitChanges(Boolean(res.has_changes));
+        setHasConflict(Boolean(res.has_conflict));
+        setRemoteUpdated(Boolean(res.remote_updated));
+      } catch (err) {
+        console.warn("[CanvasEditor] checkFileStatus error:", err);
+      }
+    },
+    [canvasId, canvas?.id, canvas?.title, canvas?.status, canvas?.metadata, getCurrentScene, gitFilePath, checkFileStatus]
+  );
+
+  useEffect(() => {
+    if (canvas?.id) {
+      checkCurrentFileStatus();
+    }
+    return () => {
+      if (checkStatusTimerRef.current) clearTimeout(checkStatusTimerRef.current);
+    };
+  }, [canvas?.id]);
+
+  const handleSaveShortcut = useCallback(async () => {
+    const currentScene = getCurrentScene();
+    await triggerSave(currentScene);
+  }, [getCurrentScene, triggerSave]);
+
+  const handlePullGit = useCallback(async () => {
+    try {
+      const res = await pullRepo().unwrap();
+      if (res.has_conflict || res.hasConflicts) {
+        message.warning("Có xung đột khi pull từ GitHub — Kiểm tra Source Control.");
+      } else {
+        message.success("Đã đồng bộ nội dung mới nhất từ Git!");
+        checkCurrentFileStatus();
+      }
+    } catch (err: unknown) {
+      const errMsg = (err as { data?: { message?: string } })?.data?.message;
+      message.error(errMsg ? `Pull từ Git thất bại: ${errMsg}` : "Pull từ Git thất bại");
+    }
+  }, [pullRepo, checkCurrentFileStatus]);
+
+  const handleSaveToGit = useCallback(async () => {
+    if (!canvas) return;
+    try {
+      const currentScene = getCurrentScene();
+      await triggerSave(currentScene);
+
+      const payload = {
+        id: canvas.id,
+        title: canvas.title || "Untitled Canvas",
+        slug: `canvas-${canvas.id}`,
+        status: canvas.status ?? 1,
+        metadata: canvas.metadata ?? null,
+        scene: currentScene,
+        saved_at: new Date().toISOString(),
+      };
+
+      const commitMsg = isCanvasOnGit
+        ? `Update ${canvas.title || `canvas-${canvas.id}`}`
+        : `Add ${canvas.title || `canvas-${canvas.id}`} to Git workspace`;
+
+      await saveGitFile({
+        path: gitFilePath,
+        content: payload,
+        auto_commit: true,
+        auto_push: true,
+        message: commitMsg,
+      }).unwrap();
+
+      message.success(
+        isCanvasOnGit
+          ? `Đã lưu và commit lên GitHub: ${gitFilePath}`
+          : `Đã lưu và đẩy lên GitHub: ${gitFilePath}`
+      );
+      checkCurrentFileStatus(currentScene, canvas.title);
+    } catch (err) {
+      const errMsg = (err as { data?: { message?: string } })?.data?.message;
+      message.error(errMsg ? `Failed to push to GitHub: ${errMsg}` : "Failed to push to GitHub");
+    }
+  }, [canvas, getCurrentScene, triggerSave, isCanvasOnGit, gitFilePath, saveGitFile, checkCurrentFileStatus]);
+
+  const isGitConnected = Boolean(user?.connected && (user?.activeRepoName || user?.active_repo_name));
+
+  const handleSaveAndCommitShortcut = useCallback(async () => {
+    if (!isGitConnected) {
+      message.warning("Vui lòng kết nối GitHub và chọn repository trong Settings trước khi lưu Git.");
+      return;
+    }
+    if (hasConflict || gitFileStatus === "conflict") {
+      message.warning("Phát hiện xung đột Git trên canvas này — Kiểm tra Source Control.");
+      return;
+    }
+    if (remoteUpdated || gitFileStatus === "behind") {
+      message.info("Nội dung trên Git đã được cập nhật — Đang kéo (pull) về...");
+      await handlePullGit();
+      return;
+    }
+    if (gitFileStatus === "clean" && !hasGitChanges && saveStatus !== "saving") {
+      message.info("Canvas đã được lưu và đồng bộ với Git (không có thay đổi mới).");
+      return;
+    }
+    await handleSaveToGit();
+  }, [isGitConnected, hasConflict, gitFileStatus, remoteUpdated, hasGitChanges, saveStatus, handleSaveToGit, handlePullGit]);
+
+  const gitTooltip = useMemo(() => {
+    if (hasConflict || gitFileStatus === "conflict") return "Phát hiện xung đột Git";
+    if (remoteUpdated || gitFileStatus === "behind") return "Có cập nhật mới trên Git — click để kéo về";
+    if (isCanvasOnGit) {
+      return hasGitChanges
+        ? "Save and Push lên GitHub (Ctrl+Shift+S)"
+        : "Save and Commit (Ctrl+Shift+S) — Đã đồng bộ với Git";
+    }
+    return "Save and Commit lên Git (Ctrl+Shift+S)";
+  }, [hasConflict, gitFileStatus, remoteUpdated, isCanvasOnGit, hasGitChanges]);
 
   const [createNote] = useCreateNoteMutation();
 
@@ -95,9 +288,9 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   }, [isAltHeld]);
 
   const setExcalidrawAPI = useCallback(
-    (api: ExcalidrawImperativeAPI) => {
-      setExcalidrawAPI(api);
-      setExcalidrawAPIStore(api);
+    (excalidrawApi: ExcalidrawImperativeAPI) => {
+      _setExcalidrawAPIState(excalidrawApi);
+      setExcalidrawAPIStore(excalidrawApi);
     },
     [setExcalidrawAPIStore]
   );
@@ -124,6 +317,15 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   const handleChange = useCallback(
     (elements: readonly any[], appState: any, files: any) => {
       handleSceneChange(elements, appState, files);
+
+      if (checkStatusTimerRef.current) clearTimeout(checkStatusTimerRef.current);
+      checkStatusTimerRef.current = setTimeout(() => {
+        checkCurrentFileStatus({
+          elements,
+          appState: sanitizeAppState(appState),
+          files,
+        });
+      }, 1000);
 
       const knownDims = knownDimsRef.current;
       const liveIds = new Set<string>();
@@ -196,7 +398,7 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
         return next;
       });
     },
-    [handleSceneChange, updateElementById]
+    [handleSceneChange, updateElementById, checkCurrentFileStatus]
   );
 
   const insertEmbeddable = useCallback((link: string, dropPoint?: { clientX: number; clientY: number }) => {
@@ -398,7 +600,7 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   const [docsSidebarOpen, setDocsSidebarOpen] = useState(false);
 
   const handleToggleDocsSidebar = useCallback(() => {
-    setDocsSidebarOpen(Boolean(open));
+    setDocsSidebarOpen((prev) => !prev);
   }, []);
 
   const handleSidebarSelect = useCallback(
@@ -411,6 +613,22 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+      const isKeyS = e.key === "s" || e.key === "S" || e.code === "KeyS";
+
+      if (isCtrlOrMeta && isKeyS) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        if (e.shiftKey) {
+          handleSaveAndCommitShortcut();
+        } else {
+          handleSaveShortcut();
+        }
+        return;
+      }
+
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       if (target) {
@@ -426,9 +644,9 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
         handleAddNote();
       }
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleToggleDocsSidebar, handleAddNote]);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [handleToggleDocsSidebar, handleAddNote, handleSaveShortcut, handleSaveAndCommitShortcut]);
 
   const handlePointerUpdate = useCallback(() => {}, []);
 
@@ -479,11 +697,31 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
     <main className="dashboard-main canvas-editor-main">
           <div className="canvas-editor-header">
             <h2 className="canvas-editor-title">{canvas?.title || "Untitled Canvas"}</h2>
-            <span className="canvas-editor-save-status">
-              {saveStatus === "saving" && "Saving…"}
-              {saveStatus === "success" && "Saved"}
-              {saveStatus === "error" && "Save failed"}
-            </span>
+            <div className="canvas-editor-header-right">
+              <span className="canvas-editor-save-status">
+                {saveStatus === "saving" && "Saving…"}
+                {saveStatus === "success" && "Saved"}
+                {saveStatus === "error" && "Save failed"}
+              </span>
+              <Tooltip title="Lưu (Ctrl+S)">
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<SaveOutlined />}
+                  loading={saveStatus === "saving"}
+                  onClick={handleSaveShortcut}
+                />
+              </Tooltip>
+              <Tooltip title={gitTooltip}>
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<CloudUploadOutlined />}
+                  loading={isSavingGit}
+                  onClick={handleSaveAndCommitShortcut}
+                />
+              </Tooltip>
+            </div>
           </div>
 
           <div
@@ -493,6 +731,7 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
           >
             <Excalidraw
               key={canvasId}
+              excalidrawAPI={setExcalidrawAPI}
               initialData={initialScene as any}
               onChange={handleChange}
               onPointerUpdate={handlePointerUpdate}

@@ -1,6 +1,7 @@
 .appbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   height: 40px;
   width: 100%;
   flex-shrink: 0;
@@ -14,70 +15,217 @@
     color: #18181b;
   }
 
-  &--dark {
+  &--dark,
+  .theme-dark & {
     background-color: #18181b;
     border-bottom: 1px solid #3f3f46;
     color: #fafafa;
   }
 }
 
+/* ── Left section & Animated Burger Button ──────────────────────────────── */
 .appbar-left {
   display: flex;
   align-items: center;
-  padding-left: 4px;
+  padding-left: 8px;
   min-width: 48px;
 }
 
+.appbar-burger-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #71717a;
+  border-radius: 6px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+    color: #18181b;
+  }
+
+  .theme-dark &,
+  .appbar--dark & {
+    color: #a1a1aa;
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+      color: #fafafa;
+    }
+  }
+
+  &.is-open {
+    color: #18181b;
+
+    .theme-dark &,
+    .appbar--dark & {
+      color: #fafafa;
+    }
+  }
+
+  .burger-box {
+    width: 16px;
+    height: 12px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+
+  .burger-line {
+    display: block;
+    height: 1.75px;
+    background-color: currentColor;
+    border-radius: 2px;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.18s ease,
+                width 0.2s ease;
+    transform-origin: center;
+
+    &--top {
+      width: 100%;
+    }
+
+    &--mid {
+      width: 65%;
+      align-self: flex-start;
+    }
+
+    &--bot {
+      width: 100%;
+    }
+  }
+
+  &:hover .burger-line--mid {
+    width: 100%;
+  }
+
+  &.is-open {
+    .burger-line--top {
+      transform: translateY(5.125px) rotate(45deg);
+    }
+    .burger-line--mid {
+      opacity: 0;
+      transform: scaleX(0);
+    }
+    .burger-line--bot {
+      transform: translateY(-5.125px) rotate(-45deg);
+    }
+  }
+}
+
+/* ── Center Dummy Search Bar ────────────────────────────────────────────── */
 .appbar-center {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   overflow: hidden;
+  height: 100%;
 }
 
-.appbar-title {
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  opacity: 0.8;
-}
-
-.appbar-right {
-  display: flex;
-  align-items: center;
-  margin-left: auto;
-}
-
-.appbar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: inherit;
-  border-radius: 4px;
-  transition: background-color 0.15s ease;
-
-  &:hover {
-    background-color: rgba(0, 0, 0, 0.06);
-  }
-
-  .appbar--dark &:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-  }
-}
-
-.window-controls {
+.appbar-search {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 14px 0 8px;
+  width: clamp(220px, 32vw, 440px);
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border-radius: 6px;
+  background: #f4f4f5;
+  border: 1px solid #e4e4e7;
+  color: #71717a;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+
+  &:hover {
+    background: #e4e4e7;
+    border-color: #d4d4d8;
+    color: #18181b;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+    .appbar-search__icon {
+      color: #18181b;
+    }
+
+    .appbar-search__kbd {
+      border-color: #cbd5e1;
+      background: #ffffff;
+      color: #18181b;
+    }
+  }
+
+  &:active {
+    transform: scale(0.99);
+  }
+
+  .theme-dark &,
+  .appbar--dark & {
+    background: #27272a;
+    border-color: #3f3f46;
+    color: #a1a1aa;
+
+    &:hover {
+      background: #3f3f46;
+      border-color: #52525b;
+      color: #fafafa;
+
+      .appbar-search__icon {
+        color: #fafafa;
+      }
+
+      .appbar-search__kbd {
+        border-color: #52525b;
+        background: #27272a;
+        color: #fafafa;
+      }
+    }
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    color: #a1a1aa;
+    transition: color 0.15s ease;
+  }
+
+  &__text {
+    flex: 1;
+    font-size: 12.5px;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__kbd {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: inherit;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: #ffffff;
+    border: 1px solid #e4e4e7;
+    color: #71717a;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    transition: all 0.15s ease;
+  }
 }
 
 .appbar-offline-badge {
@@ -88,13 +236,79 @@
   background: #f59e0b;
   color: #ffffff;
   letter-spacing: 0.03em;
-  margin-left: 8px;
+  flex-shrink: 0;
 }
 
-// Window controls must stay visible at every width — a narrow DESKTOP window
-// (login, doc popup, …) is not mobile, so we never hide them by viewport width.
-// Safe-area padding (mobile notch / curved corners) is still applied; the vars
-// resolve to 0 on desktop.
+/* ── Right Window Controls ──────────────────────────────────────────────── */
+.appbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 48px;
+}
+
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 8px;
+  height: 100%;
+}
+
+.window-btn {
+  width: 34px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+
+  svg {
+    width: 10px;
+    height: 10px;
+    pointer-events: none;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+    color: #18181b;
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  .theme-dark &,
+  .appbar--dark & {
+    color: #a1a1aa;
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+      color: #fafafa;
+    }
+  }
+
+  /* Red accent on close button hover */
+  &--close:hover {
+    background-color: #ef4444 !important;
+    color: #ffffff !important;
+  }
+
+  &--close:active {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+  }
+}
+
+/* ── Mobile safe area padding ───────────────────────────────────────────── */
 @media (max-width: 767px) {
   .appbar {
     height: calc(40px + var(--safe-top, 0px));
@@ -102,49 +316,10 @@
   }
 
   .appbar-left {
-    padding-left: calc(4px + var(--safe-left, 0px));
+    padding-left: calc(8px + var(--safe-left, 0px));
   }
 
   .appbar-right {
     padding-right: var(--safe-right, 0px);
   }
-}
-
-/* ── Traffic-light window controls ────────────────────────────────────────── */
-.window-btn {
-  /* Coloured dot */
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  flex-shrink: 0;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: filter 0.12s, transform 0.1s;
-
-  /* Icon hidden by default — revealed on group hover */
-  svg {
-    width: 6px;
-    height: 6px;
-    opacity: 0;
-    color: rgba(0, 0, 0, 0.55);
-    transition: opacity 0.12s;
-    pointer-events: none;
-    flex-shrink: 0;
-  }
-
-  /* Show all icons when cursor enters the control group */
-  .window-controls:hover & svg { opacity: 1; }
-
-  &:hover { filter: brightness(0.85); transform: scale(1.1); }
-  &:active { filter: brightness(0.7); transform: scale(0.95); }
-
-  /* Per-button colours (macOS palette) */
-  &--close    { background: #ff5f57; }
-  &--minimize { background: #febc2e; }
-  &--maximize { background: #28c840; }
 }

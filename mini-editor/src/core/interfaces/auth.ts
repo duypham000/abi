@@ -16,17 +16,25 @@ export interface TokenResponse {
 }
 
 export interface UserDto {
-  id: number;
+  id: string | number;
   username: string;
   email: string;
+  fullName?: string;
+  full_name?: string;
   active: boolean;
+  enabled?: boolean;
   role: string;
-  createdDate: string;
+  createdDate?: string;
+  createdAt?: string;
 }
 
 export interface AuthUser {
-  userId: number;
+  userId: string | number;
   username: string;
   email: string;
   role: string;
+  fullName?: string;
+  createdAt?: string;
+  active?: boolean;
 }
+

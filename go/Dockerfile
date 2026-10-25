@@ -1,5 +1,5 @@
 # Build Stage
-FROM golang:alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:alpine AS builder
 
 WORKDIR /app
 
@@ -13,8 +13,13 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o tomo-server ./cmd/server/main.go
+# Ensure .env.production exists so COPY in production stage does not fail if ignored by git
+RUN if [ ! -f .env.production ]; then touch .env.production; fi
+
+# Build static binary supporting multi-architecture cross-compilation
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -a -installsuffix cgo -o tomo-server ./cmd/server/main.go
 
 # Production Stage
 FROM alpine:3.19

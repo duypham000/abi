@@ -18,7 +18,12 @@ import {
 import "./GithubSection.scss";
 
 export default function GithubSection() {
-  const { data: user, isLoading } = useGetGithubUserQuery();
+  const { data: user, isLoading, isError: isUserError } = useGetGithubUserQuery(undefined, {
+    // Tránh gọi lại liên tục gây block khi chưa đăng nhập
+    refetchOnMountOrArgChange: false,
+    refetchOnFocus: false,
+    refetchOnReconnect: false,
+  });
   const { data: repos, isFetching: isFetchingRepos, refetch: refetchRepos } = useListGithubReposQuery(undefined, {
     skip: !user?.connected,
   });
@@ -128,7 +133,7 @@ export default function GithubSection() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !isUserError) {
     return (
       <div className="github-section">
         <h2 className="settings-section-title">GitHub Integration</h2>

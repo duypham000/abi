@@ -2,6 +2,14 @@ import { useEffect } from "react";
 
 export type PaletteMode = "quick-open" | "command";
 
+export const OPEN_COMMAND_PALETTE_EVENT = "open-command-palette";
+
+export function openCommandPalette(mode: PaletteMode = "quick-open") {
+  window.dispatchEvent(
+    new CustomEvent(OPEN_COMMAND_PALETTE_EVENT, { detail: { mode } })
+  );
+}
+
 /**
  * In-window (webview-level) shortcuts that open the command palette:
  *   - Ctrl/Cmd+P        → quick-open mode (search docs/canvas…)
@@ -23,7 +31,16 @@ export function useCommandPaletteHotkeys(onOpen: (mode: PaletteMode) => void) {
       onOpen(e.shiftKey ? "command" : "quick-open");
     };
 
+    const customHandler = (e: Event) => {
+      const detail = (e as CustomEvent<{ mode?: PaletteMode }>).detail;
+      onOpen(detail?.mode ?? "quick-open");
+    };
+
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, customHandler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, customHandler);
+    };
   }, [onOpen]);
 }

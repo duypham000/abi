@@ -57,7 +57,7 @@ struct CachedAccess {
 }
 
 pub struct AuthCore {
-    api_base: String,
+    api_base: Mutex<String>,
     http: reqwest::Client,
     access: Mutex<Option<CachedAccess>>,
     /// Single-flight gate around refresh.
@@ -66,14 +66,21 @@ pub struct AuthCore {
 
 impl AuthCore {
     pub fn new() -> Self {
+        // Load environment files if present
+        let _ = dotenvy::dotenv();
+        let _ = dotenvy::from_filename(".env.development");
+        let _ = dotenvy::from_filename("../.env.development");
+        let _ = dotenvy::from_filename("../.env");
+
         // Runtime env wins; otherwise fall back to the compiled-in default. With the
         // `local` cargo feature (pnpm build:local) that default is the local Docker
         // stack, so a packaged build is fully local with no runtime TOMO_API_BASE.
         #[cfg(feature = "local")]
         let default_base = "http://127.0.0.1:8080/api/v1";
         #[cfg(not(feature = "local"))]
-        let default_base = "http://127.0.0.1:8080/api/v1";
+        let default_base = "http://api.tomoo.uk/go/v1";
         let api_base = std::env::var("TOMO_API_BASE")
+            .or_else(|_| std::env::var("VITE_GO_API_URL").map(|u| format!("{}/v1", u.trim_end_matches('/'))))
             .unwrap_or_else(|_| default_base.to_string());
         // Always bound network calls so a slow/unreachable backend can never hang
         // a window's bootstrap indefinitely.
@@ -81,15 +88,22 @@ impl AuthCore {
             .timeout(std::time::Duration::from_secs(10));
         if let Ok(addr) = "127.0.0.1:80".parse::<std::net::SocketAddr>() {
             builder = builder.resolve("api.tomo.local", addr);
-            builder = builder.resolve("127.0.0.1", addr);
         }
         let http = builder.build().unwrap_or_default();
         AuthCore {
-            api_base,
+            api_base: Mutex::new(api_base),
             http,
             access: Mutex::new(None),
             refresh_lock: tokio::sync::Mutex::new(()),
         }
+    }
+
+    pub fn get_api_base(&self) -> String {
+        self.api_base.lock().unwrap().clone()
+    }
+
+    pub fn set_api_base(&self, base: String) {
+        *self.api_base.lock().unwrap() = base;
     }
 
     /// Returns the cached access token if it is still comfortably valid.
@@ -260,10 +274,18 @@ pub async fn auth_login(
     core: State<'_, AuthCore>,
     identifier: String,
     password: String,
+    api_base: Option<String>,
 ) -> Result<String, String> {
+    if let Some(base) = api_base {
+        let trimmed = base.trim();
+        if !trimmed.is_empty() {
+            core.set_api_base(trimmed.to_string());
+        }
+    }
+    let base_url = core.get_api_base();
     let res = core
         .http
-        .post(format!("{}/auth/login", core.api_base))
+        .post(format!("{}/auth/login", base_url))
         .json(&LoginBody {
             identifier: &identifier,
             password: &password,
@@ -307,9 +329,10 @@ pub async fn auth_access_token(
         return Ok(Some(tok));
     }
 
+    let base_url = core.get_api_base();
     let res = core
         .http
-        .post(format!("{}/auth/refresh", core.api_base))
+        .post(format!("{}/auth/refresh", base_url))
         .json(&RefreshBody {
             refresh_token: &refresh,
         })
@@ -358,9 +381,10 @@ pub async fn auth_peek_access_token(core: State<'_, AuthCore>) -> Result<Option<
 pub async fn auth_logout(app: AppHandle, core: State<'_, AuthCore>) -> Result<(), String> {
     // Best-effort server revoke using the current access token.
     if let Some(token) = core.valid_access() {
+        let base_url = core.get_api_base();
         let _ = core
             .http
-            .post(format!("{}/auth/logout", core.api_base))
+            .post(format!("{}/auth/logout", base_url))
             .bearer_auth(token)
             .send()
             .await;
