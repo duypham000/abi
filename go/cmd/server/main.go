@@ -79,19 +79,37 @@ func main() {
 	router.GET("/health", healthHandler)
 	router.GET("/actuator/health", healthHandler)
 
-	// API v1 Routing Group
-	v1 := router.Group("/api/v1")
+	// Health check endpoints with /go prefix
+	goGroup := router.Group("/go")
 	{
-		authModule.RegisterRoutes(v1, jwtManager)
-		docsModule.RegisterRoutes(v1, jwtManager)
-		githubModule.RegisterRoutes(v1, jwtManager)
+		goGroup.GET("/healthz", healthHandler)
+		goGroup.GET("/health", healthHandler)
+		goGroup.GET("/actuator/health", healthHandler)
 	}
 
-	// Legacy endpoint compatibility (/api/v1/base/docs...)
-	baseV1 := router.Group("/api/v1/base")
-	{
-		docsModule.RegisterRoutes(baseV1, jwtManager)
+	// Register API v1 routes helper
+	registerApiRoutes := func(rg *gin.RouterGroup) {
+		authModule.RegisterRoutes(rg, jwtManager)
+		docsModule.RegisterRoutes(rg, jwtManager)
+		githubModule.RegisterRoutes(rg, jwtManager)
 	}
+
+	// API v1 Routing Groups (standard, /go/api/v1, and /go/v1)
+	v1 := router.Group("/api/v1")
+	registerApiRoutes(v1)
+
+	goApiV1 := router.Group("/go/api/v1")
+	registerApiRoutes(goApiV1)
+
+	goV1 := router.Group("/go/v1")
+	registerApiRoutes(goV1)
+
+	// Legacy endpoint compatibility (/api/v1/base/docs... and /go/api/v1/base/docs...)
+	baseV1 := router.Group("/api/v1/base")
+	docsModule.RegisterRoutes(baseV1, jwtManager)
+
+	goBaseV1 := router.Group("/go/api/v1/base")
+	docsModule.RegisterRoutes(goBaseV1, jwtManager)
 
 	// 7. Start HTTP Server with Graceful Shutdown
 	srv := &http.Server{
