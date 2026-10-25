@@ -17,6 +17,7 @@ export default defineConfig(async ({ mode }) => {
   const headers = undefined;
 
   return {
+    envPrefix: ["VITE_", "TOMO_"],
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

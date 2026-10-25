@@ -5205,6 +5205,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
+ "dotenvy",
  "futures",
  "keyring",
  "reqwest 0.12.28",
