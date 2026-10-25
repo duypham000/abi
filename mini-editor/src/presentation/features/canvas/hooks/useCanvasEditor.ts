@@ -16,7 +16,7 @@ export const EMPTY_SCENE: CanvasScene = {
   files: {},
 };
 
-function sanitizeAppState(
+export function sanitizeAppState(
   appState: Record<string, unknown> | null | undefined
 ): Record<string, unknown> {
   if (!appState) return {};
@@ -75,10 +75,17 @@ export function useCanvasEditor(id: number, autoSave = true) {
   }, [dispatch, canvas?.title]);
 
   const performSave = useCallback(
-    async (sceneToSave: CanvasScene) => {
+    async (sceneToSave: CanvasScene, explicit = false) => {
       if (!canvas) return;
       const serialized = JSON.stringify(sceneToSave);
-      if (serialized === lastSavedRef.current) return;
+      if (serialized === lastSavedRef.current) {
+        if (explicit) {
+          setSaveStatus("success");
+          if (successTimerRef.current) clearTimeout(successTimerRef.current);
+          successTimerRef.current = setTimeout(() => setSaveStatus("idle"), SUCCESS_RESET_DELAY);
+        }
+        return;
+      }
 
       setSaveStatus("saving");
       if (successTimerRef.current) {
@@ -106,7 +113,7 @@ export function useCanvasEditor(id: number, autoSave = true) {
         successTimerRef.current = setTimeout(() => setSaveStatus("idle"), SUCCESS_RESET_DELAY);
       }
     },
-    [canvas, id, updateCanvas]
+    [canvas, id, updateCanvas, createCanvas]
   );
 
   const handleSceneChange = useCallback(
@@ -124,13 +131,21 @@ export function useCanvasEditor(id: number, autoSave = true) {
     [performSave]
   );
 
-  const triggerSave = useCallback(async () => {
-    if (sceneTimerRef.current) {
-      clearTimeout(sceneTimerRef.current);
-      sceneTimerRef.current = null;
-    }
-    await performSave(latestSceneRef.current);
-  }, [performSave]);
+  const triggerSave = useCallback(
+    async (customScene?: CanvasScene) => {
+      if (sceneTimerRef.current) {
+        clearTimeout(sceneTimerRef.current);
+        sceneTimerRef.current = null;
+      }
+      const sceneToSave = customScene ?? latestSceneRef.current;
+      await performSave(sceneToSave, true);
+    },
+    [performSave]
+  );
+
+  const getLatestScene = useCallback((): CanvasScene => {
+    return latestSceneRef.current;
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -139,5 +154,13 @@ export function useCanvasEditor(id: number, autoSave = true) {
     };
   }, []);
 
-  return { canvas, isLoading, saveStatus, initialScene, handleSceneChange, triggerSave };
+  return {
+    canvas,
+    isLoading,
+    saveStatus,
+    initialScene,
+    handleSceneChange,
+    triggerSave,
+    getLatestScene,
+  };
 }

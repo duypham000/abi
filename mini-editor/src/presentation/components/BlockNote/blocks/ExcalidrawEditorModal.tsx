@@ -149,6 +149,22 @@ export function ExcalidrawEditorModal({
     }
   }, [canvasData, createCanvas, updateCanvas, isDraft, realId, title, onSaved, onClose]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+      const isKeyS = e.key === "s" || e.key === "S" || e.code === "KeyS";
+      if (isCtrlOrMeta && isKeyS) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        handleSave();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [isOpen, handleSave]);
+
   return (
     <Modal
       open={isOpen}

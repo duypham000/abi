@@ -1,12 +1,13 @@
 import { useDispatch, useSelector } from "react-redux";
 import { invoke } from "@tauri-apps/api/core";
+import { Search } from "lucide-react";
 import { AppDispatch, RootState } from "@/presentation/store";
-import { setActiveSidebar, selectIsOnline } from "@/presentation/store/appSlice";
+import { toggleSidebar, selectIsOnline } from "@/presentation/store/appSlice";
 import { useWindowControls } from "@/presentation/hooks/useWindowControls";
 import { isMobile } from "@/infrastructure/platform";
+import { openCommandPalette } from "@/presentation/features/command-palette";
 import {
   CloseIcon,
-  HamburgerIcon,
   MaximizeIcon,
   MinimizeIcon,
   RestoreIcon,
@@ -20,11 +21,17 @@ interface AppBarProps {
 export function AppBar({ variant = "dashboard" }: AppBarProps) {
   const dispatch = useDispatch<AppDispatch>();
   const pageTitle = useSelector((state: RootState) => state.app.pageTitle);
+  const activeSidebar = useSelector((state: RootState) => state.app.activeSidebar);
+  const isSidebarOpen = activeSidebar !== null;
   const isOnline = useSelector(selectIsOnline);
   const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
   const isTauri =
     typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+  const isMac =
+    typeof navigator !== "undefined" &&
+    /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform || navigator.userAgent);
 
   // The auth window is a modal gate: minimizing it hides the WHOLE app (handled
   // by the Rust coordinator), not just this window.
@@ -36,59 +43,92 @@ export function AppBar({ variant = "dashboard" }: AppBarProps) {
     }
   };
 
+  const handleToggleSidebar = () => {
+    dispatch(toggleSidebar());
+  };
+
+  const handleOpenSearch = () => {
+    openCommandPalette("quick-open");
+  };
+
   return (
-    <header
-      className="appbar appbar--light"
-    >
+    <header className="appbar appbar--light" data-tauri-drag-region>
+      {/* Left: Animated burger button to toggle sidebar */}
       <div className="appbar-left" data-tauri-drag-region>
         {variant === "dashboard" && (
           <button
-            className="appbar-btn"
-            onClick={() => dispatch(setActiveSidebar(null))}
-            title="Toggle sidebar"
+            type="button"
+            className={`appbar-burger-btn ${isSidebarOpen ? "is-open" : ""}`}
+            onClick={handleToggleSidebar}
+            title={isSidebarOpen ? "Đóng sidebar" : "Mở sidebar"}
+            aria-label={isSidebarOpen ? "Đóng sidebar" : "Mở sidebar"}
+            aria-expanded={isSidebarOpen}
           >
-            <HamburgerIcon />
+            <span className="burger-box">
+              <span className="burger-line burger-line--top" />
+              <span className="burger-line burger-line--mid" />
+              <span className="burger-line burger-line--bot" />
+            </span>
           </button>
         )}
       </div>
 
+      {/* Center: Dummy search bar displaying current title, opens Ctrl+P modal on click */}
       <div className="appbar-center" data-tauri-drag-region>
         {variant === "dashboard" && (
-          <span className="appbar-title" data-tauri-drag-region>{pageTitle}</span>
+          <button
+            type="button"
+            className="appbar-search"
+            onClick={handleOpenSearch}
+            title={`Tìm kiếm (${isMac ? "⌘P" : "Ctrl+P"})`}
+            aria-label="Tìm kiếm hoặc điều hướng"
+          >
+            <Search size={13} className="appbar-search__icon" />
+            <span className="appbar-search__text" data-tauri-drag-region={false}>
+              {pageTitle || "Tìm kiếm tài liệu, canvas, lệnh..."}
+            </span>
+            <kbd className="appbar-search__kbd">
+              {isMac ? "⌘P" : "Ctrl P"}
+            </kbd>
+          </button>
         )}
         {!isOnline && (
-          <span className="appbar-offline-badge">Offline</span>
+          <span className="appbar-offline-badge" title="Chế độ ngoại tuyến">
+            Offline
+          </span>
         )}
       </div>
 
-      <div className="appbar-right">
-        {/* No OS window chrome on mobile (single webview) — these controls would
-            be dead. Desktop keeps minimize/maximize/close. */}
+      {/* Right: Friendly, accessible window control buttons */}
+      <div className="appbar-right" data-tauri-drag-region>
         {!isMobile() && (
           <div className="window-controls">
             <button
-              className="window-btn window-btn--close"
-              onClick={close}
-              title="Close"
-              aria-label="Close"
-            >
-              <CloseIcon />
-            </button>
-            <button
+              type="button"
               className="window-btn window-btn--minimize"
               onClick={handleMinimize}
-              title="Minimize"
-              aria-label="Minimize"
+              title="Thu nhỏ"
+              aria-label="Thu nhỏ"
             >
               <MinimizeIcon />
             </button>
             <button
+              type="button"
               className="window-btn window-btn--maximize"
               onClick={toggleMaximize}
-              title={isMaximized ? "Restore" : "Maximize"}
-              aria-label={isMaximized ? "Restore" : "Maximize"}
+              title={isMaximized ? "Khôi phục" : "Phóng to"}
+              aria-label={isMaximized ? "Khôi phục" : "Phóng to"}
             >
               {isMaximized ? <RestoreIcon /> : <MaximizeIcon />}
+            </button>
+            <button
+              type="button"
+              className="window-btn window-btn--close"
+              onClick={close}
+              title="Đóng"
+              aria-label="Đóng"
+            >
+              <CloseIcon />
             </button>
           </div>
         )}

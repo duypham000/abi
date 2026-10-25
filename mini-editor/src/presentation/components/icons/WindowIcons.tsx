@@ -2,34 +2,33 @@ import { SVGProps } from "react";
 
 export function MinimizeIcon(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <line x1="1" y1="4" x2="7" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
     </svg>
   );
 }
 
 export function MaximizeIcon(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      {/* Up-right arrow = expand */}
-      <path d="M1 7L7 1M4 1H7V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <rect x="1.5" y="1.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.2" />
     </svg>
   );
 }
 
 export function RestoreIcon(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      {/* Down-left arrow = contract */}
-      <path d="M7 1L1 7M4 7H1V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M3.2 2.5V1.6a.6.6 0 0 1 .6-.6h4.6a.6.6 0 0 1 .6.6v4.6a.6.6 0 0 1-.6.6H7.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+      <rect x="1" y="3.2" width="5.8" height="5.8" rx="0.8" stroke="currentColor" strokeWidth="1.1" />
     </svg>
   );
 }
 
 export function CloseIcon(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <path d="M1 1L7 7M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M2 2L8 8M8 2L2 8" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
     </svg>
   );
 }

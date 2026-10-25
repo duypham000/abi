@@ -56,11 +56,11 @@ export default function TranslatePage({ panelMode }: TranslatePageProps) {
   const dispatch = useDispatch<AppDispatch>();
   const { theme } = useSelector((state: RootState) => state.app);
 
-  const [q, setQ] = useState("run");
-  const [debouncedQ, setDebouncedQ] = useState("run");
+  const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [sl, setSl] = useState("en");
   const [tl, setTl] = useState("vi");
-  const [autoTranslate, setAutoTranslate] = useState(true);
+  const [autoTranslate, setAutoTranslate] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   useEffect(() => {
@@ -75,25 +75,26 @@ export default function TranslatePage({ panelMode }: TranslatePageProps) {
 
   // Debouncing logic for Auto-translate
   useEffect(() => {
-    if (!autoTranslate) return;
     const trimmed = q.trim();
     if (!trimmed) {
       setDebouncedQ("");
       return;
     }
+    if (!autoTranslate) return;
     const handler = setTimeout(() => {
       setDebouncedQ(trimmed);
     }, 400);
     return () => clearTimeout(handler);
   }, [q, autoTranslate]);
 
-  // Trigger translation when languages change (if query is not empty)
+  // Trigger translation when languages change (if query is not empty and auto-translate is on)
   useEffect(() => {
+    if (!autoTranslate) return;
     const trimmed = q.trim();
     if (trimmed) {
       setDebouncedQ(trimmed);
     }
-  }, [sl, tl]);
+  }, [sl, tl, autoTranslate]);
 
   const { data, error, isFetching } = useTranslateQuery(
     { q: debouncedQ, sl, tl },
