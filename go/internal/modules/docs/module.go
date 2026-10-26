@@ -112,6 +112,9 @@ func (m *Module) RegisterRoutes(router *gin.RouterGroup, jwtManager *security.JW
 		protectedYjs.Use(security.AuthMiddleware(jwtManager))
 		{
 			protectedYjs.POST("/auth/token", m.YjsHandler.GenerateToken)
+			protectedYjs.GET("/auth/token", m.YjsHandler.GenerateToken)
+			protectedYjs.POST("/token", m.YjsHandler.GenerateToken)
+			protectedYjs.GET("/token", m.YjsHandler.GenerateToken)
 			protectedYjs.POST("/storage/doc/:docId/update", m.YjsHandler.SaveUpdate)
 			protectedYjs.POST("/storage/doc/:docId/snapshot", m.YjsHandler.SaveSnapshot)
 			protectedYjs.GET("/storage/doc/:docId/snapshot", m.YjsHandler.GetSnapshot)

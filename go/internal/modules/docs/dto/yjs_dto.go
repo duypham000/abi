@@ -7,9 +7,11 @@ import (
 )
 
 type YjsTokenRequest struct {
-	DocID      string               `json:"doc_id"`
-	DocIDCamel string               `json:"docId"`
-	AccessMode domain.YjsAccessMode `json:"access_mode"`
+	DocID         string               `json:"doc_id"`
+	DocIDCamel    string               `json:"docId"`
+	CanvasID      string               `json:"canvas_id"`
+	CanvasIDCamel string               `json:"canvasId"`
+	AccessMode    domain.YjsAccessMode `json:"access_mode"`
 }
 
 type YjsTokenResponse struct {

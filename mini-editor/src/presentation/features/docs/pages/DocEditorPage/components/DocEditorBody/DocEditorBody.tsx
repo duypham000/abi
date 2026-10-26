@@ -40,6 +40,8 @@ function insertExcalidrawItem(editor: any) {
   };
 }
 
+import type { YjsCollaboration } from "@/presentation/features/docs/hooks/useYjsCollaboration";
+
 interface DocEditorBodyProps {
   docId: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,6 +52,7 @@ interface DocEditorBodyProps {
   onEditorReady?: (editor: any) => void;
   onAskAI?: (payload: AskAIPayload) => void;
   readonly?: boolean;
+  collaboration?: YjsCollaboration | null;
 }
 
 export const DocEditorBody = memo(function DocEditorBody({
@@ -59,6 +62,7 @@ export const DocEditorBody = memo(function DocEditorBody({
   onEditorReady,
   onAskAI,
   readonly = false,
+  collaboration,
 }: DocEditorBodyProps) {
   const theme = useSelector((s: RootState) => s.app.theme) as "light" | "dark";
   const editor = useWorkspaceBlockNoteEditor({
@@ -66,6 +70,7 @@ export const DocEditorBody = memo(function DocEditorBody({
     initialBlocks,
     onChange: (_id, blocks) => onBlocksChange(blocks),
     onAskAI,
+    collaboration,
   });
 
   useEffect(() => {

@@ -34,6 +34,8 @@ import {
 } from "@ant-design/icons";
 import type { EditorSettings } from "@/presentation/features/docs/pages/DocEditorPage/DocEditorPage";
 import type { SaveStatus } from "../../../../hooks/useDocEditor";
+import type { CollaboratorUser } from "@/presentation/features/docs/hooks/useYjsCollaboration";
+import { CollaboratorAvatars } from "../CollaboratorAvatars";
 import "./DocEditorToolbar.scss";
 
 interface DocEditorToolbarProps {
@@ -44,6 +46,8 @@ interface DocEditorToolbarProps {
   saveStatus: SaveStatus;
   isDraft?: boolean;
   isDirty: boolean;
+  collaborators?: CollaboratorUser[];
+  isCollabConnected?: boolean;
   canUndo: boolean;
   canRedo: boolean;
   undoTooltip?: string;
@@ -132,6 +136,8 @@ export function DocEditorToolbar({
   saveStatus,
   isDraft,
   isDirty,
+  collaborators = [],
+  isCollabConnected = false,
   canUndo,
   canRedo,
   undoTooltip = "Undo (Ctrl+Z)",
@@ -485,6 +491,19 @@ export function DocEditorToolbar({
       )}
 
       <div className="doc-editor-toolbar-actions">
+        {isCollabConnected && (
+          <Tooltip title="Đang kết nối thời gian thực (Yjs)">
+            <span style={{ display: "inline-flex", alignItems: "center", marginRight: 6 }} aria-label="Live">
+              <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#52c41a" }} />
+            </span>
+          </Tooltip>
+        )}
+        {collaborators && collaborators.length > 0 && (
+          <>
+            <CollaboratorAvatars collaborators={collaborators} />
+            <span className="toolbar-divider" />
+          </>
+        )}
         {/* Undo / Redo */}
         <Tooltip title={undoTooltip}>
           <button className="toolbar-btn" onClick={onUndo} disabled={!canUndo}>

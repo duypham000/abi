@@ -57,23 +57,36 @@ func NewYjsService(docRepo repository.DocRepository, yjsRepo repository.YjsRepos
 }
 
 func (s *yjsServiceImpl) GenerateYjsToken(ctx context.Context, userID string, req dto.YjsTokenRequest) (*dto.YjsTokenResponse, error) {
-	doc, err := s.docRepo.FindByID(ctx, req.DocID)
-	if err != nil || doc == nil {
-		return nil, ErrDocNotFound
+	targetID := req.DocID
+	if targetID == "" && req.CanvasID != "" {
+		targetID = "canvas-" + req.CanvasID
 	}
 
 	mode := req.AccessMode
-	if mode == "" {
-		if doc.OwnerID == userID {
+	isCanvas := strings.HasPrefix(targetID, "canvas-") || req.CanvasID != ""
+
+	if !isCanvas {
+		doc, err := s.docRepo.FindByID(ctx, targetID)
+		if err != nil || doc == nil {
+			return nil, ErrDocNotFound
+		}
+
+		if mode == "" {
+			if doc.OwnerID == userID {
+				mode = domain.YjsAccessWrite
+			} else {
+				mode = domain.YjsAccessRead
+			}
+		}
+	} else {
+		if mode == "" {
 			mode = domain.YjsAccessWrite
-		} else {
-			mode = domain.YjsAccessRead
 		}
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour)
 	claims := YjsClaims{
-		DocID:      req.DocID,
+		DocID:      targetID,
 		UserID:     userID,
 		AccessMode: mode,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -92,7 +105,7 @@ func (s *yjsServiceImpl) GenerateYjsToken(ctx context.Context, userID string, re
 
 	return &dto.YjsTokenResponse{
 		Token:      tokenStr,
-		DocID:      req.DocID,
+		DocID:      targetID,
 		AccessMode: mode,
 		ExpiresAt:  expiresAt,
 		Url:        "ws://127.0.0.1:1234/ws/yjs",

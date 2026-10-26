@@ -4,6 +4,7 @@ import type { PartialBlock } from "@blocknote/core";
 import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { createCodeBlockEnhanced, type OnAskAI } from "./blocks/code-block-enhanced";
 import { excalidrawBlock } from "./blocks/excalidraw-block";
+import type { YjsCollaboration } from "@/presentation/features/docs/hooks/useYjsCollaboration";
 
 function buildWorkspaceSchema(askAIRef: { current: OnAskAI | null }) {
   const { codeBlock: _defaultCodeBlock, ...rest } = defaultBlockSpecs;
@@ -34,6 +35,7 @@ interface UseBlockNoteEditorOptions {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onChange: (docId: string, blocks: any[]) => void;
   onAskAI?: OnAskAI;
+  collaboration?: YjsCollaboration | null;
 }
 
 export function useWorkspaceBlockNoteEditor({
@@ -41,6 +43,7 @@ export function useWorkspaceBlockNoteEditor({
   initialBlocks,
   onChange,
   onAskAI,
+  collaboration,
 }: UseBlockNoteEditorOptions) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -52,13 +55,30 @@ export function useWorkspaceBlockNoteEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const schema = useMemo(() => buildWorkspaceSchema(askAIRef), []);
 
-  
-  const initialContent = initialBlocks.length > 0 ? initialBlocks : undefined;
+  const collaborationOptions = collaboration
+    ? {
+        provider: collaboration.provider,
+        fragment: collaboration.ydoc.getXmlFragment(COLLAB_FRAGMENT),
+        user: collaboration.currentUser ?? { name: "Anonymous", color: "#8b5cf6" },
+      }
+    : undefined;
+
+  const initialContent: any = (() => {
+    if (!collaborationOptions) {
+      return initialBlocks.length > 0 ? initialBlocks : undefined;
+    }
+    const fragmentEmpty = collaboration!.ydoc.getXmlFragment(COLLAB_FRAGMENT).length === 0;
+    if (fragmentEmpty && initialBlocks.length > 0) {
+      return initialBlocks;
+    }
+    return undefined;
+  })();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editor = useCreateBlockNote({
     schema,
     initialContent,
+    collaboration: collaborationOptions,
     // Inside a code block, paste the clipboard's plain text verbatim instead of
     // letting BlockNote parse it as Markdown (which turns lines like `#`, `-` or
     // fenced ``` blocks into new blocks, breaking out of the code block).
@@ -86,6 +106,25 @@ export function useWorkspaceBlockNoteEditor({
       }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any) as any;
+
+  // Programmatically seed initial blocks if collaboration is active and the remote doc is empty
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!editor || !collaboration) return;
+    if (seededRef.current) return;
+
+    const xmlFragment = collaboration.ydoc.getXmlFragment(COLLAB_FRAGMENT);
+    if (xmlFragment.length === 0 && initialBlocks && initialBlocks.length > 0) {
+      seededRef.current = true;
+      try {
+        editor.replaceBlocks(editor.document, initialBlocks);
+      } catch (e) {
+        console.warn("[BlockNoteCollabInit] failed to seed initial content:", e);
+      }
+    } else if (xmlFragment.length > 0) {
+      seededRef.current = true;
+    }
+  }, [editor, collaboration, initialBlocks]);
 
   
   useEffect(() => {

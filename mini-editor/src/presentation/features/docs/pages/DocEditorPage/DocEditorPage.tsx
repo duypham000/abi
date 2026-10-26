@@ -19,6 +19,7 @@ import { ImportModal, type ImportFormat, type ImportTextFormat } from "./compone
 import { ExportModal } from "./components/ExportModal/ExportModal";
 import { DocEditorBody } from "./components/DocEditorBody";
 import { Loading } from "@/presentation/components/ui/Loading/Loading";
+import { useYjsCollaboration } from "../../hooks/useYjsCollaboration";
 import { DocRevisionPanel } from "./components/DocRevisionPanel/DocRevisionPanel";
 import { FindReplaceBar } from "./components/FindReplaceBar/FindReplaceBar";
 import { useFindAndReplace } from "./hooks/useFindAndReplace";
@@ -74,6 +75,12 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   const dispatch = useDispatch<AppDispatch>();
   const theme = useSelector((state: RootState) => state.app.theme);
   const isDirty = useSelector((state: RootState) => state.docs.isDirty);
+  const authUser = useSelector((state: RootState) => state.auth.user);
+
+  const { collaboration, isResolved: isCollabResolved } = useYjsCollaboration(
+    !docId || docId <= 0 ? -1 : docId,
+    authUser
+  );
 
   const [editorSettings, setEditorSettings] = usePersistedState<EditorSettings>("editor-settings-v2", DEFAULT_SETTINGS);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -616,6 +623,8 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
           settings={editorSettings}
           saveStatus={saveStatus}
           isDirty={isDirty}
+          collaborators={collaboration?.collaborators}
+          isCollabConnected={collaboration?.isConnected}
           onBack={handleBack}
           onUndo={handleUndo}
           onRedo={handleRedo}
@@ -654,7 +663,9 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
       )}
 
       <div className="doc-editor-content">
-        {effectivelyLoading ? <Loading label="Đang tải tài liệu…" /> : (
+        {effectivelyLoading || !isCollabResolved ? (
+          <Loading label="Đang tải tài liệu…" />
+        ) : (
           <>
             <div className="doc-editor-editor-area" ref={editorAreaRef} style={{ position: "relative" }}>
               {findReplace.isOpen && (
@@ -685,6 +696,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
                 initialBlocks={initialBlocks as any}
                 onBlocksChange={handleBlocksChange}
                 onEditorReady={handleEditorReady}
+                collaboration={collaboration}
               />
             </div>
 

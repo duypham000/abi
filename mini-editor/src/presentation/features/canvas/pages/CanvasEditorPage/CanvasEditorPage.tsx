@@ -31,6 +31,7 @@ import {
 import type { CanvasScene } from "@/core/interfaces/canvas";
 import { useCanvasEditor, sanitizeAppState } from "../../hooks/useCanvasEditor";
 import { useCanvasUiStore } from "../../store/canvasUiStore";
+import { useCanvasYjsCollaboration, hasVisualChange as hasVisualChangePush } from "../../hooks/useCanvasYjsCollaboration";
 import { EmbeddedDocFrame } from "./components/EmbeddedDocFrame";
 import { EmbeddedNoteFrame } from "./components/EmbeddedNoteFrame";
 import { DocsSidebarPanel, DOC_DRAG_TYPE } from "./components/DocsSidebarPanel";
@@ -75,6 +76,14 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   const setExcalidrawAPIStore = useCanvasUiStore((s) => s.setExcalidrawAPI);
   const [excalidrawAPIState, _setExcalidrawAPIState] = useState<ExcalidrawImperativeAPI | null>(null);
   const api = excalidrawAPIState;
+
+  const authUser = useSelector((state: RootState) => state.auth.user);
+  const { collaboration, isResolved } = useCanvasYjsCollaboration(
+    canvasId,
+    authUser,
+    api,
+    initialScene?.elements ?? []
+  );
 
   const { data: user } = useGetGithubUserQuery();
   const [saveGitFile, { isLoading: isSavingGit }] = useSaveGitFileMutation();
@@ -318,6 +327,31 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
     (elements: readonly any[], appState: any, files: any) => {
       handleSceneChange(elements, appState, files);
 
+      // Sync local drawing changes to Yjs map
+      if (collaboration && collaboration.isConnected) {
+        const elementsMap = collaboration.ydoc.getMap<any>("elements");
+        const filesMap = collaboration.ydoc.getMap<any>("files");
+        collaboration.ydoc.transact(() => {
+          elements.forEach((el) => {
+            const remoteRaw = elementsMap.get(el.id);
+            const remote = remoteRaw && typeof remoteRaw.toJSON === "function" ? remoteRaw.toJSON() : remoteRaw;
+            const shouldPush = !remote ||
+              el.version > remote.version ||
+              (el.version >= remote.version && hasVisualChangePush(el, remote));
+            if (shouldPush) {
+              elementsMap.set(el.id, JSON.parse(JSON.stringify(el)));
+            }
+          });
+          if (files) {
+            Object.entries(files).forEach(([id, file]) => {
+              if (!filesMap.has(id)) {
+                filesMap.set(id, file);
+              }
+            });
+          }
+        }, "local-draw");
+      }
+
       if (checkStatusTimerRef.current) clearTimeout(checkStatusTimerRef.current);
       checkStatusTimerRef.current = setTimeout(() => {
         checkCurrentFileStatus({
@@ -398,7 +432,17 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
         return next;
       });
     },
-    [handleSceneChange, updateElementById, checkCurrentFileStatus]
+    [handleSceneChange, updateElementById, checkCurrentFileStatus, collaboration]
+  );
+
+  const handlePointerUpdate = useCallback(
+    (payload: any) => {
+      if (collaboration?.provider?.awareness) {
+        collaboration.provider.awareness.setLocalStateField("pointer", payload.pointer);
+        collaboration.provider.awareness.setLocalStateField("button", payload.button);
+      }
+    },
+    [collaboration]
   );
 
   const insertEmbeddable = useCallback((link: string, dropPoint?: { clientX: number; clientY: number }) => {
@@ -648,8 +692,6 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [handleToggleDocsSidebar, handleAddNote, handleSaveShortcut, handleSaveAndCommitShortcut]);
 
-  const handlePointerUpdate = useCallback(() => {}, []);
-
   const renderTopRightUI = useCallback((isMobile: boolean) => (
     <div className={`tomo-toolbar ${isMobile ? "tomo-toolbar--mobile" : ""}`}>
       <button
@@ -675,7 +717,7 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
     </div>
   ), [docsSidebarOpen, handleToggleDocsSidebar, handleAddNote]);
 
-  if (isLoading || !initialScene || isLoading) {
+  if (isLoading || !initialScene || !isResolved) {
     const loadingContent = (
       <main className="dashboard-main canvas-editor-loading">
         <Loading label="Đang kết nối phòng vẽ thời gian thực…" />
@@ -698,6 +740,12 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
           <div className="canvas-editor-header">
             <h2 className="canvas-editor-title">{canvas?.title || "Untitled Canvas"}</h2>
             <div className="canvas-editor-header-right">
+              {collaboration?.isConnected && (
+                <span style={{ fontSize: 12, color: "#52c41a", display: "inline-flex", alignItems: "center", gap: 4, marginRight: 8 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#52c41a" }} />
+                  Live
+                </span>
+              )}
               <span className="canvas-editor-save-status">
                 {saveStatus === "saving" && "Saving…"}
                 {saveStatus === "success" && "Saved"}

@@ -29,5 +29,3 @@ keystore.properties
 *.sln
 *.sw?
 *.stackdump
-.env
-

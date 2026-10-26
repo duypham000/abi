@@ -26,12 +26,25 @@ func (h *YjsHandler) GenerateToken(c *gin.Context) {
 	userID, _ := userIDVal.(string)
 
 	var req dto.YjsTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid Yjs token request", err)
-		return
+	_ = c.ShouldBindJSON(&req)
+
+	if req.DocID == "" {
+		req.DocID = c.Query("docId")
+		if req.DocID == "" {
+			req.DocID = c.Query("doc_id")
+		}
 	}
 	if req.DocID == "" && req.DocIDCamel != "" {
 		req.DocID = req.DocIDCamel
+	}
+	if req.CanvasID == "" {
+		req.CanvasID = c.Query("canvasId")
+		if req.CanvasID == "" {
+			req.CanvasID = c.Query("canvas_id")
+		}
+	}
+	if req.CanvasID == "" && req.CanvasIDCamel != "" {
+		req.CanvasID = req.CanvasIDCamel
 	}
 
 	res, err := h.yjsService.GenerateYjsToken(c.Request.Context(), userID, req)

@@ -103,6 +103,16 @@ jobs:
           echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
           echo "release_title=${RELEASE_TITLE}" >> "$GITHUB_OUTPUT"
 
+      - name: Override .env with .env.production
+        shell: bash
+        run: |
+          if [ -f .env.production ]; then
+            cp .env.production .env
+            echo "Successfully overridden .env with .env.production"
+          else
+            echo "Warning: .env.production not found"
+          fi
+
       - name: Build Tauri (Windows)
         run: pnpm tauri build
 

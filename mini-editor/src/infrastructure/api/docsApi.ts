@@ -315,6 +315,14 @@ export const docsApi = baseApi.injectEndpoints({
       query: () => ({ url: "/admin/search/indices" }),
       providesTags: ["SearchIndex"],
     }),
+    getYjsToken: builder.query<{ token: string; url: string; expiresIn: number }, number>({
+      query: (docId) => ({
+        url: "/base/yjs/auth/token",
+        method: "POST",
+        body: { doc_id: String(docId), access_mode: "write" },
+      }),
+      transformResponse: (res: any) => res.data ?? res,
+    }),
   }),
   overrideExisting: false,
 });
@@ -338,4 +346,5 @@ export const {
   useReconcileMutation,
   useReconcileCountMutation,
   useGetIndicesInfoQuery,
+  useGetYjsTokenQuery,
 } = docsApi;

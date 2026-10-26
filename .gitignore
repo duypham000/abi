@@ -15,12 +15,8 @@ mini-editor/src-tauri/gen/schemas/
 *.dylib
 
 # Environment files
-.env
-.env.*
-.env.local
-.env.development
 .env.production
-!.env.example
+!mini-editor/.env.production
 
 # Logs
 logs/
