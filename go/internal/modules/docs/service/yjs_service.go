@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"time"
 
 	"tomo-backend/internal/modules/docs/domain"
