@@ -14,6 +14,8 @@ type DocRepository interface {
 	CreateDoc(ctx context.Context, doc *domain.Doc) error
 	FindByID(ctx context.Context, id string) (*domain.Doc, error)
 	FindBySlug(ctx context.Context, slug string) (*domain.Doc, error)
+	// FindBySlugAndOwner looks up a doc by exact slug AND owner_id — used for idempotent git sync.
+	FindBySlugAndOwner(ctx context.Context, slug, ownerID string) (*domain.Doc, error)
 	UpdateDoc(ctx context.Context, doc *domain.Doc) error
 	DeleteDoc(ctx context.Context, id string) error
 	ListDocs(ctx context.Context, ownerID string, parentID *string, page, pageSize int, search string) ([]domain.Doc, int64, error)
@@ -46,6 +48,17 @@ func (r *docRepositoryImpl) FindByID(ctx context.Context, id string) (*domain.Do
 func (r *docRepositoryImpl) FindBySlug(ctx context.Context, slug string) (*domain.Doc, error) {
 	var doc domain.Doc
 	err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&doc).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &doc, err
+}
+
+// FindBySlugAndOwner finds a doc by exact slug scoped to a specific owner.
+// Returns (nil, nil) when not found so callers can distinguish "not found" from errors.
+func (r *docRepositoryImpl) FindBySlugAndOwner(ctx context.Context, slug, ownerID string) (*domain.Doc, error) {
+	var doc domain.Doc
+	err := r.db.WithContext(ctx).Where("slug = ? AND owner_id = ?", slug, ownerID).First(&doc).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

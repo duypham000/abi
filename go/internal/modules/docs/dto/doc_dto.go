@@ -13,6 +13,16 @@ type CreateDocRequest struct {
 	ParentID *string          `json:"parent_id"`
 }
 
+// CreateDocFromGitRequest is used by the sync-from-git endpoint.
+// GitSlug is the file-system slug (e.g. "doc-180015") used for idempotency:
+// if a doc with the same (owner_id, slug) already exists it is returned as-is.
+type CreateDocFromGitRequest struct {
+	Title   string           `json:"title"`
+	Content string           `json:"content"`
+	GitSlug string           `json:"git_slug"` // e.g. "doc-180015"
+	Status  domain.DocStatus `json:"status"`
+}
+
 type UpdateDocRequest struct {
 	Title    *string           `json:"title"`
 	Content  *string           `json:"content"`

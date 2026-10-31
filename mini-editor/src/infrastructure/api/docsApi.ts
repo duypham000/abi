@@ -315,7 +315,20 @@ export const docsApi = baseApi.injectEndpoints({
       query: () => ({ url: "/admin/search/indices" }),
       providesTags: ["SearchIndex"],
     }),
-    getYjsToken: builder.query<{ token: string; url: string; expiresIn: number }, number>({
+    syncDocFromGit: builder.mutation<DocDto, { title: string; content: string; gitSlug: string; status?: 0 | 1 }>({
+      query: (body) => ({
+        url: "/base/docs/sync-from-git",
+        method: "POST",
+        body: {
+          title: body.title,
+          content: body.content,
+          git_slug: body.gitSlug,
+          status: body.status ?? 1,
+        },
+      }),
+      invalidatesTags: ["Doc"],
+    }),
+    getYjsToken: builder.query<{ token: string; url: string; expiresIn: number }, number | string>({
       query: (docId) => ({
         url: "/base/yjs/auth/token",
         method: "POST",
@@ -346,5 +359,6 @@ export const {
   useReconcileMutation,
   useReconcileCountMutation,
   useGetIndicesInfoQuery,
+  useSyncDocFromGitMutation,
   useGetYjsTokenQuery,
 } = docsApi;

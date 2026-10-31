@@ -20,6 +20,7 @@ import { ExportModal } from "./components/ExportModal/ExportModal";
 import { DocEditorBody } from "./components/DocEditorBody";
 import { Loading } from "@/presentation/components/ui/Loading/Loading";
 import { useYjsCollaboration } from "../../hooks/useYjsCollaboration";
+import { useGitDocSync } from "../../hooks/useGitDocSync";
 import { DocRevisionPanel } from "./components/DocRevisionPanel/DocRevisionPanel";
 import { FindReplaceBar } from "./components/FindReplaceBar/FindReplaceBar";
 import { useFindAndReplace } from "./hooks/useFindAndReplace";
@@ -149,10 +150,18 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   }, [manifest, fileHistory, docId, gitFilePath, gitFileStatus]);
 
   // Yjs real-time collaboration is only activated when document exists online on backend or git
-  const isOnlineDoc = Boolean(docId > 0 && (isSavedOnline || isDocOnGit || (doc && doc.status === 1)));
+  const needsGitSync = Boolean(docId > 0 && isDocOnGit && !isSavedOnline);
+  const { backendDocId: syncedBackendId, status: gitSyncStatus } = useGitDocSync(
+    docId,
+    gitFilePath,
+    needsGitSync
+  );
+
+  // Yjs real-time collaboration is only activated when document exists online on backend or has been synced from git
+  const isOnlineDoc = Boolean(docId > 0 && (isSavedOnline || gitSyncStatus === "synced"));
 
   const { collaboration, isResolved: isCollabResolved } = useYjsCollaboration(
-    !docId || docId <= 0 ? -1 : docId,
+    syncedBackendId || doc?.backendUuid || (!docId || docId <= 0 ? -1 : docId),
     authUser,
     isOnlineDoc
   );

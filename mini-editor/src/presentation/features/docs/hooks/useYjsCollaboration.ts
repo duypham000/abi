@@ -70,8 +70,13 @@ function hashColor(userId: string | number): string {
   return COLORS[Math.abs(hash) % COLORS.length];
 }
 
+function isInvalidDocId(id: number | string): boolean {
+  if (typeof id === "number") return id < 0;
+  return !id || id === "-1" || id === "0";
+}
+
 export function useYjsCollaboration(
-  docId: number,
+  docId: number | string,
   user: AuthUser | null,
   enabled: boolean = true
 ): UseYjsCollaborationResult {
@@ -80,12 +85,12 @@ export function useYjsCollaboration(
   const [collaborators, setCollaborators] = useState<CollaboratorUser[]>([]);
   const [providerState, setProviderState] = useState<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
   // Drafts (docId < 0 or !enabled) have no collaboration, so they're resolved immediately in solo mode.
-  const [isResolved, setIsResolved] = useState(!enabled || docId < 0);
+  const [isResolved, setIsResolved] = useState(!enabled || isInvalidDocId(docId));
 
   const providerRef = useRef<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
 
   useEffect(() => {
-    if (!enabled || docId < 0) {
+    if (!enabled || isInvalidDocId(docId)) {
       setIsResolved(true);
       return;
     }
@@ -154,7 +159,8 @@ export function useYjsCollaboration(
       if (cancelled) return;
 
       ydoc = new Y.Doc();
-      provider = new WebsocketProvider(serverUrl, `doc-${docId}`, ydoc, {
+      const roomName = String(docId).startsWith("doc-") ? String(docId) : `doc-${docId}`;
+      provider = new WebsocketProvider(serverUrl, roomName, ydoc, {
         params: { yauth: token },
       });
 

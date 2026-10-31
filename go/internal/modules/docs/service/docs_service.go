@@ -33,6 +33,10 @@ type DocsService interface {
 	// Revision history
 	GetRevisions(ctx context.Context, docID string) ([]dto.DocRevisionDto, error)
 	CreateRevision(ctx context.Context, docID, authorID, summary string, snapshot []byte) (*dto.DocRevisionDto, error)
+
+	// SyncFromGit creates a backend doc from a GitHub workspace file (idempotent by git_slug + owner).
+	// Returns (doc, wasCreated, error). wasCreated=false when an existing doc was returned.
+	SyncFromGit(ctx context.Context, ownerID string, req dto.CreateDocFromGitRequest) (*dto.DocDto, bool, error)
 }
 
 type docsServiceImpl struct {
@@ -239,6 +243,45 @@ func (s *docsServiceImpl) CreateRevision(ctx context.Context, docID, authorID, s
 
 	res := dto.ToDocRevisionDto(rev)
 	return &res, nil
+}
+
+func (s *docsServiceImpl) SyncFromGit(ctx context.Context, ownerID string, req dto.CreateDocFromGitRequest) (*dto.DocDto, bool, error) {
+	if req.GitSlug != "" {
+		existing, err := s.docRepo.FindBySlugAndOwner(ctx, req.GitSlug, ownerID)
+		if err == nil && existing != nil {
+			result := dto.ToDocDto(existing)
+			return &result, false, nil
+		}
+	}
+
+	docID := uuid.New().String()
+	slug := req.GitSlug
+	if slug == "" {
+		slug = generateSlug(req.Title) + "-" + docID[:8]
+	}
+
+	status := req.Status
+	if status == "" {
+		status = domain.DocStatusPublished
+	}
+
+	doc := &domain.Doc{
+		ID:      docID,
+		Title:   req.Title,
+		Slug:    slug,
+		Content: req.Content,
+		Status:  status,
+		OwnerID: ownerID,
+	}
+
+	if err := s.docRepo.CreateDoc(ctx, doc); err != nil {
+		return nil, false, err
+	}
+
+	_, _ = s.CreateRevision(ctx, doc.ID, ownerID, "Imported from GitHub workspace", []byte(req.Content))
+
+	result := dto.ToDocDto(doc)
+	return &result, true, nil
 }
 
 func generateSlug(title string) string {

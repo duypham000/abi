@@ -38,6 +38,32 @@ func (h *DocsHandler) CreateDoc(c *gin.Context) {
 	response.Created(c, "Document created successfully", res)
 }
 
+func (h *DocsHandler) SyncFromGit(c *gin.Context) {
+	userIDVal, _ := c.Get(security.CtxUserID)
+	userID := userIDVal.(string)
+
+	var req dto.CreateDocFromGitRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request body", err)
+		return
+	}
+	if req.Title == "" {
+		req.Title = req.GitSlug
+	}
+
+	doc, created, err := h.docsService.SyncFromGit(c.Request.Context(), userID, req)
+	if err != nil {
+		response.InternalServerError(c, "Failed to sync doc from git", err)
+		return
+	}
+
+	if created {
+		response.Created(c, "Document registered from GitHub", doc)
+	} else {
+		response.OK(c, "Document already exists", doc)
+	}
+}
+
 func (h *DocsHandler) GetDocByID(c *gin.Context) {
 	id := c.Param("id")
 	res, err := h.docsService.GetDocByID(c.Request.Context(), id)

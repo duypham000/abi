@@ -23,6 +23,7 @@ import { getDb, isTauri, now } from "./sqliteDb";
 export interface LocalDoc {
   local_id: string;
   backend_id: number | null;
+  backend_uuid?: string | null;
   title: string;
   content: string | null;
   metadata: string | null;
@@ -57,6 +58,7 @@ async function ensureDocSchema() {
   `);
   try { await db.execute(`ALTER TABLE docs ADD COLUMN yjs_state TEXT`); } catch { /* already exists */ }
   try { await db.execute(`ALTER TABLE docs ADD COLUMN series_id INTEGER`); } catch { /* already exists */ }
+  try { await db.execute(`ALTER TABLE docs ADD COLUMN backend_uuid TEXT`); } catch { /* already exists */ }
 }
 
 async function docDb() {
@@ -80,6 +82,7 @@ function rowToDocDto(r: LocalDoc): DocDto {
     lastSync: r.last_synced,
     createdBy: null,
     yjsState: r.yjs_state ?? null,
+    backendUuid: r.backend_uuid ?? null,
   };
 }
 
@@ -251,6 +254,17 @@ export async function searchDocsInSqlite(q: string): Promise<DocDto[]> {
 
 export async function cacheDoc(doc: DocDto): Promise<void> {
   await saveDocLocally(doc.id, doc, false);
+  const uuid = doc.backendUuid ?? (typeof (doc as any).id === "string" ? (doc as any).id : null);
+  if (uuid) {
+    const db = await docDb();
+    if (db) {
+      const strId = String(doc.id);
+      await db.execute(
+        "UPDATE docs SET backend_uuid = ? WHERE backend_id = ? OR local_id = ? OR local_id = ?",
+        [uuid, Number(doc.id) || -1, strId, `doc-${strId}`]
+      );
+    }
+  }
 }
 
 export async function getCachedDoc(backendId: number): Promise<DocDto | null> {

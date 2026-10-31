@@ -27,6 +27,7 @@ export interface DocDto {
   status: DocStatus;
   createdBy: { id: number; username: string; email: string } | null;
   yjsState?: string | null;
+  backendUuid?: string | null;
   preview?: string | null;
   highlights?: Record<string, string[]> | null;
 }
@@ -40,6 +41,7 @@ export interface DocRequest {
   lastSync: string | null;
   status: DocStatus;
   yjsState?: string | null;
+  backendUuid?: string | null;
 }
 
 export interface DocMetadataProperty {
