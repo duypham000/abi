@@ -8,10 +8,19 @@ import { canvasApi } from "@/infrastructure/api/canvasApi";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 function getDefaultWsUrl(): string {
+  // 1. Explicit override (e.g. custom Yjs server)
   if (import.meta.env.VITE_YJS_SERVER_URL) {
     return import.meta.env.VITE_YJS_SERVER_URL;
   }
-  if (typeof window !== "undefined" && window.location && window.location.host) {
+  // 2. Use VITE_NODE_WS_URL from .env — works in both dev (ws://127.0.0.1:1234 via .env.development)
+  //    and Tauri production (wss://ws.tomoo.uk via .env.production), bypassing window.location
+  //    which would produce ws://localhost:1420 (dev proxy only, breaks in Tauri production).
+  if (import.meta.env.VITE_NODE_WS_URL) {
+    const wsBase = (import.meta.env.VITE_NODE_WS_URL as string).replace(/\/+$/, "");
+    return `${wsBase}/ws/yjs`;
+  }
+  // 3. Dev proxy fallback: relative path via window.location (only works with Vite dev server)
+  if (typeof window !== "undefined" && window.location?.host) {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${proto}//${window.location.host}/ws/yjs`;
   }

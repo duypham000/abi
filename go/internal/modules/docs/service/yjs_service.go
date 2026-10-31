@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"os"
 	"strings"
 	"time"
 
@@ -22,7 +23,9 @@ var (
 type YjsClaims struct {
 	DocID      string               `json:"doc_id"`
 	UserID     string               `json:"user_id"`
+	YUserID    string               `json:"yuserid,omitempty"`
 	AccessMode domain.YjsAccessMode `json:"access_mode"`
+	YAccess    string               `json:"yaccess,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -34,7 +37,10 @@ type YjsService interface {
 	GetSnapshot(ctx context.Context, docID string) (*dto.YjsSnapshotResponse, error)
 	ReconstructDocument(ctx context.Context, docID string, version int) (*dto.ReconstructResponse, error)
 	
-	// tomo-node integration methods
+	// tomo-node integration methods (binary protocol)
+	GetSnapshotBinary(ctx context.Context, docID string) ([]byte, error)
+	SaveSnapshotBinary(ctx context.Context, docID string, updateBlob []byte, stateVectorB64 string) error
+	GetStateVectorBinary(ctx context.Context, docID string) ([]byte, error)
 	GetRevisionHead(ctx context.Context, docID string) (*dto.YjsRevisionHeadResponse, error)
 	AppendInternalRevision(ctx context.Context, docID string, stateVectorB64 string, isKeyframe bool, baseVersion *int, blob []byte) error
 	GetRevisionChain(ctx context.Context, docID string, revisionID int) (*dto.YjsRevisionChainResponse, error)
@@ -46,14 +52,36 @@ type yjsServiceImpl struct {
 	yjsRepo   repository.YjsRepository
 	revRepo   repository.RevisionRepository
 	yjsSecret []byte
+	wsURL     string
 }
 
-func NewYjsService(docRepo repository.DocRepository, yjsRepo repository.YjsRepository, revRepo repository.RevisionRepository, yjsSecret string) YjsService {
+func resolveWsURL(wsURL ...string) string {
+	if len(wsURL) > 0 && wsURL[0] != "" {
+		url := wsURL[0]
+		if !strings.HasSuffix(url, "/ws/yjs") {
+			return strings.TrimRight(url, "/") + "/ws/yjs"
+		}
+		return url
+	}
+	url := os.Getenv("NODE_WS_URL")
+	if url == "" {
+		url = os.Getenv("VITE_NODE_WS_URL")
+	}
+	if url == "" {
+		url = "ws://127.0.0.1:1234/ws/yjs"
+	} else if !strings.HasSuffix(url, "/ws/yjs") {
+		url = strings.TrimRight(url, "/") + "/ws/yjs"
+	}
+	return url
+}
+
+func NewYjsService(docRepo repository.DocRepository, yjsRepo repository.YjsRepository, revRepo repository.RevisionRepository, yjsSecret string, wsURL ...string) YjsService {
 	return &yjsServiceImpl{
 		docRepo:   docRepo,
 		yjsRepo:   yjsRepo,
 		revRepo:   revRepo,
 		yjsSecret: []byte(yjsSecret),
+		wsURL:     resolveWsURL(wsURL...),
 	}
 }
 
@@ -86,10 +114,16 @@ func (s *yjsServiceImpl) GenerateYjsToken(ctx context.Context, userID string, re
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour)
+	yaccess := "r"
+	if mode == domain.YjsAccessWrite {
+		yaccess = "rw"
+	}
 	claims := YjsClaims{
 		DocID:      targetID,
 		UserID:     userID,
+		YUserID:    userID,
 		AccessMode: mode,
+		YAccess:    yaccess,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -104,12 +138,17 @@ func (s *yjsServiceImpl) GenerateYjsToken(ctx context.Context, userID string, re
 		return nil, err
 	}
 
+	wsURL := s.wsURL
+	if wsURL == "" {
+		wsURL = resolveWsURL()
+	}
+
 	return &dto.YjsTokenResponse{
 		Token:      tokenStr,
 		DocID:      targetID,
 		AccessMode: mode,
 		ExpiresAt:  expiresAt,
-		Url:        "ws://127.0.0.1:1234/ws/yjs",
+		Url:        wsURL,
 		ExpiresIn:  86400,
 	}, nil
 }
@@ -284,4 +323,36 @@ func (s *yjsServiceImpl) UpdateDocMeta(ctx context.Context, docID string, plainT
 	doc.Content = plainText
 	doc.UpdatedAt = time.Now()
 	return s.docRepo.UpdateDoc(ctx, doc)
+}
+
+// GetSnapshotBinary returns the raw YjsStateVector bytes for the internal node protocol.
+// Returns nil bytes (no error) when doc exists but has no snapshot yet → handler returns 204.
+// Returns ErrDocNotFound when the doc itself does not exist → handler returns 404.
+func (s *yjsServiceImpl) GetSnapshotBinary(ctx context.Context, docID string) ([]byte, error) {
+	doc, err := s.docRepo.FindByID(ctx, docID)
+	if err != nil || doc == nil {
+		return nil, ErrDocNotFound
+	}
+	return doc.YjsStateVector, nil
+}
+
+// SaveSnapshotBinary persists a binary Yjs update (V2 format) as the doc's snapshot.
+func (s *yjsServiceImpl) SaveSnapshotBinary(ctx context.Context, docID string, updateBlob []byte, stateVectorB64 string) error {
+	doc, err := s.docRepo.FindByID(ctx, docID)
+	if err != nil || doc == nil {
+		return ErrDocNotFound
+	}
+
+	doc.YjsStateVector = updateBlob
+	doc.UpdatedAt = time.Now()
+	return s.docRepo.UpdateDoc(ctx, doc)
+}
+
+// GetStateVectorBinary returns the raw state vector bytes for diff computation.
+func (s *yjsServiceImpl) GetStateVectorBinary(ctx context.Context, docID string) ([]byte, error) {
+	doc, err := s.docRepo.FindByID(ctx, docID)
+	if err != nil || doc == nil {
+		return nil, ErrDocNotFound
+	}
+	return doc.YjsStateVector, nil
 }

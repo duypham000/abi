@@ -10,7 +10,7 @@ export default defineConfig(async ({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const goApiTarget = env.VITE_GO_API_URL || "http://127.0.0.1:8080";
   const nodeApiTarget = env.VITE_NODE_API_URL || "http://127.0.0.1:8006";
-  const wsTarget = env.VITE_NODE_WS_URL || "ws://127.0.0.1:1234";
+  const wsTarget = (env.VITE_NODE_WS_URL || "ws://127.0.0.1:1234").replace(/\/ws\/yjs\/?$/, "").replace(/\/+$/, "");
   const isLocal = goApiTarget.includes("127.0.0.1") || goApiTarget.includes("localhost");
   const secure = !isLocal;
   const changeOrigin = true;
@@ -95,8 +95,16 @@ export default defineConfig(async ({ mode }) => {
           target: wsTarget,
           ws: true,
           changeOrigin,
-          headers,
           secure,
+          configure: (proxy) => {
+            proxy.on("error", (err, _req, res) => {
+              console.warn("[Vite Proxy WS] error connecting to Yjs server:", err.message);
+              if (res && "writeHead" in res && !res.headersSent) {
+                res.writeHead(502, { "Content-Type": "text/plain" });
+                res.end("Bad Gateway: Yjs WebSocket backend unavailable");
+              }
+            });
+          },
         },
       },
     },

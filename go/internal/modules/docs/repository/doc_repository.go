@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"tomo-backend/internal/modules/docs/domain"
 
@@ -33,7 +34,9 @@ func (r *docRepositoryImpl) CreateDoc(ctx context.Context, doc *domain.Doc) erro
 
 func (r *docRepositoryImpl) FindByID(ctx context.Context, id string) (*domain.Doc, error) {
 	var doc domain.Doc
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&doc).Error
+	trimmed := strings.TrimPrefix(id, "doc-")
+	withDoc := "doc-" + trimmed
+	err := r.db.WithContext(ctx).Where("id = ? OR id = ? OR id = ? OR slug = ? OR slug = ? OR slug = ?", id, trimmed, withDoc, id, trimmed, withDoc).First(&doc).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

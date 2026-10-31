@@ -10,12 +10,12 @@
  */
 export function parseDocId(room) {
   if (typeof room !== 'string') return null
-  const m = room.match(/^doc-(\d+)$/)
+  const m = room.match(/^doc-([a-zA-Z0-9_\-]+)$/)
   return m ? m[1] : null
 }
 
 /**
- * Parse a room name into a type ('doc' or 'canvas') and a numeric ID.
+ * Parse a room name into a type ('doc' or 'canvas') and an ID.
  * Matches `doc-{id}` and `canvas-{id}`.
  *
  * @param {string} room
@@ -23,7 +23,7 @@ export function parseDocId(room) {
  */
 export function parseRoom(room) {
   if (typeof room !== 'string') return null
-  const m = room.match(/^(doc|canvas)-(\d+)$/)
+  const m = room.match(/^(doc|canvas)-([a-zA-Z0-9_\-]+)$/)
   return m ? { type: m[1], id: m[2] } : null
 }
 

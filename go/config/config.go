@@ -22,6 +22,7 @@ type Config struct {
 	GitHubAPIBaseURL   string
 	CacheTTLHours      int
 	WorkspaceRoot      string
+	NodeWsURL          string
 }
 
 func LoadConfig() *Config {
@@ -46,6 +47,11 @@ func LoadConfig() *Config {
 		corsOrigins[i] = strings.TrimSpace(corsOrigins[i])
 	}
 
+	nodeWsUrl := getEnv("NODE_WS_URL", getEnv("VITE_NODE_WS_URL", "ws://127.0.0.1:1234"))
+	if !strings.HasSuffix(nodeWsUrl, "/ws/yjs") {
+		nodeWsUrl = strings.TrimRight(nodeWsUrl, "/") + "/ws/yjs"
+	}
+
 	return &Config{
 		Environment:        appEnv,
 		ServerPort:         getEnv("SERVER_PORT", "8080"),
@@ -59,6 +65,7 @@ func LoadConfig() *Config {
 		GitHubAPIBaseURL:   getEnv("GITHUB_API_BASE_URL", "https://api.github.com"),
 		CacheTTLHours:      getEnvAsInt("CACHE_TTL_HOURS", 24),
 		WorkspaceRoot:      getEnv("WORKSPACE_ROOT", "./data/workspaces"),
+		NodeWsURL:          nodeWsUrl,
 	}
 }
 

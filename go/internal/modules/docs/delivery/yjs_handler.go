@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -49,6 +50,10 @@ func (h *YjsHandler) GenerateToken(c *gin.Context) {
 
 	res, err := h.yjsService.GenerateYjsToken(c.Request.Context(), userID, req)
 	if err != nil {
+		if errors.Is(err, service.ErrDocNotFound) {
+			response.NotFound(c, "Document not found for Yjs token")
+			return
+		}
 		response.InternalServerError(c, "Failed to generate Yjs token", err)
 		return
 	}
@@ -90,6 +95,10 @@ func (h *YjsHandler) SaveUpdate(c *gin.Context) {
 	}
 
 	if err := h.yjsService.SaveUpdate(c.Request.Context(), docID, req); err != nil {
+		if errors.Is(err, service.ErrDocNotFound) {
+			response.NotFound(c, "Document not found")
+			return
+		}
 		response.InternalServerError(c, "Failed to persist Yjs update", err)
 		return
 	}
@@ -107,6 +116,10 @@ func (h *YjsHandler) SaveSnapshot(c *gin.Context) {
 
 	res, err := h.yjsService.SaveSnapshot(c.Request.Context(), docID, req)
 	if err != nil {
+		if errors.Is(err, service.ErrDocNotFound) {
+			response.NotFound(c, "Document not found")
+			return
+		}
 		response.InternalServerError(c, "Failed to save Yjs state vector snapshot", err)
 		return
 	}
@@ -173,6 +186,10 @@ func (h *YjsHandler) AppendInternalRevision(c *gin.Context) {
 	}
 
 	if err := h.yjsService.AppendInternalRevision(c.Request.Context(), docID, stateVectorB64, isKeyframe, baseVer, blob); err != nil {
+		if errors.Is(err, service.ErrDocNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -202,9 +219,79 @@ func (h *YjsHandler) UpdateDocMeta(c *gin.Context) {
 	}
 
 	if err := h.yjsService.UpdateDocMeta(c.Request.Context(), docID, req.PlainText); err != nil {
+		if errors.Is(err, service.ErrDocNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
 	c.Status(http.StatusOK)
+}
+
+// Internal binary handlers for tomo-node javaStorage.js protocol
+// These return raw binary (application/octet-stream) instead of JSON.
+
+func (h *YjsHandler) GetInternalSnapshot(c *gin.Context) {
+	docID := c.Param("docId")
+	blob, err := h.yjsService.GetSnapshotBinary(c.Request.Context(), docID)
+	if err != nil {
+		if errors.Is(err, service.ErrDocNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	// Doc exists but has no snapshot yet → 204 No Content
+	if len(blob) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+
+	c.Data(http.StatusOK, "application/octet-stream", blob)
+}
+
+func (h *YjsHandler) PutInternalSnapshot(c *gin.Context) {
+	docID := c.Param("docId")
+	stateVectorB64 := c.GetHeader("X-Yjs-State-Vector")
+
+	blob, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	if err := h.yjsService.SaveSnapshotBinary(c.Request.Context(), docID, blob, stateVectorB64); err != nil {
+		if errors.Is(err, service.ErrDocNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *YjsHandler) GetInternalStateVector(c *gin.Context) {
+	docID := c.Param("docId")
+	blob, err := h.yjsService.GetStateVectorBinary(c.Request.Context(), docID)
+	if err != nil {
+		if errors.Is(err, service.ErrDocNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	if len(blob) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+
+	c.Data(http.StatusOK, "application/octet-stream", blob)
 }

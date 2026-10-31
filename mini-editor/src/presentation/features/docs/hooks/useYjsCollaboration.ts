@@ -7,10 +7,19 @@ import type { AppDispatch } from "@/presentation/store";
 import { docsApi } from "@/infrastructure/api/docsApi";
 
 function getDefaultWsUrl(): string {
+  // 1. Explicit override (e.g. custom Yjs server)
   if (import.meta.env.VITE_YJS_SERVER_URL) {
     return import.meta.env.VITE_YJS_SERVER_URL;
   }
-  if (typeof window !== "undefined" && window.location && window.location.host) {
+  // 2. Use VITE_NODE_WS_URL from .env — works in both dev (ws://127.0.0.1:1234 via .env.development)
+  //    and Tauri production (wss://ws.tomoo.uk via .env.production), bypassing window.location
+  //    which would produce ws://localhost:1420 (dev proxy only, breaks in Tauri production).
+  if (import.meta.env.VITE_NODE_WS_URL) {
+    const wsBase = (import.meta.env.VITE_NODE_WS_URL as string).replace(/\/+$/, "");
+    return `${wsBase}/ws/yjs`;
+  }
+  // 3. Dev proxy fallback: relative path via window.location (only works with Vite dev server)
+  if (typeof window !== "undefined" && window.location?.host) {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${proto}//${window.location.host}/ws/yjs`;
   }
@@ -61,18 +70,22 @@ function hashColor(userId: string | number): string {
   return COLORS[Math.abs(hash) % COLORS.length];
 }
 
-export function useYjsCollaboration(docId: number, user: AuthUser | null): UseYjsCollaborationResult {
+export function useYjsCollaboration(
+  docId: number,
+  user: AuthUser | null,
+  enabled: boolean = true
+): UseYjsCollaborationResult {
   const dispatch = useDispatch<AppDispatch>();
   const [isConnected, setIsConnected] = useState(false);
   const [collaborators, setCollaborators] = useState<CollaboratorUser[]>([]);
   const [providerState, setProviderState] = useState<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
-  // Drafts (docId < 0) have no collaboration, so they're resolved immediately in solo mode.
-  const [isResolved, setIsResolved] = useState(docId < 0);
+  // Drafts (docId < 0 or !enabled) have no collaboration, so they're resolved immediately in solo mode.
+  const [isResolved, setIsResolved] = useState(!enabled || docId < 0);
 
   const providerRef = useRef<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
 
   useEffect(() => {
-    if (docId < 0) {
+    if (!enabled || docId < 0) {
       setIsResolved(true);
       return;
     }
@@ -200,7 +213,7 @@ export function useYjsCollaboration(docId: number, user: AuthUser | null): UseYj
       setIsConnected(false);
       setCollaborators([]);
     };
-  }, [docId, user?.userId, dispatch]);
+  }, [docId, user?.userId, dispatch, enabled]);
 
   const currentUser = useMemo<CollaboratorUser | null>(() => {
     if (!user) return null;

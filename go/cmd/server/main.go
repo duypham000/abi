@@ -39,7 +39,7 @@ func main() {
 
 	// 5. Initialize Modular Monolith Modules
 	authModule := auth.InitModule(db, jwtManager)
-	docsModule := docs.InitModule(db, cfg.YjsSecret)
+	docsModule := docs.InitModule(db, cfg.YjsSecret, cfg.NodeWsURL)
 	githubModule := github.InitModule(db, cfg.GitHubAPIBaseURL, cfg.WorkspaceRoot, cfg.CacheTTLHours)
 
 	// 6. Setup Gin HTTP Router

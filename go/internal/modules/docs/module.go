@@ -22,7 +22,7 @@ type Module struct {
 	SeriesHandler *delivery.SeriesHandler
 }
 
-func InitModule(db *gorm.DB, yjsSecret string) *Module {
+func InitModule(db *gorm.DB, yjsSecret string, wsURL ...string) *Module {
 	// Auto migrate entities
 	_ = db.AutoMigrate(&domain.Doc{}, &domain.DocRevision{}, &domain.YjsUpdate{}, &domain.Series{})
 
@@ -31,7 +31,7 @@ func InitModule(db *gorm.DB, yjsSecret string) *Module {
 	yjsRepo := repository.NewYjsRepository(db)
 
 	docsService := service.NewDocsService(docRepo, revRepo)
-	yjsService := service.NewYjsService(docRepo, yjsRepo, revRepo, yjsSecret)
+	yjsService := service.NewYjsService(docRepo, yjsRepo, revRepo, yjsSecret, wsURL...)
 
 	docsHandler := delivery.NewDocsHandler(docsService)
 	yjsHandler := delivery.NewYjsHandler(yjsService)
@@ -97,10 +97,18 @@ func (m *Module) RegisterRoutes(router *gin.RouterGroup, jwtManager *security.JW
 		yjsGroup.GET("/auth/perm", m.YjsHandler.CheckPermission)
 		yjsGroup.GET("/auth/perm/:room/:userid", m.YjsHandler.CheckPermCallback)
 
-		// Internal endpoints for tomo-node integration
+		// Internal endpoints for tomo-node integration (binary protocol)
 		internalGroup := yjsGroup.Group("/internal")
 		{
-			internalGroup.GET("/docs/:docId/snapshot", m.YjsHandler.GetSnapshot)
+			// Binary snapshot endpoints (javaStorage.js protocol)
+			internalGroup.GET("/docs/:docId/snapshot", m.YjsHandler.GetInternalSnapshot)
+			internalGroup.PUT("/docs/:docId/snapshot", m.YjsHandler.PutInternalSnapshot)
+			internalGroup.GET("/docs/:docId/state-vector", m.YjsHandler.GetInternalStateVector)
+			// Canvas binary snapshot endpoints
+			internalGroup.GET("/canvases/:docId/snapshot", m.YjsHandler.GetInternalSnapshot)
+			internalGroup.PUT("/canvases/:docId/snapshot", m.YjsHandler.PutInternalSnapshot)
+			internalGroup.GET("/canvases/:docId/state-vector", m.YjsHandler.GetInternalStateVector)
+			// JSON endpoints (revisions, meta)
 			internalGroup.POST("/docs/:docId/snapshot", m.YjsHandler.SaveSnapshot)
 			internalGroup.GET("/docs/:docId/revisions/head", m.YjsHandler.GetRevisionHead)
 			internalGroup.POST("/docs/:docId/revisions", m.YjsHandler.AppendInternalRevision)

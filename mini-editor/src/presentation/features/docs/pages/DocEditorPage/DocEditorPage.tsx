@@ -77,11 +77,6 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   const isDirty = useSelector((state: RootState) => state.docs.isDirty);
   const authUser = useSelector((state: RootState) => state.auth.user);
 
-  const { collaboration, isResolved: isCollabResolved } = useYjsCollaboration(
-    !docId || docId <= 0 ? -1 : docId,
-    authUser
-  );
-
   const [editorSettings, setEditorSettings] = usePersistedState<EditorSettings>("editor-settings-v2", DEFAULT_SETTINGS);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editor, setEditor] = useState<any | null>(null);
@@ -102,6 +97,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
 
   const {
     doc,
+    isSavedOnline,
     isLoading,
     isFetching,
     saveStatus,
@@ -151,6 +147,15 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
     const hasHistory = Array.isArray(fileHistory) && fileHistory.length > 0;
     return Boolean(inManifest || hasHistory || gitFileStatus !== "untracked");
   }, [manifest, fileHistory, docId, gitFilePath, gitFileStatus]);
+
+  // Yjs real-time collaboration is only activated when document exists online on backend or git
+  const isOnlineDoc = Boolean(docId > 0 && (isSavedOnline || isDocOnGit || (doc && doc.status === 1)));
+
+  const { collaboration, isResolved: isCollabResolved } = useYjsCollaboration(
+    !docId || docId <= 0 ? -1 : docId,
+    authUser,
+    isOnlineDoc
+  );
 
   const checkCurrentFileStatus = useCallback(
     async (currentContent?: unknown, currentTitle?: string) => {

@@ -255,6 +255,8 @@ export function useDocEditor(
   if (skip) {
     return {
       doc: null,
+      backendData: null,
+      isSavedOnline: false,
       isLoading: false,
       isFetching: false,
       saveStatus: "idle" as SaveStatus,
@@ -270,8 +272,12 @@ export function useDocEditor(
     };
   }
 
+  const isSavedOnline = Boolean(backendData && !error);
+
   return {
     doc,
+    backendData: backendData ?? null,
+    isSavedOnline,
     isLoading,
     isFetching,
     saveStatus,
