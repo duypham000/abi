@@ -37,6 +37,10 @@ type DocsService interface {
 	// SyncFromGit creates a backend doc from a GitHub workspace file (idempotent by git_slug + owner).
 	// Returns (doc, wasCreated, error). wasCreated=false when an existing doc was returned.
 	SyncFromGit(ctx context.Context, ownerID string, req dto.CreateDocFromGitRequest) (*dto.DocDto, bool, error)
+
+	// Sync local <-> backend
+	SyncPushLocal(ctx context.Context, ownerID string, req dto.SyncPushRequest) (*dto.SyncPushResult, error)
+	SyncPullRemote(ctx context.Context, ownerID string, sinceStr string) (*dto.SyncPullResult, error)
 }
 
 type docsServiceImpl struct {
@@ -296,4 +300,116 @@ func generateSlug(title string) string {
 		slug = "doc"
 	}
 	return fmt.Sprintf("%s", slug)
+}
+
+func (s *docsServiceImpl) SyncPushLocal(ctx context.Context, ownerID string, req dto.SyncPushRequest) (*dto.SyncPushResult, error) {
+	result := &dto.SyncPushResult{
+		Created:   0,
+		Updated:   0,
+		Skipped:   0,
+		Conflicts: []dto.SyncConflictItem{},
+		Mapping:   []dto.LocalToBackendIDMapping{},
+	}
+
+	for _, item := range req.Items {
+		slug := item.LocalID
+		if slug == "" {
+			continue
+		}
+
+		existing, err := s.docRepo.FindBySlug(ctx, slug)
+		if err != nil {
+			return nil, err
+		}
+
+		localTime, _ := time.Parse(time.RFC3339, item.UpdatedAt)
+
+		if existing == nil {
+			docID := uuid.New().String()
+			status := domain.DocStatusPublished
+			if item.Status != "" {
+				status = domain.DocStatus(item.Status)
+			}
+			newDoc := &domain.Doc{
+				ID:        docID,
+				Title:     item.Title,
+				Slug:      slug,
+				Content:   item.Content,
+				Status:    status,
+				OwnerID:   ownerID,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			if err := s.docRepo.CreateDoc(ctx, newDoc); err != nil {
+				return nil, err
+			}
+			_, _ = s.CreateRevision(ctx, newDoc.ID, ownerID, "Synced from local", []byte(item.Content))
+			result.Created++
+			result.Mapping = append(result.Mapping, dto.LocalToBackendIDMapping{
+				LocalID:   item.LocalID,
+				BackendID: newDoc.ID,
+			})
+		} else {
+			// So sánh thời gian sửa đổi
+			if localTime.After(existing.UpdatedAt) || localTime.Equal(existing.UpdatedAt) {
+				existing.Title = item.Title
+				existing.Content = item.Content
+				if item.Status != "" {
+					existing.Status = domain.DocStatus(item.Status)
+				}
+				existing.UpdatedAt = time.Now()
+				if err := s.docRepo.UpdateDoc(ctx, existing); err != nil {
+					return nil, err
+				}
+				_, _ = s.CreateRevision(ctx, existing.ID, ownerID, "Updated from local sync", []byte(item.Content))
+				result.Updated++
+			} else {
+				// Backend có bản mới hơn bản local
+				if existing.Content == item.Content {
+					result.Skipped++
+				} else {
+					// Có xung đột (Conflict) -> Cần 3-way merge
+					baseContent := ""
+					revs, revErr := s.revRepo.GetRevisionsByDocID(ctx, existing.ID)
+					if revErr == nil && len(revs) > 0 {
+						baseContent = string(revs[len(revs)-1].SnapshotBlob)
+					}
+					result.Conflicts = append(result.Conflicts, dto.SyncConflictItem{
+						LocalID:          item.LocalID,
+						BackendID:        existing.ID,
+						BaseContent:      baseContent,
+						OursContent:      item.Content,
+						TheirsContent:    existing.Content,
+						BackendUpdatedAt: existing.UpdatedAt,
+					})
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func (s *docsServiceImpl) SyncPullRemote(ctx context.Context, ownerID string, sinceStr string) (*dto.SyncPullResult, error) {
+	var since *time.Time
+	if sinceStr != "" {
+		if t, err := time.Parse(time.RFC3339, sinceStr); err == nil {
+			since = &t
+		}
+	}
+
+	docs, err := s.docRepo.ListAllDocs(ctx, ownerID, since)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []dto.DocDto
+	for _, doc := range docs {
+		items = append(items, dto.ToDocDto(&doc))
+	}
+
+	return &dto.SyncPullResult{
+		Items: items,
+		Total: len(items),
+	}, nil
 }

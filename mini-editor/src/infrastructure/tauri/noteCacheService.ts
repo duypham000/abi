@@ -1,6 +1,7 @@
 import type { NoteDto, NoteRequest } from "@/core/interfaces/notes";
 import type { PageResult } from "@/infrastructure/api/baseApi";
 import { getDb, isTauri, now } from "./sqliteDb";
+import { computeNoteHash } from "@/core/utils/contentHash";
 
 export interface LocalNote {
   local_id: string;
@@ -11,6 +12,8 @@ export interface LocalNote {
   status: number;
   last_synced: string | null;
   updated_at: string;
+  is_dirty: number;
+  content_hash?: string | null;
 }
 
 let _noteSchemaInit: Promise<void> | null = null;
@@ -27,9 +30,13 @@ async function ensureNoteSchema() {
       metadata    TEXT,
       status      INTEGER NOT NULL DEFAULT 0,
       last_synced TEXT,
-      updated_at  TEXT    NOT NULL
+      updated_at  TEXT    NOT NULL,
+      is_dirty    INTEGER NOT NULL DEFAULT 0,
+      content_hash TEXT
     )
   `);
+  try { await db.execute(`ALTER TABLE notes ADD COLUMN is_dirty INTEGER NOT NULL DEFAULT 0`); } catch { /* already exists */ }
+  try { await db.execute(`ALTER TABLE notes ADD COLUMN content_hash TEXT`); } catch { /* already exists */ }
 }
 
 async function noteDb() {
@@ -114,12 +121,13 @@ export async function createNoteInSqlite(req: NoteRequest): Promise<NoteDto> {
   const content = req.content ?? null;
   const metadata = req.metadata ?? null;
   const status = req.status ?? 0;
+  const hash = await computeNoteHash({ title, content, metadata });
 
   if (db) {
     await db.execute(
-      `INSERT INTO notes (local_id, backend_id, title, content, metadata, status, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [localId, nextId, title, content, metadata, status, ts]
+      `INSERT INTO notes (local_id, backend_id, title, content, metadata, status, updated_at, is_dirty, content_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+      [localId, nextId, title, content, metadata, status, ts, hash]
     );
   }
 

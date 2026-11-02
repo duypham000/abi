@@ -79,6 +79,8 @@ func (m *Module) RegisterRoutes(router *gin.RouterGroup, jwtManager *security.JW
 		{
 			protected.POST("", m.DocsHandler.CreateDoc)
 			protected.POST("/sync-from-git", m.DocsHandler.SyncFromGit)
+			protected.POST("/sync/push", m.DocsHandler.SyncPushLocal)
+			protected.GET("/sync/pull", m.DocsHandler.SyncPullRemote)
 			protected.GET("", m.DocsHandler.ListDocs)
 			protected.GET("/list", m.DocsHandler.ListDocs)
 			protected.GET("/lazy", m.DocsHandler.ListDocs)

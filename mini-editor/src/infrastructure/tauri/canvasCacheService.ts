@@ -19,6 +19,7 @@ function parseOrHashId(localId: string, prefix: string): number {
 import type { CanvasDto, CanvasRequest } from "@/core/interfaces/canvas";
 import type { PageResult } from "@/infrastructure/api/baseApi";
 import { getDb, isTauri, now } from "./sqliteDb";
+import { computeCanvasHash } from "@/core/utils/contentHash";
 
 export interface LocalCanvas {
   local_id: string;
@@ -30,6 +31,8 @@ export interface LocalCanvas {
   last_synced: string | null;
   updated_at: string;
   deleted: number;
+  is_dirty: number;
+  content_hash?: string | null;
 }
 
 let _canvasSchemaInit: Promise<void> | null = null;
@@ -47,9 +50,13 @@ async function ensureCanvasSchema() {
       status      INTEGER NOT NULL DEFAULT 0,
       last_synced TEXT,
       updated_at  TEXT    NOT NULL,
-      deleted     INTEGER NOT NULL DEFAULT 0
+      deleted     INTEGER NOT NULL DEFAULT 0,
+      is_dirty    INTEGER NOT NULL DEFAULT 0,
+      content_hash TEXT
     )
   `);
+  try { await db.execute(`ALTER TABLE canvas ADD COLUMN is_dirty INTEGER NOT NULL DEFAULT 0`); } catch { /* already exists */ }
+  try { await db.execute(`ALTER TABLE canvas ADD COLUMN content_hash TEXT`); } catch { /* already exists */ }
 }
 
 async function canvasDb() {
@@ -117,12 +124,13 @@ export async function createCanvasInSqlite(req: CanvasRequest): Promise<CanvasDt
   const scene = req.scene ?? null;
   const metadata = req.metadata ?? null;
   const status = req.status ?? 0;
+  const hash = await computeCanvasHash({ title, scene, metadata });
 
   if (db) {
     await db.execute(
-      `INSERT INTO canvas (local_id, backend_id, title, scene, metadata, status, updated_at, deleted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
-      [localId, nextId, title, scene, metadata, status, ts]
+      `INSERT INTO canvas (local_id, backend_id, title, scene, metadata, status, updated_at, deleted, is_dirty, content_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)`,
+      [localId, nextId, title, scene, metadata, status, ts, hash]
     );
   }
 

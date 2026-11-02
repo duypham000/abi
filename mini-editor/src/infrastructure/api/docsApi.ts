@@ -356,6 +356,24 @@ export const docsApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ["Doc"],
     }),
+    syncPushLocal: builder.mutation<
+      { created: number; updated: number; skipped: number; conflicts: any[]; mapping: { local_id: string; backend_id: string }[] },
+      { items: any[] }
+    >({
+      query: (body) => ({
+        url: "/base/docs/sync/push",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: ["Doc"],
+    }),
+    syncPullRemote: builder.query<{ items: DocDto[]; total: number }, { since?: string } | void>({
+      query: (args) => ({
+        url: "/base/docs/sync/pull",
+        params: args?.since ? { since: args.since } : undefined,
+      }),
+      providesTags: ["Doc"],
+    }),
     getYjsToken: builder.query<{ token: string; url: string; expiresIn: number }, number | string>({
       query: (docId) => ({
         url: "/base/yjs/auth/token",
@@ -388,5 +406,8 @@ export const {
   useReconcileCountMutation,
   useGetIndicesInfoQuery,
   useSyncDocFromGitMutation,
+  useSyncPushLocalMutation,
+  useSyncPullRemoteQuery,
+  useLazySyncPullRemoteQuery,
   useGetYjsTokenQuery,
 } = docsApi;

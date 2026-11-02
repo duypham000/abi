@@ -158,7 +158,9 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   );
 
   // Yjs real-time collaboration is only activated when document exists online on backend or has been synced from git
-  const isOnlineDoc = Boolean(docId > 0 && (isSavedOnline || gitSyncStatus === "synced"));
+  // If file is local-only (chưa lưu online và không có backend_uuid), không kích hoạt Yjs
+  const isLocalOnly = !isSavedOnline && !doc?.backendUuid && gitSyncStatus !== "synced";
+  const isOnlineDoc = Boolean(docId > 0 && !isLocalOnly);
 
   const { collaboration, isResolved: isCollabResolved } = useYjsCollaboration(
     syncedBackendId || doc?.backendUuid || (!docId || docId <= 0 ? -1 : docId),

@@ -14,6 +14,7 @@ import {
   getCachedDocWithDirty,
   saveDocLocally,
   markClean,
+  isContentChanged,
 } from "@/infrastructure/tauri/docCacheService";
 import { pushRecentDoc } from "@/infrastructure/tauri/recentDocsService";
 import { flushDraftCanvases } from "./canvasFlushHelper";
@@ -135,10 +136,12 @@ export function useDocEditor(
     if (!doc || doc.status === 0) { return; }
     const request = buildRequest();
     if (!request) { return; }
+    const changed = await isContentChanged(id, request);
+    if (!changed) { return; }
     await saveDocLocally(id, request, true);
   }, [id, buildRequest]);
 
-  // Push to server — only called on explicit save (Ctrl+S)
+  // Push to server — only called on explicit save (Ctrl+S / Ctrl+Shift+S)
   const performSave = useCallback(async (explicit = false) => {
     const doc = docRef.current;
     if (!doc) return;
@@ -150,13 +153,16 @@ export function useDocEditor(
     const request = buildRequest(explicit);
     if (!request) return;
 
-    await saveDocLocally(id, request, !isOnlineRef.current);
-
     if (isOnlineRef.current) {
+      // ONLINE: Lưu SQLite local (is_dirty=false), đồng thời push backend
+      await saveDocLocally(id, request, false);
+
       const result = await updateDoc({ id, body: request });
       if ("error" in result) {
         const isNetwork = (result.error as { status?: string })?.status === "FETCH_ERROR";
         if (isNetwork) {
+          // Khi rớt mạng bất ngờ, chuyển trạng thái SQLite sang dirty=1 để sync lại sau
+          await saveDocLocally(id, request, true);
           dispatch(connectionLost());
           setSaveStatus("success");
           successTimerRef.current = setTimeout(() => setSaveStatus("idle"), SUCCESS_RESET_DELAY);
@@ -174,6 +180,8 @@ export function useDocEditor(
         successTimerRef.current = setTimeout(() => setSaveStatus("idle"), SUCCESS_RESET_DELAY);
       }
     } else {
+      // OFFLINE: Chỉ lưu local SQLite với is_dirty=true
+      await saveDocLocally(id, request, true);
       pendingTitleRef.current = null;
       pendingMetaRef.current = null;
       pendingBlocksRef.current = null;

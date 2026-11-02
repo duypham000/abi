@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"tomo-backend/internal/modules/docs/domain"
 
@@ -19,6 +20,7 @@ type DocRepository interface {
 	UpdateDoc(ctx context.Context, doc *domain.Doc) error
 	DeleteDoc(ctx context.Context, id string) error
 	ListDocs(ctx context.Context, ownerID string, parentID *string, page, pageSize int, search string) ([]domain.Doc, int64, error)
+	ListAllDocs(ctx context.Context, ownerID string, since *time.Time) ([]domain.Doc, error)
 	FindChildren(ctx context.Context, parentID string) ([]domain.Doc, error)
 }
 
@@ -109,6 +111,19 @@ func (r *docRepositoryImpl) ListDocs(ctx context.Context, ownerID string, parent
 
 	err = query.Offset(offset).Limit(pageSize).Order("is_pinned desc, is_starred desc, updated_at desc").Find(&docs).Error
 	return docs, total, err
+}
+
+func (r *docRepositoryImpl) ListAllDocs(ctx context.Context, ownerID string, since *time.Time) ([]domain.Doc, error) {
+	var docs []domain.Doc
+	query := r.db.WithContext(ctx).Model(&domain.Doc{})
+	if ownerID != "" {
+		query = query.Where("owner_id = ?", ownerID)
+	}
+	if since != nil {
+		query = query.Where("updated_at > ?", *since)
+	}
+	err := query.Order("updated_at desc").Find(&docs).Error
+	return docs, err
 }
 
 func (r *docRepositoryImpl) FindChildren(ctx context.Context, parentID string) ([]domain.Doc, error) {
