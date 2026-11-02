@@ -183,6 +183,14 @@ export const githubApi = baseApi.injectEndpoints({
       query: () => "/github/workspace/status",
       providesTags: ["GitStatus"],
     }),
+
+    syncWorkspace: builder.mutation<{ message: string; warning?: string }, void>({
+      query: () => ({
+        url: "/github/workspace/sync",
+        method: "POST",
+      }),
+      invalidatesTags: ["Doc", "GitStatus"],
+    }),
   }),
 });
 
@@ -215,4 +223,5 @@ export const {
   useCheckFileStatusMutation,
   useGetWorkspaceStatusQuery,
   useLazyGetWorkspaceStatusQuery,
+  useSyncWorkspaceMutation,
 } = githubApi;

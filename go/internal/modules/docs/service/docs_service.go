@@ -247,7 +247,10 @@ func (s *docsServiceImpl) CreateRevision(ctx context.Context, docID, authorID, s
 
 func (s *docsServiceImpl) SyncFromGit(ctx context.Context, ownerID string, req dto.CreateDocFromGitRequest) (*dto.DocDto, bool, error) {
 	if req.GitSlug != "" {
-		existing, err := s.docRepo.FindBySlugAndOwner(ctx, req.GitSlug, ownerID)
+		// Look up by slug only (slug is globally unique - e.g. "doc-180015").
+		// Using owner-scoped lookup would miss docs registered under a different owner_id,
+		// causing a duplicate-slug constraint error on INSERT.
+		existing, err := s.docRepo.FindBySlug(ctx, req.GitSlug)
 		if err == nil && existing != nil {
 			result := dto.ToDocDto(existing)
 			return &result, false, nil
@@ -260,9 +263,9 @@ func (s *docsServiceImpl) SyncFromGit(ctx context.Context, ownerID string, req d
 		slug = generateSlug(req.Title) + "-" + docID[:8]
 	}
 
-	status := req.Status
-	if status == "" {
-		status = domain.DocStatusPublished
+	status := domain.DocStatusPublished
+	if sStr, ok := req.Status.(string); ok && sStr != "" {
+		status = domain.DocStatus(sStr)
 	}
 
 	doc := &domain.Doc{

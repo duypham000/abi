@@ -63,16 +63,11 @@ export function useWorkspaceBlockNoteEditor({
       }
     : undefined;
 
-  const initialContent: any = (() => {
-    if (!collaborationOptions) {
-      return initialBlocks.length > 0 ? initialBlocks : undefined;
-    }
-    const fragmentEmpty = collaboration!.ydoc.getXmlFragment(COLLAB_FRAGMENT).length === 0;
-    if (fragmentEmpty && initialBlocks.length > 0) {
-      return initialBlocks;
-    }
-    return undefined;
-  })();
+  const initialContent: any = collaborationOptions
+    ? undefined
+    : initialBlocks.length > 0
+    ? initialBlocks
+    : undefined;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editor = useCreateBlockNote({
@@ -112,6 +107,7 @@ export function useWorkspaceBlockNoteEditor({
   useEffect(() => {
     if (!editor || !collaboration) return;
     if (seededRef.current) return;
+    if (!collaboration.provider.synced) return;
 
     const xmlFragment = collaboration.ydoc.getXmlFragment(COLLAB_FRAGMENT);
     if (xmlFragment.length === 0 && initialBlocks && initialBlocks.length > 0) {
@@ -124,7 +120,7 @@ export function useWorkspaceBlockNoteEditor({
     } else if (xmlFragment.length > 0) {
       seededRef.current = true;
     }
-  }, [editor, collaboration, initialBlocks]);
+  }, [editor, collaboration, collaboration?.provider.synced, initialBlocks]);
 
   
   useEffect(() => {

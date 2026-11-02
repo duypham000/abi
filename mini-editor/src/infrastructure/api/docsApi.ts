@@ -3,6 +3,7 @@ import type { DocDto, DocRequest, DocRevisionDto, DocRevisionSummaryDto, BinAnal
 import type { EsIndexInfo } from "@/core/interfaces/search";
 import { isTauri } from "@/infrastructure/tauri/sqliteDb";
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
+import { enqueue } from "@/infrastructure/tauri/outboxService";
 import {
   listDocsFromSqlite,
   getDocFromSqlite,
@@ -150,6 +151,14 @@ export const docsApi = baseApi.injectEndpoints({
         }
 
         if (localDoc) {
+          if (isTauri()) {
+            await enqueue({
+              entityType: "doc",
+              op: "create",
+              localId: `doc-${localDoc.id}`,
+              payload: body,
+            });
+          }
           return { data: localDoc };
         }
 
@@ -187,6 +196,15 @@ export const docsApi = baseApi.injectEndpoints({
         }
 
         if (localDoc) {
+          if (isTauri()) {
+            await enqueue({
+              entityType: "doc",
+              op: "update",
+              localId: `doc-${id}`,
+              backendId: id,
+              payload: body,
+            });
+          }
           return { data: localDoc };
         }
 
@@ -215,9 +233,19 @@ export const docsApi = baseApi.injectEndpoints({
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
             await fetchWithBaseQuery({ url: `/base/docs/${id}`, method: "DELETE" });
+            return { data: undefined };
           }
         } catch {
           // offline mode
+        }
+
+        if (isTauri()) {
+          await enqueue({
+            entityType: "doc",
+            op: "delete",
+            localId: `doc-${id}`,
+            backendId: id,
+          });
         }
 
         return { data: undefined };
@@ -315,7 +343,7 @@ export const docsApi = baseApi.injectEndpoints({
       query: () => ({ url: "/admin/search/indices" }),
       providesTags: ["SearchIndex"],
     }),
-    syncDocFromGit: builder.mutation<DocDto, { title: string; content: string; gitSlug: string; status?: 0 | 1 }>({
+    syncDocFromGit: builder.mutation<DocDto, { title: string; content: string; gitSlug: string; status?: string }>({
       query: (body) => ({
         url: "/base/docs/sync-from-git",
         method: "POST",
@@ -323,7 +351,7 @@ export const docsApi = baseApi.injectEndpoints({
           title: body.title,
           content: body.content,
           git_slug: body.gitSlug,
-          status: body.status ?? 1,
+          status: "PUBLISHED",
         },
       }),
       invalidatesTags: ["Doc"],

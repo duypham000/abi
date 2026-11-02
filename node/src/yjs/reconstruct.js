@@ -116,6 +116,43 @@ export function startReconstructServer({ baseUrl, sharedSecret, port }) {
             canvasElementCount,
             stateVector: toBase64(stateVector)
           }))
+        } else if (url.startsWith('/init-snapshot')) {
+          // Initialize a clean Yjs snapshot from raw text / JSON content
+          // Body: { "room": "doc-123" | "canvas-123", "content": "...", "type": "doc" | "canvas" }
+          const { room, content, type = 'doc' } = JSON.parse(body || '{}')
+          if (!room) {
+            res.writeHead(400).end()
+            return
+          }
+          const ydoc = new Y.Doc()
+          if (type === 'doc') {
+            const ytext = ydoc.getText('content')
+            if (content) {
+              ytext.insert(0, typeof content === 'string' ? content : JSON.stringify(content))
+            }
+          } else if (type === 'canvas') {
+            const elementsMap = ydoc.getMap('elements')
+            if (content) {
+              try {
+                const parsed = typeof content === 'string' ? JSON.parse(content) : content
+                if (Array.isArray(parsed)) {
+                  parsed.forEach((el, idx) => elementsMap.set(String(el.id || idx), el))
+                }
+              } catch {
+                // non-json content ignored
+              }
+            }
+          }
+
+          const update = Y.encodeStateAsUpdateV2(ydoc)
+          const stateVector = Y.encodeStateVector(ydoc)
+
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({
+            update: toBase64(update),
+            stateVector: toBase64(stateVector),
+            byteLength: update.byteLength
+          }))
         } else {
           res.writeHead(404).end()
         }

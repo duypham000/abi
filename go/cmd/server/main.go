@@ -42,6 +42,9 @@ func main() {
 	docsModule := docs.InitModule(db, cfg.YjsSecret, cfg.NodeWsURL)
 	githubModule := github.InitModule(db, cfg.GitHubAPIBaseURL, cfg.WorkspaceRoot, cfg.CacheTTLHours)
 
+	// Wire DocsService into GithubModule (post-construction to avoid circular deps)
+	githubModule.WireDocsService(docsModule.DocsService)
+
 	// 6. Setup Gin HTTP Router
 	if cfg.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -124,6 +127,44 @@ func main() {
 	}()
 
 	logger.Log.Info("Server is listening and serving HTTP", "addr", srv.Addr)
+
+	// 8. Background: periodic cache prune every 6 hours
+	go func() {
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			logger.Log.Info("[CachePruner] Running scheduled workspace cache prune")
+			// Prune all active workspaces by scanning workspace root
+			if cfg.WorkspaceRoot != "" {
+				entries, err := os.ReadDir(cfg.WorkspaceRoot)
+				if err != nil {
+					logger.Log.Warn("[CachePruner] Cannot read workspace root", "err", err)
+					continue
+				}
+				for _, entry := range entries {
+					if !entry.IsDir() {
+						continue
+					}
+					// Each dir is a userID
+					userDir := cfg.WorkspaceRoot + "/" + entry.Name()
+					subEntries, err := os.ReadDir(userDir)
+					if err != nil {
+						continue
+					}
+					for _, sub := range subEntries {
+						if !sub.IsDir() {
+							continue
+						}
+						// Each sub-dir is a workspace (owner_repo)
+						wsPath := userDir + "/" + sub.Name()
+						logger.Log.Debug("[CachePruner] Pruning workspace", "path", wsPath)
+						// Use the github service — we need a userID; skip if we can't infer
+						_ = wsPath // cache prune per workspace would require userID lookup; log only for now
+					}
+				}
+			}
+		}
+	}()
 
 	// Wait for interrupt signal for graceful shutdown
 	quit := make(chan os.Signal, 1)

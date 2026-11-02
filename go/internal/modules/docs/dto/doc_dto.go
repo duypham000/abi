@@ -20,7 +20,7 @@ type CreateDocFromGitRequest struct {
 	Title   string           `json:"title"`
 	Content string           `json:"content"`
 	GitSlug string           `json:"git_slug"` // e.g. "doc-180015"
-	Status  domain.DocStatus `json:"status"`
+	Status  interface{}      `json:"status"`
 }
 
 type UpdateDocRequest struct {

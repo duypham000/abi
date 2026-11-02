@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"tomo-backend/internal/modules/docs/service"
 	"tomo-backend/internal/modules/github/domain"
 	"tomo-backend/internal/modules/github/dto"
 	"tomo-backend/internal/modules/github/repository"
@@ -58,10 +59,17 @@ type GitHubService interface {
 	GetManifest(ctx context.Context, userID string) (*domain.WorkspaceManifest, error)
 	RebuildManifest(ctx context.Context, userID string) (*domain.WorkspaceManifest, error)
 	GetWorkspaceStatus(ctx context.Context, userID string) (*dto.WorkspaceStatusResponse, error)
+
+	// DB Sync
+	SyncWorkspaceToDB(ctx context.Context, userID string) error
+
+	// Inject docs service (for cross-module wiring post-construction)
+	SetDocsService(ds service.DocsService)
 }
 
 type gitHubService struct {
 	accountRepo   repository.GithubAccountRepository
+	docsService   service.DocsService // injected post-construction via SetDocsService
 	cacheMgr      *CacheManager
 	manifestMgr   *ManifestManager
 	conflictSvc   *ConflictService
@@ -1199,6 +1207,13 @@ func (s *gitHubService) Pull(ctx context.Context, userID string, req dto.PullReq
 		}
 		return nil, fmt.Errorf("pull error: %w", pullErr)
 	}
+
+	// Pull succeeded with new changes — sync workspace files into DB in the background.
+	// This ensures every git file has a corresponding docs DB entry (idempotent).
+	go func() {
+		bgCtx := context.Background()
+		_ = s.syncWorkspaceToDBInternal(bgCtx, userID, repoPath)
+	}()
 
 	return &dto.PullResponse{
 		Status:        "updated",

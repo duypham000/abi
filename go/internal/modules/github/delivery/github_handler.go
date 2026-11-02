@@ -438,3 +438,15 @@ func (h *GithubHandler) GetWorkspaceStatus(c *gin.Context) {
 	}
 	response.OK(c, "Workspace status retrieved", status)
 }
+
+// SyncWorkspace triggers a manual sync of all workspace files on disk into the docs DB.
+// Idempotent — safe to call multiple times. Also triggered automatically after Pull().
+func (h *GithubHandler) SyncWorkspace(c *gin.Context) {
+	userID := h.getUserID(c)
+	if err := h.githubService.SyncWorkspaceToDB(c.Request.Context(), userID); err != nil {
+		// Non-fatal partial errors are surfaced as a warning, not 500
+		response.OK(c, "Workspace sync completed (with some warnings)", gin.H{"warning": err.Error()})
+		return
+	}
+	response.OK(c, "Workspace synced to database successfully", nil)
+}

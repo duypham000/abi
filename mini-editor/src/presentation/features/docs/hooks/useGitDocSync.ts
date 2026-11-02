@@ -80,7 +80,7 @@ export function useGitDocSync(
             title,
             content: contentStr,
             gitSlug,
-            status: 1,
+            status: "PUBLISHED",
           })
         ).unwrap();
 

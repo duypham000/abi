@@ -705,7 +705,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
                 />
               )}
               <DocEditorBody
-                key={docId}
+                key={`${docId}-${collaboration ? "collab" : "solo"}`}
                 docId={docId}
                 initialBlocks={initialBlocks as any}
                 onBlocksChange={handleBlocksChange}

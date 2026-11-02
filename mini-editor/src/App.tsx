@@ -14,8 +14,10 @@ import GithubSection from "@/presentation/features/settings/sections/GithubSecti
 
 import { isMobile } from "@/infrastructure/platform";
 import { MobileShell } from "@/presentation/layout/MobileShell";
+import { useConnectivityManager } from "@/presentation/hooks/useConnectivityManager";
 
 function App() {
+  useConnectivityManager();
   const mobile = isMobile();
 
   return (
