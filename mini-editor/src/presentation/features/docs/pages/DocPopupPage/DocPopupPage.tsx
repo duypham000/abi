@@ -44,8 +44,6 @@ export default function DocPopupPage() {
   const { id, localId } = useParams<{ id?: string; localId?: string }>();
     const isDraftMode = !!localId;
   const docId = isDraftMode ? -1 : Number(id);
-  const [isMini, setIsMini] = useState(false);
-
   const isDirty = useSelector((state: RootState) => state.docs.isDirty);
 
   const [editorSettings, setEditorSettings] = usePersistedState<PopupEditorSettings>("popup-editor-settings", DEFAULT_POPUP_SETTINGS);
@@ -391,12 +389,10 @@ export default function DocPopupPage() {
   ) : null;
 
   return (
-    <div className={`doc-popup-layout${isMini ? " doc-popup-layout--mini" : ""}`}>
+    <div className={"doc-popup-layout"}>
       <DocPopupAppBar
         docTitle={doc?.title ?? ""}
-        isMini={isMini}
         isDraft={false}
-        onToggleMini={() => setIsMini((p) => !p)}
         saveStatus={saveStatus}
         isDirty={isDirty}
         canUndo={canUndo}
@@ -425,8 +421,7 @@ export default function DocPopupPage() {
         onExport={() => setExportModalOpen(true)}
       />
 
-      {!isMini && (
-        <div className="doc-popup-body" ref={containerRef}>
+      <div className="doc-popup-body" ref={containerRef}>
           {effectivelyLoading ? (
             <div className="doc-popup-loading">
               <Loading label="Đang tải tài liệu…" />
@@ -446,12 +441,11 @@ export default function DocPopupPage() {
               {isRightPanelOpen && isWide && rightPanelContent}
             </>
           )}
-        </div>
-      )}
+      </div>
 
       {/* Narrow mode: bottom drawer */}
       <Drawer
-        open={isRightPanelOpen && !isMini && !isWide}
+        open={isRightPanelOpen && !isWide}
         placement="bottom"
         onClose={() => setIsRightPanelOpen(false)}
         title={null}

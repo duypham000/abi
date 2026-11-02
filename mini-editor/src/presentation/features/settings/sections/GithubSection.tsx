@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Select } from "antd";
 import {
   useGetGithubUserQuery,
@@ -19,10 +19,10 @@ import "./GithubSection.scss";
 
 export default function GithubSection() {
   const { data: user, isLoading, isError: isUserError } = useGetGithubUserQuery(undefined, {
-    // Tránh gọi lại liên tục gây block khi chưa đăng nhập
-    refetchOnMountOrArgChange: false,
+    // Refetch nếu cache > 60s để đảm bảo luôn đồng bộ data từ backend khi vào Settings
+    refetchOnMountOrArgChange: 60,
     refetchOnFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
   });
   const { data: repos, isFetching: isFetchingRepos, refetch: refetchRepos } = useListGithubReposQuery(undefined, {
     skip: !user?.connected,
@@ -36,6 +36,7 @@ export default function GithubSection() {
 
   const [tokenInput, setTokenInput] = useState("");
   const [selectedRepoFullName, setSelectedRepoFullName] = useState("");
+  // Khởi tạo "main" tạm; sẽ được sync từ activeRepoBranch sau khi API load xong
   const [targetBranch, setTargetBranch] = useState("main");
   const [cloneIfMissing, setCloneIfMissing] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -50,6 +51,16 @@ export default function GithubSection() {
   const activeWorkspacePath = user?.workspacePath || user?.workspace_path || "";
   const activeAvatarUrl = user?.avatarUrl || user?.avatar_url || "";
   const activeTokenPreview = user?.tokenPreview || user?.token_preview || "";
+
+  // Sync targetBranch từ backend khi data load lần đầu hoặc sau khi refetch
+  // Chỉ override nếu user chưa tự sửa (tức là vẫn đang là giá trị mặc định "main"
+  // và backend có branch khác)
+  useEffect(() => {
+    if (activeRepoBranch && activeRepoBranch !== targetBranch) {
+      setTargetBranch(activeRepoBranch);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRepoBranch]);
 
   const handleConnect = async () => {
     if (!tokenInput.trim()) return;

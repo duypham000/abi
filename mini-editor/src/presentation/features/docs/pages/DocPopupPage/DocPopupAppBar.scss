@@ -15,6 +15,7 @@
   width: 100%;
   flex-shrink: 0;
   user-select: none;
+  -webkit-app-region: drag;
   position: relative;
   z-index: 50;
   background-color: #ffffff;
@@ -34,6 +35,8 @@
   height: 40px;
   padding: 0 0 0 10px;
   border-bottom: 1px solid #e4e4e7;
+  min-width: 0;
+  overflow: hidden;
 
   @media (prefers-color-scheme: dark) {
     border-bottom-color: #3f3f46;
@@ -65,6 +68,7 @@
 
 // Edit mode — active input
 .doc-popup-appbar-title-input {
+  -webkit-app-region: no-drag;
   flex: 1;
   min-width: 0;
   font-size: 12px !important;
@@ -81,6 +85,7 @@
 
 // Save status chip
 .popup-save-status {
+  -webkit-app-region: no-drag;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -118,6 +123,7 @@
 
 // Compact row-1 action buttons
 .popup-row1-btn {
+  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -209,6 +215,7 @@
 
 // Standard window control buttons (pin/mini/close)
 .doc-popup-btn {
+  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -266,6 +273,7 @@
 }
 
 .popup-row2-btn {
+  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   justify-content: center;

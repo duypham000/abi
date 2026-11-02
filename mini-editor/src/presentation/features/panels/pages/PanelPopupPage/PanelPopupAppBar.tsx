@@ -22,7 +22,7 @@ export function PanelPopupAppBar({ title }: PanelPopupAppBarProps) {
   }, [isAlwaysOnTop]);
 
   return (
-    <header className="panel-popup-appbar">
+    <header className="panel-popup-appbar" data-tauri-drag-region>
       <span className="panel-popup-appbar-title" data-tauri-drag-region>
         {title}
       </span>
