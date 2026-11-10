@@ -99,6 +99,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   const {
     doc,
     isSavedOnline,
+    isSyncedToServer,
     isLoading,
     isFetching,
     saveStatus,
@@ -158,12 +159,11 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   );
 
   // Yjs real-time collaboration is only activated when document exists online on backend or has been synced from git
-  // If file is local-only (chưa lưu online và không có backend_uuid), không kích hoạt Yjs
-  const isLocalOnly = !isSavedOnline && !doc?.backendUuid && gitSyncStatus !== "synced";
-  const isOnlineDoc = Boolean(docId > 0 && !isLocalOnly);
+  // Chỉ kích hoạt Yjs khi doc đã xác nhận có trên server (isSavedOnline) hoặc đã sync từ Git (gitSyncStatus === "synced")
+  const isOnlineDoc = Boolean(docId > 0 && (isSavedOnline || gitSyncStatus === "synced"));
 
   const { collaboration, isResolved: isCollabResolved } = useYjsCollaboration(
-    syncedBackendId || doc?.backendUuid || (!docId || docId <= 0 ? -1 : docId),
+    isOnlineDoc ? (syncedBackendId || doc?.backendUuid || docId) : -1,
     authUser,
     isOnlineDoc
   );
@@ -639,6 +639,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
           settings={editorSettings}
           saveStatus={saveStatus}
           isDirty={isDirty}
+          isSyncedToServer={isSyncedToServer}
           collaborators={collaboration?.collaborators}
           isCollabConnected={collaboration?.isConnected}
           onBack={handleBack}

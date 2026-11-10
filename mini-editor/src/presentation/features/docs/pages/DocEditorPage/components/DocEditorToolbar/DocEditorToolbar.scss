@@ -162,6 +162,21 @@
   white-space: nowrap;
 }
 
+.toolbar-unsynced-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(113, 113, 122, 0.12);
+  color: var(--text-muted, #71717a);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  user-select: none;
+}
+
 .toolbar-autosave {
   display: flex;
   align-items: center;

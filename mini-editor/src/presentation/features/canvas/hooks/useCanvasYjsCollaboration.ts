@@ -140,6 +140,10 @@ export function useCanvasYjsCollaboration(
         token = res.token;
         expiresIn = res.expiresIn || 86400;
         if (res.url) serverUrl = res.url;
+        // Only let backend override if client has no explicit WS URL configured in .env
+        if (res.url && !import.meta.env.VITE_NODE_WS_URL && !import.meta.env.VITE_YJS_SERVER_URL) {
+          serverUrl = res.url;
+        }
       } catch (e) {
         console.warn("[Yjs-Canvas] token fetch failed — falling back to solo mode", e);
         if (!cancelled) setIsResolved(true);

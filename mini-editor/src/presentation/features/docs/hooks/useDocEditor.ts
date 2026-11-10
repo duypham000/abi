@@ -50,6 +50,7 @@ export function useDocEditor(
 
   const [updateDoc] = useUpdateDocMutation();
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [isSyncedToServer, setIsSyncedToServer] = useState(false);
 
   // Cache successful backend response
   useEffect(() => {
@@ -70,7 +71,10 @@ export function useDocEditor(
   useEffect(() => {
     if (skip) return;
     getCachedDocWithDirty(id).then(({ doc, isDirty }) => {
-      if (isDirty && doc) setDirtyLocalDoc(doc as typeof backendData);
+      if (isDirty && doc) {
+        setDirtyLocalDoc(doc as typeof backendData);
+        setIsSyncedToServer(false);
+      }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, skip]);
@@ -78,9 +82,12 @@ export function useDocEditor(
   // When the server save succeeds (markClean called elsewhere), clear dirty local state
   // so subsequent re-mounts use fresh API data
   useEffect(() => {
-    if (backendData && dirtyLocalDoc && !error) setDirtyLocalDoc(undefined);
+    if (backendData && !error) {
+      if (dirtyLocalDoc) setDirtyLocalDoc(undefined);
+      setIsSyncedToServer(true);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backendData?.id]);
+  }, [backendData?.id, error]);
 
   // Priority: dirty local SQLite (unsaved edits) > fresh API > SQLite error fallback
   const doc = !skip ? (dirtyLocalDoc ?? backendData ?? cachedDoc ?? null) : null;
@@ -164,13 +171,14 @@ export function useDocEditor(
           // Khi rớt mạng bất ngờ, chuyển trạng thái SQLite sang dirty=1 để sync lại sau
           await saveDocLocally(id, request, true);
           dispatch(connectionLost());
-          setSaveStatus("success");
-          successTimerRef.current = setTimeout(() => setSaveStatus("idle"), SUCCESS_RESET_DELAY);
+          setIsSyncedToServer(false);
+          setSaveStatus("error");
         } else {
           setSaveStatus("error");
         }
       } else {
         await markClean(id);
+        setIsSyncedToServer(true);
         pendingTitleRef.current = null;
         pendingMetaRef.current = null;
         pendingBlocksRef.current = null;
@@ -182,13 +190,14 @@ export function useDocEditor(
     } else {
       // OFFLINE: Chỉ lưu local SQLite với is_dirty=true
       await saveDocLocally(id, request, true);
+      setIsSyncedToServer(false);
       pendingTitleRef.current = null;
       pendingMetaRef.current = null;
       pendingBlocksRef.current = null;
       pendingSeriesIdRef.current = undefined;
       dispatch(setDirty(false));
-      setSaveStatus("success");
-      successTimerRef.current = setTimeout(() => setSaveStatus("idle"), SUCCESS_RESET_DELAY);
+      // SQLite đã lưu ngầm liên tục, offline không cần hiển thị "Saved"
+      setSaveStatus("idle");
     }
   }, [id, buildRequest, updateDoc, dispatch]);
 
@@ -265,6 +274,7 @@ export function useDocEditor(
       doc: null,
       backendData: null,
       isSavedOnline: false,
+      isSyncedToServer: false,
       isLoading: false,
       isFetching: false,
       saveStatus: "idle" as SaveStatus,
@@ -286,6 +296,7 @@ export function useDocEditor(
     doc,
     backendData: backendData ?? null,
     isSavedOnline,
+    isSyncedToServer,
     isLoading,
     isFetching,
     saveStatus,

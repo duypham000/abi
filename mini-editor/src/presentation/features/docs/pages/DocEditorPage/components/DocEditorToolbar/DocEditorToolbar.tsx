@@ -31,6 +31,7 @@ import {
   CloudUploadOutlined,
   WarningOutlined,
   CloudDownloadOutlined,
+  CloudSyncOutlined,
 } from "@ant-design/icons";
 import type { EditorSettings } from "@/presentation/features/docs/pages/DocEditorPage/DocEditorPage";
 import type { SaveStatus } from "../../../../hooks/useDocEditor";
@@ -46,6 +47,7 @@ interface DocEditorToolbarProps {
   saveStatus: SaveStatus;
   isDraft?: boolean;
   isDirty: boolean;
+  isSyncedToServer?: boolean;
   collaborators?: CollaboratorUser[];
   isCollabConnected?: boolean;
   canUndo: boolean;
@@ -136,6 +138,7 @@ export function DocEditorToolbar({
   saveStatus,
   isDraft,
   isDirty,
+  isSyncedToServer,
   collaborators = [],
   isCollabConnected = false,
   canUndo,
@@ -447,6 +450,15 @@ export function DocEditorToolbar({
       {/* Draft badge */}
       {isDraft && saveStatus === "idle" && (
         <span className="toolbar-draft-badge">DRAFT · Ctrl+S to save</span>
+      )}
+
+      {/* Unsynced to server badge — khi idle, không phải draft, đã lưu SQLite nhưng chưa lên server */}
+      {!isDraft && saveStatus === "idle" && isSyncedToServer === false && !isDirty && (
+        <Tooltip title="Chưa đồng bộ server — Nhấn Ctrl+S để lưu lên server">
+          <span className="toolbar-unsynced-badge">
+            <CloudSyncOutlined /> Chưa sync
+          </span>
+        </Tooltip>
       )}
 
       {/* Save status indicator */}
