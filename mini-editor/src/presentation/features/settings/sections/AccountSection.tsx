@@ -1,15 +1,28 @@
+import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
+import { Modal } from "antd";
 import { RootState } from "@/presentation/store";
 import { useAuth } from "@/presentation/features/auth/hooks/useAuth";
 import { useGetMeQuery } from "@/infrastructure/api/authApi";
+import LoginForm from "@/presentation/features/auth/components/LoginForm";
 
 export default function AccountSection() {
   const { user: storeUser } = useSelector((state: RootState) => state.auth);
   const { logout, isLoggingOut } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginStep, setLoginStep] = useState<1 | 2>(1);
 
   // LOCAL_USER always has email "local@device" — that is the only reliable signal
   // that the user is in offline/local mode (the userId can be 0 or a UUID string).
   const isLocalUser = !storeUser || storeUser.email === "local@device";
+
+  // Automatically close modal when user successfully logs in
+  useEffect(() => {
+    if (!isLocalUser && showLoginModal) {
+      setShowLoginModal(false);
+      setLoginStep(1);
+    }
+  }, [isLocalUser, showLoginModal]);
 
   const {
     data: profile,
@@ -126,23 +139,59 @@ export default function AccountSection() {
         )}
       </div>
 
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">Sign out</div>
-            <div className="settings-row-desc">
-              Log out of your account on this device
+      {/* Account actions: Sign in if local guest, Sign out if authenticated */}
+      {isLocalUser ? (
+        <div className="settings-card">
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">Sign in to server</div>
+              <div className="settings-row-desc">
+                Log in with your Tomo account to sync documents, Git integrations, and preferences from server
+              </div>
             </div>
+            <button
+              className="settings-btn"
+              onClick={() => {
+                setLoginStep(1);
+                setShowLoginModal(true);
+              }}
+            >
+              Sign in
+            </button>
           </div>
-          <button
-            className="settings-btn"
-            onClick={logout}
-            disabled={isLoggingOut}
-          >
-            {isLoggingOut ? "Signing out…" : "Sign out"}
-          </button>
         </div>
-      </div>
+      ) : (
+        <div className="settings-card">
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">Sign out</div>
+              <div className="settings-row-desc">
+                Log out of your account on this device
+              </div>
+            </div>
+            <button
+              className="settings-btn"
+              onClick={logout}
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? "Signing out…" : "Sign out"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Login Modal */}
+      <Modal
+        open={showLoginModal}
+        onCancel={() => setShowLoginModal(false)}
+        footer={null}
+        width={420}
+        destroyOnClose
+      >
+        <div style={{ padding: "16px 8px" }}>
+          <LoginForm step={loginStep} setStep={setLoginStep} />
+        </div>
+      </Modal>
     </div>
   );
 }

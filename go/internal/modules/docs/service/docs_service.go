@@ -256,6 +256,28 @@ func (s *docsServiceImpl) SyncFromGit(ctx context.Context, ownerID string, req d
 		// causing a duplicate-slug constraint error on INSERT.
 		existing, err := s.docRepo.FindBySlug(ctx, req.GitSlug)
 		if err == nil && existing != nil {
+			hasChanges := false
+			if req.Title != "" && existing.Title != req.Title {
+				existing.Title = req.Title
+				hasChanges = true
+			}
+			if req.Content != "" && existing.Content != req.Content {
+				existing.Content = req.Content
+				hasChanges = true
+			}
+			if sStr, ok := req.Status.(string); ok && sStr != "" && string(existing.Status) != sStr {
+				existing.Status = domain.DocStatus(sStr)
+				hasChanges = true
+			}
+			if hasChanges {
+				existing.UpdatedAt = time.Now()
+				if err := s.docRepo.UpdateDoc(ctx, existing); err != nil {
+					return nil, false, err
+				}
+				_, _ = s.CreateRevision(ctx, existing.ID, ownerID, "Synchronized from GitHub workspace", []byte(req.Content))
+				result := dto.ToDocDto(existing)
+				return &result, true, nil
+			}
 			result := dto.ToDocDto(existing)
 			return &result, false, nil
 		}

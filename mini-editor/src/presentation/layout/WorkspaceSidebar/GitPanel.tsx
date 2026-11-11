@@ -6,6 +6,7 @@ import {
   usePullRepoMutation,
   useGetConflictsQuery,
   useGetWorkspaceStatusQuery,
+  useSaveGitFileMutation,
 } from "@/infrastructure/api/githubApi";
 import type { GitFileDiff, WorkspaceItemStatus } from "@/core/interfaces/github";
 import {
@@ -26,7 +27,7 @@ import {
   X,
   History,
 } from "lucide-react";
-import { Tooltip } from "antd";
+import { Tooltip, message } from "antd";
 import { GitDiffModal } from "@/presentation/features/git/components/GitDiffModal";
 import { GitConflictModal } from "@/presentation/features/git/components/GitConflictModal";
 import { DocGitHistoryDrawer } from "@/presentation/features/git/components/DocGitHistoryDrawer";
@@ -61,6 +62,7 @@ export function GitPanel() {
 
   const [commitAndPush, { isLoading: isCommitting }] = useCommitAndPushMutation();
   const [pullRepo, { isLoading: isPulling }] = usePullRepoMutation();
+  const [saveGitFile] = useSaveGitFileMutation();
 
   const [commitMessage, setCommitMessage] = useState("");
   const [activeDiff, setActiveDiff] = useState<GitFileDiff | null>(null);
@@ -69,6 +71,31 @@ export function GitPanel() {
   const [panelMessage, setPanelMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTab, setFilterTab] = useState<"all" | "changes" | "uptodate">("all");
+
+  const handleRestoreFileSnapshot = async (content: string) => {
+    if (!historyFilePath) return;
+    try {
+      let payloadContent: unknown = content;
+      try {
+        payloadContent = JSON.parse(content);
+      } catch {
+        // keep string
+      }
+      await saveGitFile({
+        path: historyFilePath,
+        content: payloadContent,
+        auto_commit: true,
+        auto_push: true,
+        message: `Restore ${historyFilePath} from Git history snapshot`,
+      }).unwrap();
+      message.success(`Đã khôi phục ${historyFilePath} về snapshot`);
+      handleRefresh();
+      setHistoryFilePath(null);
+    } catch (err: unknown) {
+      const errMsg = (err as { data?: { message?: string } })?.data?.message;
+      message.error(errMsg ? `Khôi phục thất bại: ${errMsg}` : "Khôi phục snapshot thất bại");
+    }
+  };
 
   const conflicts = conflictsData?.conflicts || [];
   const hasConflicts = conflicts.length > 0 || (workspaceStatus?.total_conflict ?? 0) > 0;
@@ -204,6 +231,7 @@ export function GitPanel() {
   }
 
   if (!isConnected) {
+    const isGitAuthed = Boolean(user?.connected);
     return (
       <div className="git-panel">
         <div className="git-panel__header">
@@ -213,15 +241,33 @@ export function GitPanel() {
         </div>
         <div className="git-panel__not-connected">
           <FolderGit2 size={36} style={{ marginBottom: 12, opacity: 0.6 }} />
-          <p>GitHub account is not connected or no repository is selected.</p>
-          <button
-            className="btn-connect-link"
-            onClick={() =>
-              openPanel(PANEL_TYPES.SETTINGS, { section: "github" }, { title: PANEL_TITLES[PANEL_TYPES.SETTINGS], singleton: true })
-            }
-          >
-            Configure in Settings
-          </button>
+          {isGitAuthed ? (
+            <>
+              <p>
+                Đã kết nối GitHub (@{user?.username}), nhưng chưa chọn Repository hoạt động.
+              </p>
+              <button
+                className="btn-connect-link"
+                onClick={() =>
+                  openPanel(PANEL_TYPES.SETTINGS, { section: "github" }, { title: PANEL_TITLES[PANEL_TYPES.SETTINGS], singleton: true })
+                }
+              >
+                Chọn Repository trong Cài đặt
+              </button>
+            </>
+          ) : (
+            <>
+              <p>Chưa kết nối tài khoản GitHub hoặc phiên đăng nhập chưa được đồng bộ từ server.</p>
+              <button
+                className="btn-connect-link"
+                onClick={() =>
+                  openPanel(PANEL_TYPES.SETTINGS, { section: "github" }, { title: PANEL_TITLES[PANEL_TYPES.SETTINGS], singleton: true })
+                }
+              >
+                Cấu hình trong Cài đặt
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -498,6 +544,7 @@ export function GitPanel() {
           filePath={historyFilePath}
           open={Boolean(historyFilePath)}
           onClose={() => setHistoryFilePath(null)}
+          onRestoreSnapshot={handleRestoreFileSnapshot}
         />
       )}
     </div>

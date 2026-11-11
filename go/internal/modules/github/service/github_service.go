@@ -421,6 +421,12 @@ func (s *gitHubService) SelectRepository(ctx context.Context, userID string, req
 	account.ActiveRepoURL = cloneURL
 	account.WorkspacePath = workspaceDir
 
+	// Sync workspace files into docs DB in the background
+	go func() {
+		bgCtx := context.Background()
+		_ = s.syncWorkspaceToDBInternal(bgCtx, userID, workspaceDir)
+	}()
+
 	return s.accountToProfileResponse(account), nil
 }
 
@@ -1186,6 +1192,12 @@ func (s *gitHubService) Pull(ctx context.Context, userID string, req dto.PullReq
 	}
 
 	if pullErr == git.NoErrAlreadyUpToDate || errors.Is(pullErr, plumbing.ErrReferenceNotFound) || (pullErr != nil && strings.Contains(pullErr.Error(), "reference not found")) {
+		// Even if up-to-date remotely, ensure any local workspace files are registered in DB
+		go func() {
+			bgCtx := context.Background()
+			_ = s.syncWorkspaceToDBInternal(bgCtx, userID, repoPath)
+		}()
+
 		return &dto.PullResponse{
 			Status:        "up_to_date",
 			HasConflict:   false,

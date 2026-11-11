@@ -6,6 +6,7 @@ import { setUser, decodeUser, LOCAL_USER } from "@/presentation/store/authSlice"
 import { goOffline } from "@/presentation/store/appSlice";
 import * as authBridge from "@/infrastructure/tauri/authBridge";
 import * as kvStore from "@/infrastructure/tauri/kvStore";
+import { baseApi } from "@/infrastructure/api/baseApi";
 import { LoginRequest } from "@/core/interfaces/auth";
 import { isMobile } from "@/infrastructure/platform";
 import { authenticateWithDevice } from "@/infrastructure/platform/deviceAuth";
@@ -33,6 +34,7 @@ export function useAuth() {
         credentials.password
       );
       dispatch(setUser(decodeUser(accessToken)));
+      dispatch(baseApi.util.resetApiState());
       if (!isTauri() || isMobile()) navigate("/");
     } catch (err) {
       setLoginError(err);
@@ -101,6 +103,7 @@ export function useAuth() {
       await authBridge.logout();
     } finally {
       dispatch(setUser(null));
+      dispatch(baseApi.util.resetApiState());
       setIsLoggingOut(false);
       if (!isTauri() || isMobile()) navigate("/login");
     }

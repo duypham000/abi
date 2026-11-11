@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
+import { Link } from "react-router-dom";
 import { Select } from "antd";
+import type { RootState } from "@/presentation/store";
 import {
   useGetGithubUserQuery,
   useConnectGithubMutation,
@@ -18,6 +21,9 @@ import {
 import "./GithubSection.scss";
 
 export default function GithubSection() {
+  const storeUser = useSelector((state: RootState) => state.auth.user);
+  const isLocalUser = !storeUser || storeUser.email === "local@device";
+
   const { data: user, isLoading, isError: isUserError } = useGetGithubUserQuery(undefined, {
     // Refetch nếu cache > 60s để đảm bảo luôn đồng bộ data từ backend khi vào Settings
     refetchOnMountOrArgChange: 60,
@@ -172,6 +178,35 @@ export default function GithubSection() {
           }}
         >
           {feedbackMsg.text}
+        </div>
+      )}
+
+      {isLocalUser && !user?.connected && (
+        <div
+          style={{
+            padding: "12px 16px",
+            borderRadius: 8,
+            marginBottom: 14,
+            fontSize: "0.85rem",
+            background: "rgba(59, 130, 246, 0.08)",
+            color: "#1d4ed8",
+            border: "1px solid rgba(59, 130, 246, 0.25)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <span>
+            ℹ️ Thiết bị đang ở chế độ <strong>Cục bộ (Local User)</strong>. Nếu bạn đã kết nối GitHub PAT từ máy khác, vui lòng <strong>Đăng nhập tài khoản hệ thống</strong> để đồng bộ cấu hình Git từ server.
+          </span>
+          <Link
+            to="/settings/account"
+            className="settings-btn"
+            style={{ whiteSpace: "nowrap", textDecoration: "none", fontSize: "0.775rem", padding: "6px 12px" }}
+          >
+            Đăng nhập
+          </Link>
         </div>
       )}
 

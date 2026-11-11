@@ -32,6 +32,7 @@ import {
   useGetFileHistoryQuery,
   useCheckFileStatusMutation,
   usePullRepoMutation,
+  githubApi,
 } from "@/infrastructure/api/githubApi";
 import "./DocEditorPage.scss";
 
@@ -56,9 +57,10 @@ function parseInitialBlocks(content: string | null | undefined): unknown[] {
   try {
     const parsed = JSON.parse(content);
     if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.content)) return parsed.content;
     return [];
   } catch {
-    return [];
+    return [{ type: "paragraph", content: [{ type: "text", text: content, styles: {} }] }];
   }
 }
 
@@ -233,6 +235,63 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
     }
   }, [doc?.id, checkCurrentFileStatus]);
 
+  const applyGitContentToEditor = useCallback(
+    async (rawContent: string | unknown, actionLabel: string) => {
+      try {
+        let parsed: any = rawContent;
+        if (typeof rawContent === "string") {
+          try {
+            parsed = JSON.parse(rawContent);
+          } catch {
+            parsed = rawContent;
+          }
+        }
+
+        let blocksToApply: any[] = [];
+        let titleToApply = "";
+
+        if (Array.isArray(parsed)) {
+          blocksToApply = parsed;
+        } else if (parsed && typeof parsed === "object") {
+          if (parsed.title && typeof parsed.title === "string") {
+            titleToApply = parsed.title;
+          }
+          if (Array.isArray(parsed.content)) {
+            blocksToApply = parsed.content;
+          } else if (typeof parsed.content === "string") {
+            blocksToApply = parseInitialBlocks(parsed.content) as any[];
+          }
+        } else if (typeof rawContent === "string") {
+          blocksToApply = parseInitialBlocks(rawContent) as any[];
+        }
+
+        if (blocksToApply.length > 0 && editorRef.current) {
+          try {
+            editorRef.current.replaceBlocks(editorRef.current.document, blocksToApply);
+          } catch (e) {
+            console.warn("[DocEditor] replaceBlocks failed:", e);
+          }
+          handleBlocksChange(blocksToApply);
+        }
+
+        if (titleToApply && titleToApply !== doc?.title) {
+          handleTitleChange(titleToApply);
+        }
+
+        if (blocksToApply.length > 0 || titleToApply) {
+          await triggerSave();
+          message.success(`Đã ${actionLabel} từ Git`);
+        } else {
+          message.warning("Nội dung Git không chứa khối văn bản hợp lệ");
+        }
+      } catch (err) {
+        console.error(`[DocEditor] Failed to apply ${actionLabel}:`, err);
+        message.error(`Không thể xử lý nội dung để ${actionLabel}`);
+      }
+    },
+    [doc?.title, handleBlocksChange, handleTitleChange, triggerSave]
+  );
+
   const handlePullGit = async () => {
     try {
       const res = await pullRepo({}).unwrap();
@@ -241,6 +300,16 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
         setShowConflictModal(true);
       } else {
         message.success("Đã đồng bộ nội dung mới nhất từ Git!");
+        try {
+          const fileRes = await dispatch(
+            githubApi.endpoints.getGitFile.initiate(gitFilePath, { forceRefetch: true })
+          ).unwrap();
+          if (fileRes?.content) {
+            await applyGitContentToEditor(fileRes.content, "cập nhật nội dung mới nhất");
+          }
+        } catch (e) {
+          console.warn("[DocEditor] Failed to reload editor blocks after pull:", e);
+        }
         checkCurrentFileStatus();
       }
     } catch (err: unknown) {
@@ -312,17 +381,8 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
     await handleSaveToGit();
   }, [hasConflict, gitFileStatus, remoteUpdated, hasGitChanges, isDirty, handleSaveToGit, handlePullGit]);
 
-  const handleRestoreGitSnapshot = (snapshotContent: string) => {
-    try {
-      const parsed = JSON.parse(snapshotContent);
-      if (parsed.content) {
-        const strContent = typeof parsed.content === "string" ? parsed.content : JSON.stringify(parsed.content);
-        handleBlocksChange(parseInitialBlocks(strContent));
-        message.success("Restored content from Git snapshot");
-      }
-    } catch {
-      message.error("Could not parse snapshot content as JSON");
-    }
+  const handleRestoreGitSnapshot = async (snapshotContent: string) => {
+    await applyGitContentToEditor(snapshotContent, "khôi phục phiên bản");
   };
 
   const docMeta = useMemo(() => parseDocMetadata(doc?.metadata ?? null), [doc?.metadata]);
