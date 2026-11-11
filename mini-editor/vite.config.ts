@@ -11,8 +11,25 @@ export default defineConfig(async ({ mode }) => {
   const goApiTarget = env.VITE_GO_API_URL || "http://127.0.0.1:8080";
   const nodeApiTarget = env.VITE_NODE_API_URL || "http://127.0.0.1:8006";
   const wsTarget = (env.VITE_NODE_WS_URL || "ws://127.0.0.1:1234").replace(/\/ws\/yjs\/?$/, "").replace(/\/+$/, "");
-  const isLocal = goApiTarget.includes("127.0.0.1") || goApiTarget.includes("localhost");
-  const secure = !isLocal;
+
+  // Parse origin and base subpath so proxy works seamlessly with subpath targets (e.g. http://api.tomoo.uk/go)
+  const parseTarget = (urlStr: string) => {
+    try {
+      const u = new URL(urlStr);
+      return {
+        origin: u.origin,
+        basePath: u.pathname.replace(/\/+$/, ""),
+      };
+    } catch {
+      return { origin: urlStr, basePath: "" };
+    }
+  };
+
+  const goParsed = parseTarget(goApiTarget);
+  const nodeParsed = parseTarget(nodeApiTarget);
+
+  // Use secure: false in dev proxy to avoid rejecting unencrypted http or self-signed certs
+  const secure = false;
   const changeOrigin = true;
   const headers = undefined;
 
@@ -74,19 +91,31 @@ export default defineConfig(async ({ mode }) => {
       // on 127.0.0.1 while injecting the api.tomo.local Host header to avoid hosts file edits.)
       proxy: {
         "/api/v1/translate": {
-          target: nodeApiTarget,
+          target: nodeParsed.origin,
+          rewrite: (p) => (nodeParsed.basePath ? `${nodeParsed.basePath}${p}` : p),
           changeOrigin,
           headers,
           secure,
         },
         "/api": {
-          target: goApiTarget,
+          target: goParsed.origin,
+          rewrite: (p) => (goParsed.basePath ? `${goParsed.basePath}${p}` : p),
           changeOrigin,
           headers,
           secure,
+          configure: (proxy) => {
+            proxy.on("error", (err, _req, res) => {
+              console.warn("[Vite Proxy API] error connecting to backend:", err.message);
+              if (res && "writeHead" in res && !res.headersSent) {
+                res.writeHead(502, { "Content-Type": "text/plain" });
+                res.end("Bad Gateway: Backend API unavailable");
+              }
+            });
+          },
         },
         "/actuator": {
-          target: goApiTarget,
+          target: goParsed.origin,
+          rewrite: (p) => (goParsed.basePath ? `${goParsed.basePath}${p}` : p),
           changeOrigin,
           headers,
           secure,
