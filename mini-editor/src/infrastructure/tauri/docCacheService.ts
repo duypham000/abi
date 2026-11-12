@@ -309,17 +309,24 @@ export async function isContentChanged(
 }
 
 export async function saveDocLocally(
-  backendId: number,
-  fields: { title?: string; content?: string | null; metadata?: string | null; plainText?: string | null; status?: number; yjsState?: string | null },
+  backendId: number | string,
+  fields: { title?: string; content?: string | null; metadata?: string | null; plainText?: string | null; status?: number; yjsState?: string | null; seriesId?: number | null; backendUuid?: string | null },
   isDirty = false
 ): Promise<void> {
   const db = await docDb();
+  if (!db) return;
   const ts = now();
   const strId = String(backendId);
   const numId = typeof backendId === "number" ? backendId : Number(backendId);
   const hash = await computeDocHash({ title: fields.title, content: fields.content, metadata: fields.metadata });
+  const uuid = fields.backendUuid ?? (typeof backendId === "string" && backendId.length > 10 ? backendId : null);
 
-  if (db) {
+  const existing: { local_id: string }[] = await db.select(
+    "SELECT local_id FROM docs WHERE backend_id = ? OR local_id = ? OR local_id = ? LIMIT 1",
+    [numId || -1, strId, `doc-${strId}`]
+  );
+
+  if (existing.length > 0) {
     await db.execute(
       `UPDATE docs SET
          title = COALESCE(?, title),
@@ -330,7 +337,7 @@ export async function saveDocLocally(
          is_dirty = ?,
          content_hash = ?,
          updated_at = ?
-       WHERE backend_id = ? OR local_id = ? OR local_id = ?`,
+       WHERE local_id = ?`,
       [
         fields.title ?? null,
         fields.content ?? null,
@@ -340,9 +347,27 @@ export async function saveDocLocally(
         isDirty ? 1 : 0,
         hash,
         ts,
-        numId || -1,
-        strId,
-        `doc-${strId}`,
+        existing[0].local_id,
+      ]
+    );
+  } else {
+    const localId = `doc-${strId}`;
+    await db.execute(
+      `INSERT INTO docs (local_id, backend_id, title, content, metadata, plain_text, status, last_synced, updated_at, is_dirty, backend_uuid, content_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        localId,
+        !isNaN(numId) && numId > 0 ? numId : null,
+        fields.title || "Untitled",
+        fields.content ?? null,
+        fields.metadata ?? null,
+        fields.plainText ?? null,
+        fields.status ?? 0,
+        ts,
+        ts,
+        isDirty ? 1 : 0,
+        uuid,
+        hash,
       ]
     );
   }

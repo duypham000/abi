@@ -1193,10 +1193,7 @@ func (s *gitHubService) Pull(ctx context.Context, userID string, req dto.PullReq
 
 	if pullErr == git.NoErrAlreadyUpToDate || errors.Is(pullErr, plumbing.ErrReferenceNotFound) || (pullErr != nil && strings.Contains(pullErr.Error(), "reference not found")) {
 		// Even if up-to-date remotely, ensure any local workspace files are registered in DB
-		go func() {
-			bgCtx := context.Background()
-			_ = s.syncWorkspaceToDBInternal(bgCtx, userID, repoPath)
-		}()
+		_ = s.syncWorkspaceToDBInternal(ctx, userID, repoPath)
 
 		return &dto.PullResponse{
 			Status:        "up_to_date",
@@ -1220,12 +1217,9 @@ func (s *gitHubService) Pull(ctx context.Context, userID string, req dto.PullReq
 		return nil, fmt.Errorf("pull error: %w", pullErr)
 	}
 
-	// Pull succeeded with new changes — sync workspace files into DB in the background.
-	// This ensures every git file has a corresponding docs DB entry (idempotent).
-	go func() {
-		bgCtx := context.Background()
-		_ = s.syncWorkspaceToDBInternal(bgCtx, userID, repoPath)
-	}()
+	// Pull succeeded with new changes — sync workspace files into DB synchronously.
+	// This ensures every git file has a corresponding docs DB entry before returning to client.
+	_ = s.syncWorkspaceToDBInternal(ctx, userID, repoPath)
 
 	return &dto.PullResponse{
 		Status:        "updated",

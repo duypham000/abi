@@ -49,32 +49,48 @@ func (s *gitHubService) syncWorkspaceToDBInternal(ctx context.Context, userID, r
 		}
 
 		// Parse title/slug/content from the JSON file
-		var meta struct {
-			Title   string `json:"title"`
-			Slug    string `json:"slug"`
-			Content string `json:"content"`
-			Status  string `json:"status"`
-		}
-		_ = json.Unmarshal(data, &meta)
+		var rawDoc map[string]interface{}
+		var title, gitSlug, status, contentStr string
 
-		title := meta.Title
+		if err := json.Unmarshal(data, &rawDoc); err == nil {
+			if t, ok := rawDoc["title"].(string); ok {
+				title = t
+			}
+			if s, ok := rawDoc["slug"].(string); ok {
+				gitSlug = s
+			}
+			if st, ok := rawDoc["status"].(string); ok {
+				status = st
+			}
+			if cVal, exists := rawDoc["content"]; exists {
+				if cStr, ok := cVal.(string); ok {
+					contentStr = cStr
+				} else {
+					if cBytes, err := json.Marshal(cVal); err == nil {
+						contentStr = string(cBytes)
+					}
+				}
+			}
+		} else {
+			// File might be raw string or array
+			contentStr = string(data)
+		}
+
 		if title == "" {
 			title = strings.TrimSuffix(filepath.Base(item.Path), ".json")
 		}
 
-		gitSlug := meta.Slug
 		if gitSlug == "" {
 			gitSlug = strings.TrimSuffix(filepath.Base(item.Path), ".json")
 		}
 
-		status := meta.Status
 		if status == "" {
 			status = "PUBLISHED"
 		}
 
 		req := docsDto.CreateDocFromGitRequest{
 			Title:   title,
-			Content: meta.Content,
+			Content: contentStr,
 			GitSlug: gitSlug,
 			Status:  status,
 		}

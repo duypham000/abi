@@ -1,4 +1,8 @@
 import { useState, useMemo } from "react";
+import { useDispatch } from "react-redux";
+import type { AppDispatch } from "@/presentation/store";
+import { docsApi } from "@/infrastructure/api/docsApi";
+import { cacheDoc } from "@/infrastructure/tauri/docCacheService";
 import {
   useGetGithubUserQuery,
   useGetGitDiffQuery,
@@ -36,6 +40,7 @@ import { PANEL_TYPES, PANEL_TITLES } from "@/presentation/layout/golden/panelReg
 import "./GitPanel.scss";
 
 export function GitPanel() {
+  const dispatch = useDispatch<AppDispatch>();
   const { openPanel } = useGoldenLayout();
   const { data: user, isLoading: isUserLoading } = useGetGithubUserQuery();
   const activeRepoOwner = user?.activeRepoOwner || user?.active_repo_owner || "";
@@ -131,14 +136,45 @@ export function GitPanel() {
   const handlePull = async () => {
     setPanelMessage(null);
     try {
+      // 1. Kéo dữ liệu từ Git Server -> Backend Disk & cập nhật Backend DB
       const res = await pullRepo().unwrap();
       if (res.hasConflicts || res.has_conflict) {
         setPanelMessage({ type: "error", text: "Merge conflicts detected during pull!" });
         setShowConflictModal(true);
-      } else if (res.alreadyUpToDate) {
-        setPanelMessage({ type: "success", text: "Already up to date with remote." });
+        handleRefresh();
+        return;
+      }
+
+      // 2. Kéo dữ liệu từ Backend DB -> SQLite FE
+      let syncedCount = 0;
+      try {
+        const pullRes = await dispatch(
+          docsApi.endpoints.syncPullRemote.initiate(undefined, { forceRefetch: true })
+        ).unwrap();
+
+        if (pullRes?.items && Array.isArray(pullRes.items)) {
+          for (const doc of pullRes.items) {
+            await cacheDoc(doc);
+            syncedCount++;
+          }
+        }
+      } catch (dbSyncErr) {
+        console.warn("[GitPanel] syncPullRemote to SQLite failed:", dbSyncErr);
+      }
+
+      // 3. Thông báo kết quả
+      if (res.alreadyUpToDate || res.status === "up_to_date") {
+        setPanelMessage({
+          type: "success",
+          text: syncedCount > 0
+            ? `Dữ liệu Git đã mới nhất. Đã đồng bộ ${syncedCount} tài liệu về SQLite FE.`
+            : "Already up to date with remote.",
+        });
       } else {
-        setPanelMessage({ type: "success", text: `Pulled updated files from GitHub.` });
+        setPanelMessage({
+          type: "success",
+          text: `Đã kéo từ Git về backend và đồng bộ ${syncedCount} tài liệu về SQLite FE.`,
+        });
       }
       handleRefresh();
     } catch {
