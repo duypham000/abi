@@ -1,0 +1,22 @@
+// Find-and-replace highlights via CSS Custom Highlight API.
+// The browser paints these directly over the DOM without any ProseMirror involvement.
+::highlight(find-match) {
+  background-color: rgba(255, 213, 0, 0.45);
+}
+
+::highlight(find-match-current) {
+  background-color: rgba(255, 120, 0, 0.82);
+  color: #000;
+}
+
+.doc-editor-body {
+  flex: 1;
+  overflow: auto;
+  padding: 24px 0;
+
+  .bn-editor {
+    max-width: var(--doc-editor-max-width, 760px);
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+}

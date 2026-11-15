@@ -1,0 +1,143 @@
+.script-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, #e4e4e7);
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+  transition: box-shadow 200ms ease, border-color 200ms ease, transform 150ms ease;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    border-color: var(--accent, #6c6cff);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: scale(0.98) translateY(0);
+    transition: transform 100ms ease;
+  }
+
+  &--running {
+    border-color: var(--accent, #6c6cff);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #6c6cff) 20%, transparent);
+  }
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text, #111827);
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  &__badge {
+    .ant-badge-count {
+      background: var(--accent, #6c6cff);
+      box-shadow: none;
+      animation: pulse-badge 2s ease infinite;
+    }
+  }
+
+  &__menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted, #9ca3af);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+    font-size: 16px;
+
+    &:hover {
+      background: var(--border-color, #e4e4e7);
+      color: var(--text, #111827);
+    }
+  }
+
+  &__description {
+    font-size: 12px;
+    color: var(--text-muted, #9ca3af);
+    margin: 0;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  &__body {
+    font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-muted, #6b7280);
+    background: var(--surface-2, rgba(0, 0, 0, 0.03));
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 0;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+
+  &__updated {
+    font-size: 11px;
+    color: var(--text-muted, #9ca3af);
+  }
+
+  &__hints {
+    display: flex;
+    gap: 6px;
+  }
+
+  &__hint-icon {
+    font-size: 12px;
+    color: var(--text-muted, #d1d5db);
+    transition: color 150ms ease;
+
+    &:hover {
+      color: var(--text-muted, #9ca3af);
+    }
+  }
+}
+
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}

@@ -1,0 +1,391 @@
+/* Golden Layout theme — tokens cascade from .workspace-shell in WorkspaceShell.scss.
+   Fallback values match the light palette (app's default). */
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+.lm_goldenlayout {
+  background: transparent;
+}
+
+/* ── Tab strip ───────────────────────────────────────────────────────────── */
+/*
+ * GL v2 positions .lm_tabs and .lm_controls as position:absolute inside the
+ * header. All overrides use .lm_header .lm_<x> (two-class specificity) to
+ * beat GL's defaults. Design goal: VSCode-style — flat, edge-to-edge tabs,
+ * active tab is white with an accent top border.
+ */
+
+/* Header bar */
+.lm_header {
+  height: 35px !important;
+  background: var(--gl-header-bg, #f0f0f0);
+  border-bottom: 1px solid var(--gl-header-border, #e4e4e7);
+  position: relative;
+}
+
+/* Prevent browser middle-click autoscroll cursor on the tab bar */
+.lm_header { -webkit-user-drag: none; }
+.lm_header .lm_tab { -webkit-user-drag: none; }
+
+/* Tab strip — fills header minus controls zone */
+.lm_header .lm_tabs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 90px;          /* room for controls (popout + maximize + close) */
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 0;
+  scrollbar-width: none !important; /* Hide for Firefox */
+  -ms-overflow-style: none !important; /* Hide for IE/Edge */
+}
+
+/* Hide scrollbars completely to prevent any layout shifting or pushing tabs up */
+.lm_header .lm_tabs::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Individual tab — VSCode style */
+.lm_header .lm_tab {
+  height: 100%;
+  box-sizing: border-box !important;
+  padding: 0 12px 0 10px;
+  font-size: 11.5px;
+  font-family: inherit;
+  color: var(--gl-tab-inactive-fg, #8c8c8c);
+  background: var(--gl-tab-inactive-bg, #ececec);
+  border: none;
+  /* subtle right separator between tabs */
+  border-right: 1px solid var(--gl-header-border, #d8d8d8);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.12s ease, background-color 0.12s ease;
+  position: relative;
+  outline: none;
+  overflow: visible;
+  margin: 0;
+  float: none;
+  /* 2px top border placeholder (transparent on inactive) keeps height stable */
+  border-top: 2px solid transparent;
+  /* prevent tabs from shrinking when container overflows */
+  flex-shrink: 0;
+}
+
+.lm_header .lm_tab:hover {
+  color: var(--gl-tab-active-fg, #1f1f1f);
+  background: var(--gl-tab-hover-bg, #e0e0e0);
+}
+
+/* Active tab: white bg, accent top line, no right border (blends with next) */
+.lm_header .lm_tab.lm_active {
+  color: var(--gl-tab-active-fg, #1f1f1f);
+  background: var(--gl-tab-active-bg, #ffffff);
+  border-top-color: var(--gl-tab-active-line, #6c6cff);
+  border-right-color: var(--gl-header-border, #e4e4e7);
+}
+
+/* Controls — right-aligned, vertically centred */
+.lm_header .lm_controls {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 0 6px;
+  background: var(--gl-header-bg, #f0f0f0);
+  z-index: 10;
+  border-left: 1px solid var(--gl-header-border, #e4e4e7);
+  box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Tab type-icon badge (colored square like VSCode file icon) ──────────── */
+.gl-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+  pointer-events: none;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ── Close button ────────────────────────────────────────────────────────── */
+/* GL base CSS puts an image sprite on .lm_close_tab — reset everything and
+   use a CSS-generated × character instead. Sits at the right of the tab via
+   margin-left: auto (tab is display:flex). Hidden until hover / active. */
+.lm_header .lm_tab .lm_close_tab {
+  /* wipe GL's image-based icon */
+  background-image: none !important;
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+
+  /* Force inline flex positioning instead of GL's absolute positioning */
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+
+  /* sizing */
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  flex-shrink: 0;
+  margin-left: 8px;   /* standard spacing to the right of title */
+  padding: 0;
+
+  /* layout */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+
+  /* colour / visibility */
+  color: var(--gl-tab-inactive-fg, #8c8c8c);
+  opacity: 0;
+  transition: opacity 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+}
+
+/* Draw the × via pseudo-element so we don't rely on GL's text node */
+.lm_header .lm_tab .lm_close_tab::before {
+  content: '✕';
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  display: block;
+}
+
+/* Show on hover or when tab is active */
+.lm_header .lm_tab:hover .lm_close_tab,
+.lm_header .lm_tab.lm_active .lm_close_tab {
+  opacity: 0.65;
+}
+
+/* Close-button hover states */
+.lm_header .lm_tab .lm_close_tab:hover {
+  opacity: 1 !important;
+  background: rgba(120, 120, 120, 0.18);
+  color: var(--gl-tab-active-fg, #1f1f1f);
+}
+
+.theme-dark .lm_header .lm_tab .lm_close_tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+/* ── Custom Tooltips ─────────────────────────────────────────────────────── */
+.gl-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #18181b;
+  color: #fafafa;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 9999;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top: none;
+    border-bottom-color: #18181b;
+  }
+}
+
+.lm_tab:hover .gl-tooltip {
+  display: block;
+}
+
+/* ── Tab scroll state indicator ──────────────────────────────────────────── */
+.lm_tab--scroll::after {
+  content: '↕';
+  font-size: 9px;
+  color: var(--gl-accent, #6c6cff);
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Splitter ────────────────────────────────────────────────────────────── */
+/* Custom Splitters feature */
+.lm_splitter {
+  background: var(--gl-splitter, #e4e4e7) !important;
+  transition: background 0.15s;
+}
+
+.lm_splitter:hover,
+.lm_splitter.lm_dragging {
+  background: var(--gl-splitter-hover, #6c6cff) !important;
+}
+
+/* ── Content area ────────────────────────────────────────────────────────── */
+.lm_content {
+  background: var(--gl-content-bg, #ffffff);
+  overflow: hidden;
+  position: relative;
+  /* flex column: pages with flex:1 fill the full panel height */
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Stack controls (maximize / popout / close) ──────────────────────────── */
+/* Wipe GL's sprite-based background-image, then render clean icon buttons. */
+.lm_header .lm_maximise,
+.lm_header .lm_popout,
+.lm_header .lm_close {
+  background-image: none !important;  /* remove GL's default sprites */
+  background-color: transparent;
+  border: none;
+  outline: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gl-tab-inactive-fg, #8c8c8c);
+  font-size: 11px;
+  line-height: 1;
+  transition: background 0.1s, color 0.1s;
+  /* Draw the icon via content so we're not relying on GL's sprite sheet */
+  position: relative;
+}
+
+/* Icon characters */
+.lm_header .lm_maximise::before { content: '⤢'; font-size: 13px; }
+.lm_maximised .lm_header .lm_maximise::before { content: '❐'; font-size: 11px; } /* Restore icon in maximised state */
+.lm_maximised .lm_header .lm_maximise {
+  background-color: var(--gl-accent, #6c6cff) !important;
+  color: #ffffff !important;
+}
+.lm_maximised .lm_header .lm_maximise:hover {
+  background-color: var(--gl-accent, #6c6cff) !important;
+  opacity: 0.85;
+}
+.lm_header .lm_popout::before   { content: '⧉'; font-size: 11px; }
+.lm_header .lm_close::before    { content: '✕'; font-size: 11px; }
+
+.lm_header .lm_maximise:hover,
+.lm_header .lm_popout:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--gl-tab-active-fg, #1f1f1f);
+}
+
+.lm_header .lm_close:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+
+
+/* ── Disable Drop on Header: visual indicator ────────────────────────────── */
+.lm_header.gl-no-drop {
+  /* Subtle hatched overlay to show drop is disabled */
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    rgba(239, 68, 68, 0.06) 4px,
+    rgba(239, 68, 68, 0.06) 5px
+  );
+}
+
+.lm_header.gl-no-drop .lm_tab {
+  cursor: default !important;
+}
+
+/* ── Configured CSS Classes: per-panel-type accent ──────────────────────── */
+/* Left border accent on the content element, using a data attribute set by
+   setupTabExtension. One accent colour per panel type for quick recognition. */
+
+.lm_content.gl-panel--dashboard    { border-left: 2px solid #6c6cff; }
+.lm_content.gl-panel--docs-list    { border-left: 2px solid #10b981; }
+.lm_content.gl-panel--doc-editor   { border-left: 2px solid #3b82f6; }
+.lm_content.gl-panel--doc-draft    { border-left: 2px solid #60a5fa; }
+.lm_content.gl-panel--canvas-list  { border-left: 2px solid #f59e0b; }
+.lm_content.gl-panel--canvas-editor { border-left: 2px solid #f97316; }
+.lm_content.gl-panel--ports        { border-left: 2px solid #8b5cf6; }
+.lm_content.gl-panel--secrets      { border-left: 2px solid #ef4444; }
+.lm_content.gl-panel--chat         { border-left: 2px solid #14b8a6; }
+.lm_content.gl-panel--scripts      { border-left: 2px solid #eab308; }
+.lm_content.gl-panel--api          { border-left: 2px solid #ec4899; }
+.lm_content.gl-panel--settings     { border-left: 2px solid #6b7280; }
+.lm_content.gl-panel--search       { border-left: 2px solid #06b6d4; }
+
+/* ── Drag proxy ──────────────────────────────────────────────────────────── */
+/* Force above all portaled panel content — base CSS uses z-index:30 which
+   can lose to stacking contexts created by page components. */
+.lm_dragProxy {
+  z-index: 9000 !important;
+  pointer-events: none;
+}
+
+.lm_dragProxy .lm_header {
+  background: var(--gl-header-bg, #f4f4f5) !important;
+  border-bottom: 1px solid var(--gl-header-border, #e4e4e7) !important;
+  opacity: 0.9;
+}
+
+.lm_dragProxy .lm_content {
+  background: var(--gl-content-bg, #ffffff);
+  opacity: 0.75;
+  border: 2px dashed var(--gl-accent, #6c6cff);
+  border-top: none;
+  min-height: 40px;
+}
+
+/* ── Drop target indicator (GL v2 class) ─────────────────────────────────── */
+.lm_dropTargetIndicator {
+  z-index: 9100 !important;
+}
+
+.lm_dropTargetIndicator .lm_inner {
+  background: var(--gl-dropzone-bg, rgba(108, 108, 255, 0.08));
+  border: 2px solid var(--gl-dropzone-border, #6c6cff);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* ── Floating panel ──────────────────────────────────────────────────────── */
+.lm_float {
+  box-shadow: var(--gl-float-shadow, 0 4px 16px rgba(0, 0, 0, 0.08));
+  border: 1px solid var(--gl-header-border, #e4e4e7);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* ── Loading fallback ────────────────────────────────────────────────────── */
+.gl-panel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  font-size: 12px;
+  background: var(--gl-content-bg, #ffffff);
+}

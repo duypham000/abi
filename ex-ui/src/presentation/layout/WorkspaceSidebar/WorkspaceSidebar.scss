@@ -1,0 +1,266 @@
+/* WorkspaceSidebar — VSCode-style left sidebar */
+
+.workspace-sidebar {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--ab-bg, #ffffff);
+  border-right: 1px solid var(--ab-border, #e4e4e7);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+              min-width 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &.is-open {
+    width: 260px;
+    min-width: 260px;
+  }
+}
+
+.workspace-sidebar__inner {
+  width: 260px;   /* fixed so content doesn't reflow during transition */
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 16px;
+}
+
+/* ── Section ──────────────────────────────────────────────────────────────── */
+.ws-section {
+  border-bottom: 1px solid var(--gl-header-border, #e4e4e7);
+}
+
+.ws-section__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  font-family: inherit;
+  outline: none;
+  transition: color 0.1s;
+  text-align: left;
+
+  &:hover { color: var(--ws-fg, #18181b); }
+}
+
+.ws-section__arrow { flex-shrink: 0; }
+
+.ws-section__title { flex: 1; }
+
+.ws-section__body {
+  padding: 4px 8px 8px;
+}
+
+/* ── Button base ──────────────────────────────────────────────────────────── */
+.ws-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  height: 26px;
+  border: 1px solid var(--gl-header-border, #e4e4e7);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-family: inherit;
+  color: var(--ws-fg, #18181b);
+  white-space: nowrap;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  outline: none;
+
+  &:hover {
+    background: var(--ab-hover-bg, rgba(0, 0, 0, 0.05));
+    border-color: var(--gl-accent, #6c6cff);
+  }
+
+  &--accent {
+    border-color: var(--gl-accent, #6c6cff);
+    color: var(--gl-accent, #6c6cff);
+    &:hover { background: rgba(108, 108, 255, 0.08); }
+  }
+
+  &--danger {
+    &:hover {
+      border-color: #ef4444;
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.07);
+    }
+  }
+
+  &--block {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+.ws-btn__icon { display: flex; align-items: center; }
+.ws-btn__label { font-size: 11.5px; }
+
+.ws-btn-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* ── Preset grid ──────────────────────────────────────────────────────────── */
+.ws-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.ws-preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 4px;
+  border: 1px solid var(--gl-header-border, #e4e4e7);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ws-fg, #18181b);
+  transition: background 0.1s, border-color 0.1s;
+  outline: none;
+
+  &:hover {
+    background: rgba(108, 108, 255, 0.07);
+    border-color: var(--gl-accent, #6c6cff);
+  }
+}
+
+.ws-preset-btn__emoji { font-size: 18px; line-height: 1; }
+.ws-preset-btn__label { font-size: 10px; color: var(--gl-tab-inactive-fg, #71717a); }
+
+/* ── Panel list (Add Panel — By Selection) ────────────────────────────────── */
+.ws-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ws-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ws-fg, #18181b);
+  text-align: left;
+  transition: background 0.1s;
+  outline: none;
+
+  &:hover {
+    background: var(--ab-hover-bg, rgba(0, 0, 0, 0.05));
+    .ws-panel-item__add { opacity: 1; }
+    .ws-panel-item__emoji { opacity: 0; }
+  }
+}
+
+.ws-panel-item__icon { display: flex; align-items: center; color: var(--gl-tab-inactive-fg, #71717a); }
+.ws-panel-item__label { flex: 1; }
+.ws-panel-item__emoji { font-size: 12px; opacity: 0.6; transition: opacity 0.1s; }
+.ws-panel-item__add {
+  display: flex;
+  align-items: center;
+  color: var(--gl-accent, #6c6cff);
+  opacity: 0;
+  transition: opacity 0.1s;
+  position: absolute;
+  right: 12px;
+}
+.ws-panel-item { position: relative; }
+
+/* ── Feature rows (Panel Options) ─────────────────────────────────────────── */
+.ws-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ws-feature-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--gl-header-border, #e4e4e7);
+  border-radius: 6px;
+  background: var(--ws-bg, #f4f4f5);
+}
+
+.ws-feature-row__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ws-feature-row__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ws-fg, #18181b);
+}
+
+.ws-feature-row__desc {
+  font-size: 10px;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  line-height: 1.3;
+}
+
+.ws-feature-row__btn {
+  padding: 3px 8px;
+  border: 1px solid var(--gl-header-border, #e4e4e7);
+  border-radius: 4px;
+  background: var(--ab-bg, #ffffff);
+  cursor: pointer;
+  font-size: 10.5px;
+  font-family: inherit;
+  color: var(--gl-accent, #6c6cff);
+  font-weight: 600;
+  transition: background 0.1s, border-color 0.1s;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba(108, 108, 255, 0.08);
+    border-color: var(--gl-accent, #6c6cff);
+  }
+}
+
+/* ── Hint text ────────────────────────────────────────────────────────────── */
+.ws-hint {
+  font-size: 10.5px;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  line-height: 1.5;
+  margin: 4px 0 0;
+
+  code {
+    font-family: monospace;
+    background: var(--ws-bg, #f4f4f5);
+    padding: 1px 3px;
+    border-radius: 3px;
+  }
+}
+
+.ws-hint-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

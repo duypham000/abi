@@ -1,0 +1,134 @@
+.api-settings-page {
+  height: 100%;
+  overflow-y: auto;
+  background: var(--color-bg-base, #fff);
+}
+
+.settings-content {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 24px 48px;
+}
+
+.settings-page-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 24px;
+  color: var(--color-text, #111827);
+}
+
+.settings-section {
+  margin-bottom: 32px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  overflow: hidden;
+
+  &.settings-section--danger {
+    border-color: #faad14;
+  }
+}
+
+.settings-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 16px;
+  background: var(--color-bg-secondary, #f9fafb);
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  color: var(--color-text, #111827);
+
+  &.settings-section-title--danger {
+    color: #d48806;
+  }
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border-light, #f3f4f6);
+  gap: 16px;
+
+  &:last-child { border-bottom: none; }
+}
+
+.setting-row-label { flex: 1; }
+
+.setting-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text, #111827);
+  margin-bottom: 2px;
+}
+
+.setting-description {
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+  line-height: 1.4;
+}
+
+.setting-row-control {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.theme-mode-selector {
+  display: flex;
+  gap: 4px;
+}
+
+.theme-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  background: transparent;
+  color: var(--color-text, #374151);
+  transition: all 0.15s;
+
+  &:hover {
+    border-color: var(--color-primary, #1677ff);
+    color: var(--color-primary, #1677ff);
+  }
+
+  &.active {
+    border-color: var(--color-primary, #1677ff);
+    background: #e6f4ff;
+    color: var(--color-primary, #1677ff);
+  }
+}
+
+.accent-color-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.accent-color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s, transform 0.1s;
+
+  &.selected { border-color: #374151; }
+  &:hover { transform: scale(1.15); }
+}
+
+.accent-color-custom {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px dashed var(--color-border, #d1d5db);
+  padding: 0;
+  overflow: hidden;
+}

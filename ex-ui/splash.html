@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Tomo</title>
+    <!--
+      Instant splash: pure inline CSS so the loading screen paints on the very
+      first frame, before the splash JS bundle is fetched/parsed. React replaces
+      #splash-root's content once it mounts (full InitScreen), which removes this
+      placeholder automatically. Keep it visually close to InitScreen.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #ffffff;
+        color: #0f0f0f;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        z-index: 9999;
+      }
+      #boot-splash .bs-name {
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      #boot-splash .bs-ring {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: conic-gradient(
+          from 0deg,
+          transparent 0%,
+          rgba(108, 108, 255, 0.25) 35%,
+          #6c6cff 100%
+        );
+        -webkit-mask: radial-gradient(
+          farthest-side,
+          transparent calc(100% - 4px),
+          #000 calc(100% - 4px)
+        );
+        mask: radial-gradient(
+          farthest-side,
+          transparent calc(100% - 4px),
+          #000 calc(100% - 4px)
+        );
+        animation: bs-spin 0.9s linear infinite;
+      }
+      #boot-splash .bs-hint {
+        font-size: 0.8rem;
+        color: #8a8a93;
+      }
+      @keyframes bs-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-color-scheme: dark) {
+        #boot-splash {
+          background: #0b0f11;
+          color: #f6f6f6;
+        }
+        #boot-splash .bs-hint {
+          color: #8b8b94;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="splash-root">
+      <div id="boot-splash" data-tauri-drag-region>
+        <div class="bs-name">Tomo</div>
+        <div class="bs-ring"></div>
+        <div class="bs-hint">Đang khởi động…</div>
+      </div>
+    </div>
+    <script type="module" src="/src/splash/splash.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,45 @@
+.demo-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.demo-panel__header {
+  padding: 10px 12px 6px;
+  border-bottom: 1px solid var(--gl-header-border, #e4e4e7);
+  flex-shrink: 0;
+}
+
+.demo-panel__title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gl-tab-inactive-fg, #71717a);
+}
+
+.demo-panel__body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.demo-panel__desc {
+  font-size: 11px;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  margin: 0;
+}
+
+.demo-panel__toolbar-wrap {
+  border: 1px solid var(--gl-header-border, #e4e4e7);
+  border-radius: 6px;
+  overflow: hidden;
+
+  /* LayoutToolbar normally sits in a fixed-height strip; make it wrap here */
+  .layout-toolbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 6px;
+  }
+}

@@ -1,0 +1,164 @@
+/* Activity bar — tokens from WorkspaceShell.scss cascade here */
+
+.activity-bar {
+  width: 48px;
+  min-width: 48px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--ab-bg, #ffffff);
+  border-right: 1px solid var(--ab-border, #e4e4e7);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.activity-bar__top {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 4px;
+  gap: 0;
+}
+
+.activity-bar__bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 8px;
+  gap: 0;
+}
+
+/* ── Item wrapper ─────────────────────────────────────────────────────────── */
+.activity-item {
+  position: relative;
+  width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Left active-indicator bar */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%) scaleY(0);
+    width: 2px;
+    height: 22px;
+    background: var(--ab-active-ind, #6c6cff);
+    border-radius: 0 2px 2px 0;
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  &.is-active::before {
+    transform: translateY(-50%) scaleY(1);
+  }
+
+  &:hover .activity-item__drag { opacity: 1; }
+}
+
+/* ── Main click button ────────────────────────────────────────────────────── */
+.activity-item__btn {
+  width: 40px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  cursor: pointer;
+  color: var(--ab-icon-fg, #71717a);
+  transition: color 0.12s, background 0.12s;
+  padding: 0;
+  outline: none;
+
+  &:hover {
+    color: var(--ab-icon-active-fg, #18181b);
+    background: var(--ab-hover-bg, rgba(0, 0, 0, 0.05));
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ab-active-ind, #6c6cff);
+    outline-offset: -3px;
+    border-radius: 2px;
+  }
+}
+
+.activity-item__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px; /* optical offset for the 2px left indicator */
+}
+
+.is-active .activity-item__btn {
+  color: var(--ab-icon-active-fg, #18181b);
+}
+
+/* ── Drag handle (By Drag feature) ───────────────────────────────────────── */
+.activity-item__drag {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--ab-icon-fg, #71717a);
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 2;
+  border-radius: 2px;
+
+  &:hover {
+    background: var(--ab-hover-bg, rgba(0, 0, 0, 0.05));
+    color: var(--ab-icon-active-fg, #18181b);
+    opacity: 1 !important;
+  }
+
+  &:active { cursor: grabbing; }
+}
+
+/* ── User avatar ──────────────────────────────────────────────────────────── */
+.activity-item--avatar {
+  width: 48px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+
+  .activity-item__avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--ab-avatar-bg, #6c6cff);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    transition: box-shadow 0.15s;
+  }
+
+  &:hover .activity-item__avatar {
+    box-shadow: 0 0 0 2px var(--ab-active-ind, #6c6cff);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}

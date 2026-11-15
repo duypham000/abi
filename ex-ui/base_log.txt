@@ -1,0 +1,513 @@
+﻿Picked up JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.0.6)
+
+{"@timestamp":"2026-07-02T03:46:30.801186474Z","@version":"1","message":"Starting BaseApplication v0.0.1-SNAPSHOT using Java 21.0.11 with PID 1 (/app/app.jar started by spring in /app)","logger_name":"com.tomo.base.BaseApplication","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:30.872564771Z","@version":"1","message":"Running with Spring Boot v4.0.6, Spring v7.0.7","logger_name":"com.tomo.base.BaseApplication","thread_name":"main","level":"DEBUG","level_value":10000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:30.877004968Z","@version":"1","message":"The following 1 profile is active: \"local\"","logger_name":"com.tomo.base.BaseApplication","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:33.900262342Z","@version":"1","message":"Multiple Spring Data modules found, entering strict repository configuration mode","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationDelegate","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:33.902389891Z","@version":"1","message":"Bootstrapping Spring Data JPA repositories in DEFAULT mode.","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationDelegate","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.370132785Z","@version":"1","message":"Finished Spring Data repository scanning in 459 ms. Found 14 JPA repository interfaces.","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationDelegate","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.484523808Z","@version":"1","message":"Multiple Spring Data modules found, entering strict repository configuration mode","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationDelegate","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.48557845Z","@version":"1","message":"Bootstrapping Spring Data Redis repositories in DEFAULT mode.","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationDelegate","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.501837526Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.CanvasRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.503596946Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.CanvasSnapshotChunkRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.503995082Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.CanvasSnapshotRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.504248063Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.DocRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.504475284Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.DocRevisionRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.504749755Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.DocSnapshotChunkRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.504972729Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.DocSnapshotRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.50519995Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.NoteRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.50541595Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.RefreshTokenRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.505615739Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.SecretAuditLogRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.505910389Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.SecretGroupRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.506219366Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.SecretItemRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.506534274Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.SecretRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.506803094Z","@version":"1","message":"Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.tomo.base.domain.repository.UserRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:34.507051846Z","@version":"1","message":"Finished Spring Data repository scanning in 12 ms. Found 0 Redis repository interfaces.","logger_name":"org.springframework.data.repository.config.RepositoryConfigurationDelegate","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:37.509033401Z","@version":"1","message":"Tomcat initialized with port 8080 (http)","logger_name":"org.springframework.boot.tomcat.TomcatWebServer","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:37.579476256Z","@version":"1","message":"Initializing ProtocolHandler [\"http-nio-8080\"]","logger_name":"org.apache.coyote.http11.Http11NioProtocol","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:37.583472031Z","@version":"1","message":"Starting service [Tomcat]","logger_name":"org.apache.catalina.core.StandardService","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:37.584046662Z","@version":"1","message":"Starting Servlet engine: [Apache Tomcat/11.0.21]","logger_name":"org.apache.catalina.core.StandardEngine","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:37.769941209Z","@version":"1","message":"Root WebApplicationContext: initialization completed in 6767 ms","logger_name":"org.springframework.boot.web.context.servlet.WebApplicationContextInitializer","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:38.615983127Z","@version":"1","message":"HHH008540: Processing PersistenceUnitInfo [name: default]","logger_name":"org.hibernate.orm.jpa","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:38.770889164Z","@version":"1","message":"HHH000001: Hibernate ORM core version 7.2.12.Final","logger_name":"org.hibernate.orm.core","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:40.116677402Z","@version":"1","message":"No LoadTimeWeaver setup: ignoring JPA class transformer","logger_name":"org.springframework.orm.jpa.persistenceunit.SpringPersistenceUnitInfo","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:40.200306174Z","@version":"1","message":"HikariPool-1 - Starting...","logger_name":"com.zaxxer.hikari.HikariDataSource","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:43.520453173Z","@version":"1","message":"HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@65011123","logger_name":"com.zaxxer.hikari.pool.HikariPool","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:43.523542148Z","@version":"1","message":"HikariPool-1 - Start completed.","logger_name":"com.zaxxer.hikari.HikariDataSource","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:44.038540548Z","@version":"1","message":"HHH10001005: Database info:\n\tDatabase JDBC URL [jdbc:mysql://gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/tomo_base?sslMode=VERIFY_IDENTITY]\n\tDatabase driver: MySQL Connector/J\n\tDatabase dialect: MySQLDialect\n\tDatabase version: 8.0.11\n\tDefault catalog/schema: tomo_base/undefined\n\tAutocommit mode: undefined/unknown\n\tIsolation level: REPEATABLE_READ [default REPEATABLE_READ]\n\tJDBC fetch size: none\n\tPool: DataSourceConnectionProvider\n\tMinimum pool size: undefined/unknown\n\tMaximum pool size: undefined/unknown","logger_name":"org.hibernate.orm.connections.pooling","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:44.973335366Z","@version":"1","message":"HV000001: Hibernate Validator 9.0.1.Final","logger_name":"org.hibernate.validator.internal.util.Version","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:47.391098409Z","@version":"1","message":"HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)","logger_name":"org.hibernate.orm.core","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+Hibernate: 
+    alter table canvas 
+       modify column title VARCHAR(500) CHARACTER SET utf8mb4
+Hibernate: 
+    alter table doc 
+       modify column title VARCHAR(500) CHARACTER SET utf8mb4
+Hibernate: 
+    alter table doc_revision 
+       modify column title VARCHAR(500) CHARACTER SET utf8mb4
+Hibernate: 
+    alter table note 
+       modify column title VARCHAR(500) CHARACTER SET utf8mb4
+Hibernate: 
+    alter table secret 
+       modify column title VARCHAR(500) CHARACTER SET utf8mb4
+Hibernate: 
+    alter table secret_group 
+       modify column title VARCHAR(500) CHARACTER SET utf8mb4
+{"@timestamp":"2026-07-02T03:46:51.149475582Z","@version":"1","message":"Initialized JPA EntityManagerFactory for persistence unit 'default'","logger_name":"org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:51.302923409Z","@version":"1","message":"Hibernate is in classpath; If applicable, HQL parser will be used.","logger_name":"org.springframework.data.jpa.repository.query.QueryEnhancerFactories","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:52.382708749Z","@version":"1","message":"Filter 'jwtAuthenticationFilter' configured for use","logger_name":"com.tomo.base.infrastructure.security.JwtAuthenticationFilter","thread_name":"main","level":"DEBUG","level_value":10000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:52.384530476Z","@version":"1","message":"Filter 'yjsServiceAuthFilter' configured for use","logger_name":"com.tomo.base.infrastructure.security.YjsServiceAuthFilter","thread_name":"main","level":"DEBUG","level_value":10000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:53.674722307Z","@version":"1","message":"Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider","logger_name":"org.springframework.security.config.annotation.authentication.configuration.InitializeAuthenticationProviderBeanManagerConfigurer$InitializeAuthenticationProviderManagerConfigurer","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:53.675086957Z","@version":"1","message":"Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used by Spring Security for automatically configuring username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider. If the current configuration is intentional, to turn off this warning, increase the logging level of 'org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer' to ERROR","logger_name":"org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer","thread_name":"main","level":"WARN","level_value":30000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:46:56.180770939Z","@version":"1","message":"Meilisearch recovered ΓÇö switching to active mode","logger_name":"com.tomo.base.application.integration.meilisearch.MeilisearchAvailabilityManager","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:56.294959973Z","@version":"1","message":"Created Meilisearch index: tomo_search","logger_name":"com.tomo.base.application.integration.meilisearch.impl.MeilisearchSearchEngineServiceImpl","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:46:57.265366986Z","@version":"1","message":"Search reconciliation scheduled: incremental every 5m, count-check every 1h","logger_name":"com.tomo.base.application.integration.meilisearch.impl.SearchReconciliationServiceImpl","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:00.302991474Z","@version":"1","message":"Exposing 1 endpoint beneath base path '/actuator'","logger_name":"org.springframework.boot.actuate.endpoint.web.EndpointLinksResolver","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:47:00.596730301Z","@version":"1","message":"AdminClientConfig values: \n\tbootstrap.controllers = []\n\tbootstrap.servers = [kafka.tomo-infra.svc.cluster.local:9092]\n\tclient.dns.lookup = use_all_dns_ips\n\tclient.id = base-admin-0\n\tconnections.max.idle.ms = 300000\n\tdefault.api.timeout.ms = 60000\n\tenable.metrics.push = false\n\tmetadata.max.age.ms = 300000\n\tmetadata.recovery.rebootstrap.trigger.ms = 300000\n\tmetadata.recovery.strategy = rebootstrap\n\tmetric.reporters = [org.apache.kafka.common.metrics.JmxReporter]\n\tmetrics.num.samples = 2\n\tmetrics.recording.level = INFO\n\tmetrics.sample.window.ms = 30000\n\treceive.buffer.bytes = 65536\n\treconnect.backoff.max.ms = 1000\n\treconnect.backoff.ms = 50\n\trequest.timeout.ms = 30000\n\tretries = 2147483647\n\tretry.backoff.max.ms = 1000\n\tretry.backoff.ms = 100\n\tsasl.client.callback.handler.class = null\n\tsasl.jaas.config = null\n\tsasl.kerberos.kinit.cmd = /usr/bin/kinit\n\tsasl.kerberos.min.time.before.relogin = 60000\n\tsasl.kerberos.service.name = null\n\tsasl.kerberos.ticket.renew.jitter = 0.05\n\tsasl.kerberos.ticket.renew.window.factor = 0.8\n\tsasl.login.callback.handler.class = null\n\tsasl.login.class = null\n\tsasl.login.connect.timeout.ms = null\n\tsasl.login.read.timeout.ms = null\n\tsasl.login.refresh.buffer.seconds = 300\n\tsasl.login.refresh.min.period.seconds = 60\n\tsasl.login.refresh.window.factor = 0.8\n\tsasl.login.refresh.window.jitter = 0.05\n\tsasl.login.retry.backoff.max.ms = 10000\n\tsasl.login.retry.backoff.ms = 100\n\tsasl.mechanism = GSSAPI\n\tsasl.oauthbearer.assertion.algorithm = RS256\n\tsasl.oauthbearer.assertion.claim.aud = null\n\tsasl.oauthbearer.assertion.claim.exp.seconds = 300\n\tsasl.oauthbearer.assertion.claim.iss = null\n\tsasl.oauthbearer.assertion.claim.jti.include = false\n\tsasl.oauthbearer.assertion.claim.nbf.seconds = 60\n\tsasl.oauthbearer.assertion.claim.sub = null\n\tsasl.oauthbearer.assertion.file = null\n\tsasl.oauthbearer.assertion.private.key.file = null\n\tsasl.oauthbearer.assertion.private.key.passphrase = null\n\tsasl.oauthbearer.assertion.template.file = null\n\tsasl.oauthbearer.client.credentials.client.id = null\n\tsasl.oauthbearer.client.credentials.client.secret = null\n\tsasl.oauthbearer.clock.skew.seconds = 30\n\tsasl.oauthbearer.expected.audience = null\n\tsasl.oauthbearer.expected.issuer = null\n\tsasl.oauthbearer.header.urlencode = false\n\tsasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000\n\tsasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000\n\tsasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100\n\tsasl.oauthbearer.jwks.endpoint.url = null\n\tsasl.oauthbearer.jwt.retriever.class = class org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever\n\tsasl.oauthbearer.jwt.validator.class = class org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator\n\tsasl.oauthbearer.scope = null\n\tsasl.oauthbearer.scope.claim.name = scope\n\tsasl.oauthbearer.sub.claim.name = sub\n\tsasl.oauthbearer.token.endpoint.url = null\n\tsecurity.protocol = PLAINTEXT\n\tsecurity.providers = null\n\tsend.buffer.bytes = 131072\n\tsocket.connection.setup.timeout.max.ms = 30000\n\tsocket.connection.setup.timeout.ms = 10000\n\tssl.cipher.suites = null\n\tssl.enabled.protocols = [TLSv1.2, TLSv1.3]\n\tssl.endpoint.identification.algorithm = https\n\tssl.engine.factory.class = null\n\tssl.key.password = null\n\tssl.keymanager.algorithm = SunX509\n\tssl.keystore.certificate.chain = null\n\tssl.keystore.key = null\n\tssl.keystore.location = null\n\tssl.keystore.password = null\n\tssl.keystore.type = JKS\n\tssl.protocol = TLSv1.3\n\tssl.provider = null\n\tssl.secure.random.implementation = null\n\tssl.trustmanager.algorithm = PKIX\n\tssl.truststore.certificates = null\n\tssl.truststore.location = null\n\tssl.truststore.password = null\n\tssl.truststore.type = JKS\n","logger_name":"org.apache.kafka.common.config.AbstractConfig","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:01.007480375Z","@version":"1","message":"Kafka version: 4.1.2","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:01.007872455Z","@version":"1","message":"Kafka commitId: c82fd9b934b4c1e6","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:01.007927774Z","@version":"1","message":"Kafka startTimeMs: 1782964021005","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.000274432Z","@version":"1","message":"Metrics scheduler closed","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.000796902Z","@version":"1","message":"Closing reporter org.apache.kafka.common.metrics.JmxReporter","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.001089947Z","@version":"1","message":"Metrics reporters closed","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.001873491Z","@version":"1","message":"App info kafka.admin.client for base-admin-0 unregistered","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"kafka-admin-client-thread | base-admin-0","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.005040271Z","@version":"1","message":"Metrics scheduler closed","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"kafka-admin-client-thread | base-admin-0","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.005289353Z","@version":"1","message":"Closing reporter org.apache.kafka.common.metrics.JmxReporter","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"kafka-admin-client-thread | base-admin-0","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.00538282Z","@version":"1","message":"Metrics reporters closed","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"kafka-admin-client-thread | base-admin-0","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.008262525Z","@version":"1","message":"AdminClientConfig values: \n\tbootstrap.controllers = []\n\tbootstrap.servers = [kafka.tomo-infra.svc.cluster.local:9092]\n\tclient.dns.lookup = use_all_dns_ips\n\tclient.id = base-admin-1\n\tconnections.max.idle.ms = 300000\n\tdefault.api.timeout.ms = 60000\n\tenable.metrics.push = false\n\tmetadata.max.age.ms = 300000\n\tmetadata.recovery.rebootstrap.trigger.ms = 300000\n\tmetadata.recovery.strategy = rebootstrap\n\tmetric.reporters = [org.apache.kafka.common.metrics.JmxReporter]\n\tmetrics.num.samples = 2\n\tmetrics.recording.level = INFO\n\tmetrics.sample.window.ms = 30000\n\treceive.buffer.bytes = 65536\n\treconnect.backoff.max.ms = 1000\n\treconnect.backoff.ms = 50\n\trequest.timeout.ms = 30000\n\tretries = 2147483647\n\tretry.backoff.max.ms = 1000\n\tretry.backoff.ms = 100\n\tsasl.client.callback.handler.class = null\n\tsasl.jaas.config = null\n\tsasl.kerberos.kinit.cmd = /usr/bin/kinit\n\tsasl.kerberos.min.time.before.relogin = 60000\n\tsasl.kerberos.service.name = null\n\tsasl.kerberos.ticket.renew.jitter = 0.05\n\tsasl.kerberos.ticket.renew.window.factor = 0.8\n\tsasl.login.callback.handler.class = null\n\tsasl.login.class = null\n\tsasl.login.connect.timeout.ms = null\n\tsasl.login.read.timeout.ms = null\n\tsasl.login.refresh.buffer.seconds = 300\n\tsasl.login.refresh.min.period.seconds = 60\n\tsasl.login.refresh.window.factor = 0.8\n\tsasl.login.refresh.window.jitter = 0.05\n\tsasl.login.retry.backoff.max.ms = 10000\n\tsasl.login.retry.backoff.ms = 100\n\tsasl.mechanism = GSSAPI\n\tsasl.oauthbearer.assertion.algorithm = RS256\n\tsasl.oauthbearer.assertion.claim.aud = null\n\tsasl.oauthbearer.assertion.claim.exp.seconds = 300\n\tsasl.oauthbearer.assertion.claim.iss = null\n\tsasl.oauthbearer.assertion.claim.jti.include = false\n\tsasl.oauthbearer.assertion.claim.nbf.seconds = 60\n\tsasl.oauthbearer.assertion.claim.sub = null\n\tsasl.oauthbearer.assertion.file = null\n\tsasl.oauthbearer.assertion.private.key.file = null\n\tsasl.oauthbearer.assertion.private.key.passphrase = null\n\tsasl.oauthbearer.assertion.template.file = null\n\tsasl.oauthbearer.client.credentials.client.id = null\n\tsasl.oauthbearer.client.credentials.client.secret = null\n\tsasl.oauthbearer.clock.skew.seconds = 30\n\tsasl.oauthbearer.expected.audience = null\n\tsasl.oauthbearer.expected.issuer = null\n\tsasl.oauthbearer.header.urlencode = false\n\tsasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000\n\tsasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000\n\tsasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100\n\tsasl.oauthbearer.jwks.endpoint.url = null\n\tsasl.oauthbearer.jwt.retriever.class = class org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever\n\tsasl.oauthbearer.jwt.validator.class = class org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator\n\tsasl.oauthbearer.scope = null\n\tsasl.oauthbearer.scope.claim.name = scope\n\tsasl.oauthbearer.sub.claim.name = sub\n\tsasl.oauthbearer.token.endpoint.url = null\n\tsecurity.protocol = PLAINTEXT\n\tsecurity.providers = null\n\tsend.buffer.bytes = 131072\n\tsocket.connection.setup.timeout.max.ms = 30000\n\tsocket.connection.setup.timeout.ms = 10000\n\tssl.cipher.suites = null\n\tssl.enabled.protocols = [TLSv1.2, TLSv1.3]\n\tssl.endpoint.identification.algorithm = https\n\tssl.engine.factory.class = null\n\tssl.key.password = null\n\tssl.keymanager.algorithm = SunX509\n\tssl.keystore.certificate.chain = null\n\tssl.keystore.key = null\n\tssl.keystore.location = null\n\tssl.keystore.password = null\n\tssl.keystore.type = JKS\n\tssl.protocol = TLSv1.3\n\tssl.provider = null\n\tssl.secure.random.implementation = null\n\tssl.trustmanager.algorithm = PKIX\n\tssl.truststore.certificates = null\n\tssl.truststore.location = null\n\tssl.truststore.password = null\n\tssl.truststore.type = JKS\n","logger_name":"org.apache.kafka.common.config.AbstractConfig","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.010822947Z","@version":"1","message":"Kafka version: 4.1.2","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.011057251Z","@version":"1","message":"Kafka commitId: c82fd9b934b4c1e6","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.011160557Z","@version":"1","message":"Kafka startTimeMs: 1782964022010","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.073574323Z","@version":"1","message":"Metrics scheduler closed","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.074017683Z","@version":"1","message":"Closing reporter org.apache.kafka.common.metrics.JmxReporter","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.074425336Z","@version":"1","message":"Metrics reporters closed","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.07486563Z","@version":"1","message":"App info kafka.admin.client for base-admin-1 unregistered","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"kafka-admin-client-thread | base-admin-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.076640844Z","@version":"1","message":"Metrics scheduler closed","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"kafka-admin-client-thread | base-admin-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.07679182Z","@version":"1","message":"Closing reporter org.apache.kafka.common.metrics.JmxReporter","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"kafka-admin-client-thread | base-admin-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.076873294Z","@version":"1","message":"Metrics reporters closed","logger_name":"org.apache.kafka.common.metrics.Metrics","thread_name":"kafka-admin-client-thread | base-admin-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.185532146Z","@version":"1","message":"Starting ProtocolHandler [\"http-nio-8080\"]","logger_name":"org.apache.coyote.http11.Http11NioProtocol","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.194929218Z","@version":"1","message":"Tomcat started on port 8080 (http) with context path '/'","logger_name":"org.springframework.boot.tomcat.TomcatWebServer","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.286827004Z","@version":"1","message":"ConsumerConfig values: \n\tallow.auto.create.topics = true\n\tauto.commit.interval.ms = 5000\n\tauto.offset.reset = earliest\n\tbootstrap.servers = [kafka.tomo-infra.svc.cluster.local:9092]\n\tcheck.crcs = true\n\tclient.dns.lookup = use_all_dns_ips\n\tclient.id = consumer-notification-consumer-group-1\n\tclient.rack = \n\tconnections.max.idle.ms = 540000\n\tdefault.api.timeout.ms = 60000\n\tenable.auto.commit = false\n\tenable.metrics.push = true\n\texclude.internal.topics = true\n\tfetch.max.bytes = 52428800\n\tfetch.max.wait.ms = 500\n\tfetch.min.bytes = 1\n\tgroup.id = notification-consumer-group\n\tgroup.instance.id = null\n\tgroup.protocol = classic\n\tgroup.remote.assignor = null\n\theartbeat.interval.ms = 3000\n\tinterceptor.classes = []\n\tinternal.leave.group.on.close = true\n\tinternal.throw.on.fetch.stable.offset.unsupported = false\n\tisolation.level = read_uncommitted\n\tkey.deserializer = class org.apache.kafka.common.serialization.StringDeserializer\n\tmax.partition.fetch.bytes = 1048576\n\tmax.poll.interval.ms = 300000\n\tmax.poll.records = 500\n\tmetadata.max.age.ms = 300000\n\tmetadata.recovery.rebootstrap.trigger.ms = 300000\n\tmetadata.recovery.strategy = rebootstrap\n\tmetric.reporters = [org.apache.kafka.common.metrics.JmxReporter]\n\tmetrics.num.samples = 2\n\tmetrics.recording.level = INFO\n\tmetrics.sample.window.ms = 30000\n\tpartition.assignment.strategy = [class org.apache.kafka.clients.consumer.RangeAssignor, class org.apache.kafka.clients.consumer.CooperativeStickyAssignor]\n\treceive.buffer.bytes = 65536\n\treconnect.backoff.max.ms = 1000\n\treconnect.backoff.ms = 50\n\trequest.timeout.ms = 30000\n\tretry.backoff.max.ms = 1000\n\tretry.backoff.ms = 100\n\tsasl.client.callback.handler.class = null\n\tsasl.jaas.config = null\n\tsasl.kerberos.kinit.cmd = /usr/bin/kinit\n\tsasl.kerberos.min.time.before.relogin = 60000\n\tsasl.kerberos.service.name = null\n\tsasl.kerberos.ticket.renew.jitter = 0.05\n\tsasl.kerberos.ticket.renew.window.factor = 0.8\n\tsasl.login.callback.handler.class = null\n\tsasl.login.class = null\n\tsasl.login.connect.timeout.ms = null\n\tsasl.login.read.timeout.ms = null\n\tsasl.login.refresh.buffer.seconds = 300\n\tsasl.login.refresh.min.period.seconds = 60\n\tsasl.login.refresh.window.factor = 0.8\n\tsasl.login.refresh.window.jitter = 0.05\n\tsasl.login.retry.backoff.max.ms = 10000\n\tsasl.login.retry.backoff.ms = 100\n\tsasl.mechanism = GSSAPI\n\tsasl.oauthbearer.assertion.algorithm = RS256\n\tsasl.oauthbearer.assertion.claim.aud = null\n\tsasl.oauthbearer.assertion.claim.exp.seconds = 300\n\tsasl.oauthbearer.assertion.claim.iss = null\n\tsasl.oauthbearer.assertion.claim.jti.include = false\n\tsasl.oauthbearer.assertion.claim.nbf.seconds = 60\n\tsasl.oauthbearer.assertion.claim.sub = null\n\tsasl.oauthbearer.assertion.file = null\n\tsasl.oauthbearer.assertion.private.key.file = null\n\tsasl.oauthbearer.assertion.private.key.passphrase = null\n\tsasl.oauthbearer.assertion.template.file = null\n\tsasl.oauthbearer.client.credentials.client.id = null\n\tsasl.oauthbearer.client.credentials.client.secret = null\n\tsasl.oauthbearer.clock.skew.seconds = 30\n\tsasl.oauthbearer.expected.audience = null\n\tsasl.oauthbearer.expected.issuer = null\n\tsasl.oauthbearer.header.urlencode = false\n\tsasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000\n\tsasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000\n\tsasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100\n\tsasl.oauthbearer.jwks.endpoint.url = null\n\tsasl.oauthbearer.jwt.retriever.class = class org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever\n\tsasl.oauthbearer.jwt.validator.class = class org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator\n\tsasl.oauthbearer.scope = null\n\tsasl.oauthbearer.scope.claim.name = scope\n\tsasl.oauthbearer.sub.claim.name = sub\n\tsasl.oauthbearer.token.endpoint.url = null\n\tsecurity.protocol = PLAINTEXT\n\tsecurity.providers = null\n\tsend.buffer.bytes = 131072\n\tsession.timeout.ms = 45000\n\tshare.acknowledgement.mode = implicit\n\tsocket.connection.setup.timeout.max.ms = 30000\n\tsocket.connection.setup.timeout.ms = 10000\n\tssl.cipher.suites = null\n\tssl.enabled.protocols = [TLSv1.2, TLSv1.3]\n\tssl.endpoint.identification.algorithm = https\n\tssl.engine.factory.class = null\n\tssl.key.password = null\n\tssl.keymanager.algorithm = SunX509\n\tssl.keystore.certificate.chain = null\n\tssl.keystore.key = null\n\tssl.keystore.location = null\n\tssl.keystore.password = null\n\tssl.keystore.type = JKS\n\tssl.protocol = TLSv1.3\n\tssl.provider = null\n\tssl.secure.random.implementation = null\n\tssl.trustmanager.algorithm = PKIX\n\tssl.truststore.certificates = null\n\tssl.truststore.location = null\n\tssl.truststore.password = null\n\tssl.truststore.type = JKS\n\tvalue.deserializer = class org.apache.kafka.common.serialization.StringDeserializer\n","logger_name":"org.apache.kafka.common.config.AbstractConfig","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.486330249Z","@version":"1","message":"initializing Kafka metrics collector","logger_name":"org.apache.kafka.common.telemetry.internals.KafkaMetricsCollector","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.607113019Z","@version":"1","message":"Kafka version: 4.1.2","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.607390435Z","@version":"1","message":"Kafka commitId: c82fd9b934b4c1e6","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.607513327Z","@version":"1","message":"Kafka startTimeMs: 1782964022607","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.6100375Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Subscribed to topic(s): notification.send","logger_name":"org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.621482834Z","@version":"1","message":"ConsumerConfig values: \n\tallow.auto.create.topics = true\n\tauto.commit.interval.ms = 5000\n\tauto.offset.reset = earliest\n\tbootstrap.servers = [kafka.tomo-infra.svc.cluster.local:9092]\n\tcheck.crcs = true\n\tclient.dns.lookup = use_all_dns_ips\n\tclient.id = consumer-doc-reindex-consumer-group-2\n\tclient.rack = \n\tconnections.max.idle.ms = 540000\n\tdefault.api.timeout.ms = 60000\n\tenable.auto.commit = false\n\tenable.metrics.push = true\n\texclude.internal.topics = true\n\tfetch.max.bytes = 52428800\n\tfetch.max.wait.ms = 500\n\tfetch.min.bytes = 1\n\tgroup.id = doc-reindex-consumer-group\n\tgroup.instance.id = null\n\tgroup.protocol = classic\n\tgroup.remote.assignor = null\n\theartbeat.interval.ms = 3000\n\tinterceptor.classes = []\n\tinternal.leave.group.on.close = true\n\tinternal.throw.on.fetch.stable.offset.unsupported = false\n\tisolation.level = read_uncommitted\n\tkey.deserializer = class org.apache.kafka.common.serialization.StringDeserializer\n\tmax.partition.fetch.bytes = 1048576\n\tmax.poll.interval.ms = 300000\n\tmax.poll.records = 500\n\tmetadata.max.age.ms = 300000\n\tmetadata.recovery.rebootstrap.trigger.ms = 300000\n\tmetadata.recovery.strategy = rebootstrap\n\tmetric.reporters = [org.apache.kafka.common.metrics.JmxReporter]\n\tmetrics.num.samples = 2\n\tmetrics.recording.level = INFO\n\tmetrics.sample.window.ms = 30000\n\tpartition.assignment.strategy = [class org.apache.kafka.clients.consumer.RangeAssignor, class org.apache.kafka.clients.consumer.CooperativeStickyAssignor]\n\treceive.buffer.bytes = 65536\n\treconnect.backoff.max.ms = 1000\n\treconnect.backoff.ms = 50\n\trequest.timeout.ms = 30000\n\tretry.backoff.max.ms = 1000\n\tretry.backoff.ms = 100\n\tsasl.client.callback.handler.class = null\n\tsasl.jaas.config = null\n\tsasl.kerberos.kinit.cmd = /usr/bin/kinit\n\tsasl.kerberos.min.time.before.relogin = 60000\n\tsasl.kerberos.service.name = null\n\tsasl.kerberos.ticket.renew.jitter = 0.05\n\tsasl.kerberos.ticket.renew.window.factor = 0.8\n\tsasl.login.callback.handler.class = null\n\tsasl.login.class = null\n\tsasl.login.connect.timeout.ms = null\n\tsasl.login.read.timeout.ms = null\n\tsasl.login.refresh.buffer.seconds = 300\n\tsasl.login.refresh.min.period.seconds = 60\n\tsasl.login.refresh.window.factor = 0.8\n\tsasl.login.refresh.window.jitter = 0.05\n\tsasl.login.retry.backoff.max.ms = 10000\n\tsasl.login.retry.backoff.ms = 100\n\tsasl.mechanism = GSSAPI\n\tsasl.oauthbearer.assertion.algorithm = RS256\n\tsasl.oauthbearer.assertion.claim.aud = null\n\tsasl.oauthbearer.assertion.claim.exp.seconds = 300\n\tsasl.oauthbearer.assertion.claim.iss = null\n\tsasl.oauthbearer.assertion.claim.jti.include = false\n\tsasl.oauthbearer.assertion.claim.nbf.seconds = 60\n\tsasl.oauthbearer.assertion.claim.sub = null\n\tsasl.oauthbearer.assertion.file = null\n\tsasl.oauthbearer.assertion.private.key.file = null\n\tsasl.oauthbearer.assertion.private.key.passphrase = null\n\tsasl.oauthbearer.assertion.template.file = null\n\tsasl.oauthbearer.client.credentials.client.id = null\n\tsasl.oauthbearer.client.credentials.client.secret = null\n\tsasl.oauthbearer.clock.skew.seconds = 30\n\tsasl.oauthbearer.expected.audience = null\n\tsasl.oauthbearer.expected.issuer = null\n\tsasl.oauthbearer.header.urlencode = false\n\tsasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000\n\tsasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000\n\tsasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100\n\tsasl.oauthbearer.jwks.endpoint.url = null\n\tsasl.oauthbearer.jwt.retriever.class = class org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever\n\tsasl.oauthbearer.jwt.validator.class = class org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator\n\tsasl.oauthbearer.scope = null\n\tsasl.oauthbearer.scope.claim.name = scope\n\tsasl.oauthbearer.sub.claim.name = sub\n\tsasl.oauthbearer.token.endpoint.url = null\n\tsecurity.protocol = PLAINTEXT\n\tsecurity.providers = null\n\tsend.buffer.bytes = 131072\n\tsession.timeout.ms = 45000\n\tshare.acknowledgement.mode = implicit\n\tsocket.connection.setup.timeout.max.ms = 30000\n\tsocket.connection.setup.timeout.ms = 10000\n\tssl.cipher.suites = null\n\tssl.enabled.protocols = [TLSv1.2, TLSv1.3]\n\tssl.endpoint.identification.algorithm = https\n\tssl.engine.factory.class = null\n\tssl.key.password = null\n\tssl.keymanager.algorithm = SunX509\n\tssl.keystore.certificate.chain = null\n\tssl.keystore.key = null\n\tssl.keystore.location = null\n\tssl.keystore.password = null\n\tssl.keystore.type = JKS\n\tssl.protocol = TLSv1.3\n\tssl.provider = null\n\tssl.secure.random.implementation = null\n\tssl.trustmanager.algorithm = PKIX\n\tssl.truststore.certificates = null\n\tssl.truststore.location = null\n\tssl.truststore.password = null\n\tssl.truststore.type = JKS\n\tvalue.deserializer = class org.apache.kafka.common.serialization.StringDeserializer\n","logger_name":"org.apache.kafka.common.config.AbstractConfig","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.622263883Z","@version":"1","message":"initializing Kafka metrics collector","logger_name":"org.apache.kafka.common.telemetry.internals.KafkaMetricsCollector","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.62509644Z","@version":"1","message":"Kafka version: 4.1.2","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.625240312Z","@version":"1","message":"Kafka commitId: c82fd9b934b4c1e6","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.625289656Z","@version":"1","message":"Kafka startTimeMs: 1782964022625","logger_name":"org.apache.kafka.common.utils.AppInfoParser","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.625535241Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] Subscribed to topic(s): doc.reindex","logger_name":"org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.688615001Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] Cluster ID: MkU3OEVBNTcwNTJENDM2Qk","logger_name":"org.apache.kafka.clients.Metadata","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.688926621Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Cluster ID: MkU3OEVBNTcwNTJENDM2Qk","logger_name":"org.apache.kafka.clients.Metadata","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.69258953Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] Discovered group coordinator kafka.tomo-infra.svc.cluster.local:9092 (id: 2147483646 rack: null isFenced: false)","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.692635828Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Discovered group coordinator kafka.tomo-infra.svc.cluster.local:9092 (id: 2147483646 rack: null isFenced: false)","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.695104825Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] (Re-)joining group","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.763827606Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] (Re-)joining group","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.780887627Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Request joining group due to: need to re-join with the given member-id: consumer-notification-consumer-group-1-0e774884-a4e0-44ad-8d5d-2603d5711656","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.780887707Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] Request joining group due to: need to re-join with the given member-id: consumer-doc-reindex-consumer-group-2-73075b5c-f9b1-42c5-aa26-ec67e6a9ea59","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.781403173Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] (Re-)joining group","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:02.781405779Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] (Re-)joining group","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:03.294002794Z","@version":"1","message":"gRPC server started on port 9091","logger_name":"com.tomo.base.infrastructure.grpc.GrpcServerConfig","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:03.305087224Z","@version":"1","message":"Started BaseApplication in 34.64 seconds (process running for 36.008)","logger_name":"com.tomo.base.BaseApplication","thread_name":"main","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+Hibernate: 
+    select
+        u1_0.id 
+    from
+        users u1_0 
+    where
+        u1_0.role=? 
+    limit
+        ?
+{"@timestamp":"2026-07-02T03:47:05.78560789Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Successfully joined group with generation Generation{generationId=1, memberId='consumer-notification-consumer-group-1-0e774884-a4e0-44ad-8d5d-2603d5711656', protocol='range'}","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.78560791Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] Successfully joined group with generation Generation{generationId=11, memberId='consumer-doc-reindex-consumer-group-2-73075b5c-f9b1-42c5-aa26-ec67e6a9ea59', protocol='range'}","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.791478672Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Finished assignment for group at generation 1: {consumer-notification-consumer-group-1-0e774884-a4e0-44ad-8d5d-2603d5711656=Assignment(partitions=[notification.send-0, notification.send-1, notification.send-2])}","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.791478572Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] Finished assignment for group at generation 11: {consumer-doc-reindex-consumer-group-2-73075b5c-f9b1-42c5-aa26-ec67e6a9ea59=Assignment(partitions=[doc.reindex-0, doc.reindex-1, doc.reindex-2])}","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.797791154Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] Successfully synced group in generation Generation{generationId=11, memberId='consumer-doc-reindex-consumer-group-2-73075b5c-f9b1-42c5-aa26-ec67e6a9ea59', protocol='range'}","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.797791205Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Successfully synced group in generation Generation{generationId=1, memberId='consumer-notification-consumer-group-1-0e774884-a4e0-44ad-8d5d-2603d5711656', protocol='range'}","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.798519651Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Notifying assignor about the new Assignment(partitions=[notification.send-0, notification.send-1, notification.send-2])","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.79851968Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] Notifying assignor about the new Assignment(partitions=[doc.reindex-0, doc.reindex-1, doc.reindex-2])","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.800794809Z","@version":"1","message":"[Consumer clientId=consumer-doc-reindex-consumer-group-2, groupId=doc-reindex-consumer-group] Adding newly assigned partitions: [doc.reindex-0, doc.reindex-1, doc.reindex-2]","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerInvoker","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.80079482Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Adding newly assigned partitions: [notification.send-0, notification.send-1, notification.send-2]","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerInvoker","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.809679989Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Found no committed offset for partition notification.send-1","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.809978557Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Found no committed offset for partition notification.send-2","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.810068508Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Found no committed offset for partition notification.send-0","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerCoordinator","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.811147501Z","@version":"1","message":"Setting offset for partition doc.reindex-1 to the committed offset FetchPosition{offset=3, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[kafka.tomo-infra.svc.cluster.local:9092 (id: 1 rack: null isFenced: false)], epoch=0}}","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerUtils","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.813535615Z","@version":"1","message":"Setting offset for partition doc.reindex-2 to the committed offset FetchPosition{offset=1, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[kafka.tomo-infra.svc.cluster.local:9092 (id: 1 rack: null isFenced: false)], epoch=0}}","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerUtils","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.813736026Z","@version":"1","message":"Setting offset for partition doc.reindex-0 to the committed offset FetchPosition{offset=1, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[kafka.tomo-infra.svc.cluster.local:9092 (id: 1 rack: null isFenced: false)], epoch=0}}","logger_name":"org.apache.kafka.clients.consumer.internals.ConsumerUtils","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.814599189Z","@version":"1","message":"doc-reindex-consumer-group: partitions assigned: [doc.reindex-0, doc.reindex-1, doc.reindex-2]","logger_name":"org.springframework.kafka.listener.KafkaMessageListenerContainer","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#1-0-C-1","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.820074238Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Resetting offset for partition notification.send-1 to position FetchPosition{offset=0, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[kafka.tomo-infra.svc.cluster.local:9092 (id: 1 rack: null isFenced: false)], epoch=0}}.","logger_name":"org.apache.kafka.clients.consumer.internals.SubscriptionState","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.820569109Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Resetting offset for partition notification.send-2 to position FetchPosition{offset=0, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[kafka.tomo-infra.svc.cluster.local:9092 (id: 1 rack: null isFenced: false)], epoch=0}}.","logger_name":"org.apache.kafka.clients.consumer.internals.SubscriptionState","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.820786663Z","@version":"1","message":"[Consumer clientId=consumer-notification-consumer-group-1, groupId=notification-consumer-group] Resetting offset for partition notification.send-0 to position FetchPosition{offset=0, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[kafka.tomo-infra.svc.cluster.local:9092 (id: 1 rack: null isFenced: false)], epoch=0}}.","logger_name":"org.apache.kafka.clients.consumer.internals.SubscriptionState","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:05.820983187Z","@version":"1","message":"notification-consumer-group: partitions assigned: [notification.send-0, notification.send-1, notification.send-2]","logger_name":"org.springframework.kafka.listener.KafkaMessageListenerContainer","thread_name":"org.springframework.kafka.KafkaListenerEndpointContainer#0-0-C-1","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:47:09.205726032Z","@version":"1","message":"Initializing Spring DispatcherServlet 'dispatcherServlet'","logger_name":"org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/]","thread_name":"tomcat-handler-0","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:09.206274296Z","@version":"1","message":"Initializing Servlet 'dispatcherServlet'","logger_name":"org.springframework.web.servlet.DispatcherServlet","thread_name":"tomcat-handler-0","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:47:09.20804253Z","@version":"1","message":"Completed initialization in 1 ms","logger_name":"org.springframework.web.servlet.DispatcherServlet","thread_name":"tomcat-handler-0","level":"INFO","level_value":20000,"appName":"base","tags":["COMMONS-LOGGING"],"app":"base"}
+{"@timestamp":"2026-07-02T03:47:23.712494459Z","@version":"1","message":"JWT validation failed: Invalid compact JWT string: Compact JWSs must contain exactly 2 period characters, and compact JWEs must contain exactly 4.  Found: 0","logger_name":"com.tomo.base.infrastructure.security.JwtAuthenticationFilter","thread_name":"tomcat-handler-3","level":"WARN","level_value":30000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:23.712503516Z","@version":"1","message":"JWT validation failed: Invalid compact JWT string: Compact JWSs must contain exactly 2 period characters, and compact JWEs must contain exactly 4.  Found: 0","logger_name":"com.tomo.base.infrastructure.security.JwtAuthenticationFilter","thread_name":"tomcat-handler-4","level":"WARN","level_value":30000,"appName":"base","app":"base"}
+Hibernate: 
+    select
+        ds1_0.id,
+        ds1_0.branch,
+        ds1_0.chunk_count,
+        ds1_0.created_at,
+        ds1_0.doc_id,
+        ds1_0.gzip,
+        ds1_0.hot_bytes,
+        ds1_0.seq,
+        ds1_0.size_bytes,
+        ds1_0.state_vector 
+    from
+        doc_snapshot ds1_0 
+    where
+        ds1_0.doc_id=? 
+        and ds1_0.branch=? 
+    order by
+        ds1_0.seq desc 
+    limit
+        ?
+Hibernate: 
+    select
+        ds1_0.id,
+        ds1_0.branch,
+        ds1_0.chunk_count,
+        ds1_0.created_at,
+        ds1_0.doc_id,
+        ds1_0.gzip,
+        ds1_0.hot_bytes,
+        ds1_0.seq,
+        ds1_0.size_bytes,
+        ds1_0.state_vector 
+    from
+        doc_snapshot ds1_0 
+    where
+        ds1_0.doc_id=? 
+        and ds1_0.branch=? 
+    order by
+        ds1_0.seq desc 
+    limit
+        ?
+{"@timestamp":"2026-07-02T03:47:31.420926593Z","@version":"1","message":"JWT validation failed: Invalid compact JWT string: Compact JWSs must contain exactly 2 period characters, and compact JWEs must contain exactly 4.  Found: 0","logger_name":"com.tomo.base.infrastructure.security.JwtAuthenticationFilter","thread_name":"tomcat-handler-6","level":"WARN","level_value":30000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:47:31.423856218Z","@version":"1","message":"JWT validation failed: Invalid compact JWT string: Compact JWSs must contain exactly 2 period characters, and compact JWEs must contain exactly 4.  Found: 0","logger_name":"com.tomo.base.infrastructure.security.JwtAuthenticationFilter","thread_name":"tomcat-handler-7","level":"WARN","level_value":30000,"appName":"base","app":"base"}
+Hibernate: 
+    select
+        ds1_0.id,
+        ds1_0.branch,
+        ds1_0.chunk_count,
+        ds1_0.created_at,
+        ds1_0.doc_id,
+        ds1_0.gzip,
+        ds1_0.hot_bytes,
+        ds1_0.seq,
+        ds1_0.size_bytes,
+        ds1_0.state_vector 
+    from
+        doc_snapshot ds1_0 
+    where
+        ds1_0.doc_id=? 
+        and ds1_0.branch=? 
+    order by
+        ds1_0.seq desc 
+    limit
+        ?
+Hibernate: 
+    select
+        ds1_0.id,
+        ds1_0.branch,
+        ds1_0.chunk_count,
+        ds1_0.created_at,
+        ds1_0.doc_id,
+        ds1_0.gzip,
+        ds1_0.hot_bytes,
+        ds1_0.seq,
+        ds1_0.size_bytes,
+        ds1_0.state_vector 
+    from
+        doc_snapshot ds1_0 
+    where
+        ds1_0.doc_id=? 
+        and ds1_0.branch=? 
+    order by
+        ds1_0.seq desc 
+    limit
+        ?
+Hibernate: 
+    select
+        d1_0.id,
+        d1_0.content,
+        d1_0.created_by,
+        d1_0.created_date,
+        d1_0.last_modified_by,
+        d1_0.last_modified_date,
+        d1_0.last_sync,
+        d1_0.metadata,
+        d1_0.plain_text,
+        d1_0.status,
+        d1_0.title,
+        d1_0.yjs_state 
+    from
+        doc d1_0 
+    where
+        d1_0.last_modified_date>?
+{"@timestamp":"2026-07-02T03:51:59.512179446Z","@version":"1","message":"Indexed 1 documents to tomo_search","logger_name":"com.tomo.base.application.integration.meilisearch.impl.MeilisearchSearchEngineServiceImpl","thread_name":"search-reconciliation-0","level":"DEBUG","level_value":10000,"appName":"base","app":"base"}
+{"@timestamp":"2026-07-02T03:51:59.512901197Z","@version":"1","message":"Reconciled 1 DOC docs modified after 2026-07-02T03:06:57.264563097","logger_name":"com.tomo.base.application.integration.meilisearch.impl.SearchReconciliationServiceImpl","thread_name":"search-reconciliation-0","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+Hibernate: 
+    select
+        c1_0.id,
+        c1_0.created_by,
+        c1_0.created_date,
+        c1_0.last_modified_by,
+        c1_0.last_modified_date,
+        c1_0.last_sync,
+        c1_0.metadata,
+        c1_0.scene,
+        c1_0.status,
+        c1_0.title 
+    from
+        canvas c1_0 
+    where
+        c1_0.last_modified_date>?
+Hibernate: 
+    select
+        s1_0.id,
+        s1_0.created_by,
+        s1_0.created_date,
+        s1_0.description,
+        s1_0.favorite,
+        s1_0.group_id,
+        s1_0.last_modified_by,
+        s1_0.last_modified_date,
+        s1_0.searchable_text,
+        s1_0.status,
+        s1_0.tags,
+        s1_0.title 
+    from
+        secret s1_0 
+    where
+        s1_0.last_modified_date>? 
+        and s1_0.status=?
+{"@timestamp":"2026-07-02T03:51:59.96955342Z","@version":"1","message":"Incremental reconciliation complete: 1 documents reindexed","logger_name":"com.tomo.base.application.integration.meilisearch.impl.SearchReconciliationServiceImpl","thread_name":"search-reconciliation-0","level":"INFO","level_value":20000,"appName":"base","app":"base"}
+Hibernate: 
+    select
+        d1_0.id,
+        d1_0.content,
+        d1_0.created_by,
+        d1_0.created_date,
+        d1_0.last_modified_by,
+        d1_0.last_modified_date,
+        d1_0.last_sync,
+        d1_0.metadata,
+        d1_0.plain_text,
+        d1_0.status,
+        d1_0.title,
+        d1_0.yjs_state 
+    from
+        doc d1_0 
+    where
+        d1_0.last_modified_date>?
+Hibernate: 
+    select
+        c1_0.id,
+        c1_0.created_by,
+        c1_0.created_date,
+        c1_0.last_modified_by,
+        c1_0.last_modified_date,
+        c1_0.last_sync,
+        c1_0.metadata,
+        c1_0.scene,
+        c1_0.status,
+        c1_0.title 
+    from
+        canvas c1_0 
+    where
+        c1_0.last_modified_date>?
+Hibernate: 
+    select
+        s1_0.id,
+        s1_0.created_by,
+        s1_0.created_date,
+        s1_0.description,
+        s1_0.favorite,
+        s1_0.group_id,
+        s1_0.last_modified_by,
+        s1_0.last_modified_date,
+        s1_0.searchable_text,
+        s1_0.status,
+        s1_0.tags,
+        s1_0.title 
+    from
+        secret s1_0 
+    where
+        s1_0.last_modified_date>? 
+        and s1_0.status=?
+Hibernate: 
+    select
+        d1_0.id,
+        d1_0.content,
+        d1_0.created_by,
+        d1_0.created_date,
+        d1_0.last_modified_by,
+        d1_0.last_modified_date,
+        d1_0.last_sync,
+        d1_0.metadata,
+        d1_0.plain_text,
+        d1_0.status,
+        d1_0.title,
+        d1_0.yjs_state 
+    from
+        doc d1_0 
+    where
+        d1_0.last_modified_date>?
+Hibernate: 
+    select
+        c1_0.id,
+        c1_0.created_by,
+        c1_0.created_date,
+        c1_0.last_modified_by,
+        c1_0.last_modified_date,
+        c1_0.last_sync,
+        c1_0.metadata,
+        c1_0.scene,
+        c1_0.status,
+        c1_0.title 
+    from
+        canvas c1_0 
+    where
+        c1_0.last_modified_date>?
+Hibernate: 
+    select
+        s1_0.id,
+        s1_0.created_by,
+        s1_0.created_date,
+        s1_0.description,
+        s1_0.favorite,
+        s1_0.group_id,
+        s1_0.last_modified_by,
+        s1_0.last_modified_date,
+        s1_0.searchable_text,
+        s1_0.status,
+        s1_0.tags,
+        s1_0.title 
+    from
+        secret s1_0 
+    where
+        s1_0.last_modified_date>? 
+        and s1_0.status=?
+Hibernate: 
+    select
+        d1_0.id,
+        d1_0.content,
+        d1_0.created_by,
+        d1_0.created_date,
+        d1_0.last_modified_by,
+        d1_0.last_modified_date,
+        d1_0.last_sync,
+        d1_0.metadata,
+        d1_0.plain_text,
+        d1_0.status,
+        d1_0.title,
+        d1_0.yjs_state 
+    from
+        doc d1_0 
+    where
+        d1_0.last_modified_date>?
+Hibernate: 
+    select
+        c1_0.id,
+        c1_0.created_by,
+        c1_0.created_date,
+        c1_0.last_modified_by,
+        c1_0.last_modified_date,
+        c1_0.last_sync,
+        c1_0.metadata,
+        c1_0.scene,
+        c1_0.status,
+        c1_0.title 
+    from
+        canvas c1_0 
+    where
+        c1_0.last_modified_date>?
+Hibernate: 
+    select
+        s1_0.id,
+        s1_0.created_by,
+        s1_0.created_date,
+        s1_0.description,
+        s1_0.favorite,
+        s1_0.group_id,
+        s1_0.last_modified_by,
+        s1_0.last_modified_date,
+        s1_0.searchable_text,
+        s1_0.status,
+        s1_0.tags,
+        s1_0.title 
+    from
+        secret s1_0 
+    where
+        s1_0.last_modified_date>? 
+        and s1_0.status=?
+Hibernate: 
+    select
+        d1_0.id,
+        d1_0.content,
+        d1_0.created_by,
+        d1_0.created_date,
+        d1_0.last_modified_by,
+        d1_0.last_modified_date,
+        d1_0.last_sync,
+        d1_0.metadata,
+        d1_0.plain_text,
+        d1_0.status,
+        d1_0.title,
+        d1_0.yjs_state 
+    from
+        doc d1_0 
+    where
+        d1_0.last_modified_date>?
+Hibernate: 
+    select
+        c1_0.id,
+        c1_0.created_by,
+        c1_0.created_date,
+        c1_0.last_modified_by,
+        c1_0.last_modified_date,
+        c1_0.last_sync,
+        c1_0.metadata,
+        c1_0.scene,
+        c1_0.status,
+        c1_0.title 
+    from
+        canvas c1_0 
+    where
+        c1_0.last_modified_date>?
+Hibernate: 
+    select
+        s1_0.id,
+        s1_0.created_by,
+        s1_0.created_date,
+        s1_0.description,
+        s1_0.favorite,
+        s1_0.group_id,
+        s1_0.last_modified_by,
+        s1_0.last_modified_date,
+        s1_0.searchable_text,
+        s1_0.status,
+        s1_0.tags,
+        s1_0.title 
+    from
+        secret s1_0 
+    where
+        s1_0.last_modified_date>? 
+        and s1_0.status=?

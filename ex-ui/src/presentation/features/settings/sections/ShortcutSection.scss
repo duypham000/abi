@@ -1,0 +1,64 @@
+.shortcut-recorder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #e4e4e7);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  min-width: 200px;
+  justify-content: space-between;
+
+  &:hover {
+    border-color: #71717a;
+  }
+
+  &.recording {
+    border-color: #3b82f6;
+    background-color: rgba(59, 130, 246, 0.06);
+    outline: none;
+  }
+}
+
+.shortcut-kbd {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8125rem;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+
+  .theme-dark & {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.shortcut-recorder-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.shortcut-recording-hint {
+  font-size: 0.75rem;
+  color: #3b82f6;
+  font-style: italic;
+}
+
+.shortcut-conflict {
+  font-size: 0.75rem;
+  color: #d97706;
+  text-align: right;
+  max-width: 200px;
+}
+
+.shortcut-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}

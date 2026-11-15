@@ -1,0 +1,364 @@
+/* WorkspacePanel — VS Code-style collapsible bottom panel */
+
+.workspace-panel {
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  border-top: 1px solid var(--gl-header-border, #e4e4e7);
+  display: flex;
+  flex-direction: column;
+  background: var(--ab-bg, #ffffff);
+  transition: height 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &.is-open {
+    height: 240px;
+  }
+}
+
+/* ── Tab bar ──────────────────────────────────────────────────────────────── */
+.workspace-panel__tabs {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--gl-header-border, #e4e4e7);
+  background: var(--gl-header-bg, #f4f4f5);
+  padding: 0 4px;
+  gap: 2px;
+}
+
+.wp-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  border-radius: 4px 4px 0 0;
+  transition: color 0.1s, border-color 0.1s;
+  outline: none;
+
+  &:hover { color: var(--ws-fg, #18181b); }
+
+  &.is-active {
+    color: var(--ws-fg, #18181b);
+    border-bottom-color: var(--gl-accent, #6c6cff);
+  }
+}
+
+.wp-close {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  border-radius: 4px;
+  transition: background 0.1s, color 0.1s;
+
+  &:hover { background: rgba(0,0,0,0.06); color: var(--ws-fg, #18181b); }
+}
+
+/* ── Content area ─────────────────────────────────────────────────────────── */
+.workspace-panel__content {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 12px;
+}
+
+.wp-empty {
+  font-size: 12px;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  margin: 0;
+  padding: 8px 0;
+}
+
+.wp-label {
+  font-size: 11px;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.wp-pre {
+  font-family: "Fira Code", "Cascadia Code", monospace;
+  font-size: 10.5px;
+  background: var(--ws-bg, #f4f4f5);
+  border: 1px solid var(--gl-header-border, #e4e4e7);
+  border-radius: 4px;
+  padding: 8px;
+  margin: 0;
+  overflow: auto;
+  max-height: 120px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--ws-fg, #18181b);
+  line-height: 1.5;
+}
+
+.wp-layout-view,
+.wp-panels-view { display: flex; flex-direction: column; gap: 6px; }
+
+/* ── Panels table ─────────────────────────────────────────────────────────── */
+.wp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+
+  th {
+    text-align: left;
+    padding: 2px 8px;
+    color: var(--gl-tab-inactive-fg, #71717a);
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--gl-header-border, #e4e4e7);
+  }
+
+  td {
+    padding: 3px 8px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--gl-header-border, #e4e4e7);
+    color: var(--ws-fg, #18181b);
+  }
+}
+
+.wp-table__num {
+  color: var(--gl-tab-inactive-fg, #71717a) !important;
+  width: 24px;
+}
+
+.wp-code {
+  font-family: monospace;
+  font-size: 10.5px;
+  background: var(--ws-bg, #f4f4f5);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--gl-accent, #6c6cff);
+}
+
+.wp-focus-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--gl-header-border, #e4e4e7);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 10.5px;
+  font-family: inherit;
+  color: var(--gl-accent, #6c6cff);
+  transition: background 0.1s;
+
+  &:hover { background: rgba(108, 108, 255, 0.08); border-color: var(--gl-accent, #6c6cff); }
+}
+
+/* ── Icon button (kill, show/hide, refresh) ───────────────────────────────── */
+.wp-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--gl-header-border, #e4e4e7);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  padding: 0;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+
+  &:hover {
+    background: var(--ab-hover-bg, rgba(0,0,0,0.05));
+    color: var(--ws-fg, #18181b);
+    border-color: var(--gl-accent, #6c6cff);
+  }
+
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  &--danger:hover {
+    color: #ef4444;
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.07);
+  }
+}
+
+/* ── Status badge ─────────────────────────────────────────────────────────── */
+.wp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid transparent;
+
+  &--normal   { color: #16a34a; background: rgba(22,163,74,0.1);  border-color: rgba(22,163,74,0.3);  }
+  &--hidden   { color: #71717a; background: rgba(113,113,122,0.1); border-color: rgba(113,113,122,0.3); }
+  &--admin    { color: #d97706; background: rgba(217,119,6,0.1);  border-color: rgba(217,119,6,0.3);  }
+  &--visible  { color: #16a34a; background: rgba(22,163,74,0.1);  border-color: rgba(22,163,74,0.3);  }
+}
+
+/* ── Running Scripts tab ─────────────────────────────────────────────────── */
+.wp-scripts-view { display: flex; flex-direction: column; }
+
+.wp-scripts-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  padding: 8px 0;
+}
+
+.wp-scripts__title { font-size: 11.5px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wp-scripts__iid   { opacity: 0.7; }
+.wp-scripts__time  { font-size: 11px; color: var(--gl-tab-inactive-fg, #71717a); white-space: nowrap; }
+.wp-scripts__actions { display: flex; gap: 4px; align-items: center; }
+
+/* ── Services tab ────────────────────────────────────────────────────────── */
+.wp-services-view { display: flex; flex-direction: column; gap: 6px; }
+
+.wp-services-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.wp-services-overall {
+  display: flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ws-fg, #18181b);
+}
+
+.wp-services-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wp-services-time {
+  font-size: 10.5px;
+  color: var(--gl-tab-inactive-fg, #71717a);
+}
+
+.wp-services-error {
+  font-size: 11px;
+  color: #ef4444;
+  background: rgba(239,68,68,0.07);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.wp-services-detail {
+  font-size: 10.5px;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Service status indicator ────────────────────────────────────────────── */
+.wp-svc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wp-svc-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.wp-svc-status--UP       { color: #16a34a; .wp-svc-status__dot { background: #16a34a; box-shadow: 0 0 0 2px rgba(22,163,74,0.2); } }
+.wp-svc-status--DOWN     { color: #ef4444; .wp-svc-status__dot { background: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,0.2); } }
+.wp-svc-status--UNKNOWN  { color: #71717a; .wp-svc-status__dot { background: #a1a1aa; } }
+.wp-svc-status--checking { color: #d97706; .wp-svc-status__dot { background: #d97706; } }
+
+/* ── Spin animation for refresh icon ─────────────────────────────────────── */
+@keyframes wp-spin { to { transform: rotate(360deg); } }
+.wp-spin { animation: wp-spin 0.8s linear infinite; }
+
+/* ── Windows tab ─────────────────────────────────────────────────────────── */
+.wp-win-view { display: flex; flex-direction: column; gap: 6px; }
+
+.wp-win-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--gl-tab-inactive-fg, #71717a);
+  padding: 8px 0;
+}
+
+.wp-win-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.wp-win-count {
+  font-size: 11px;
+  color: var(--gl-tab-inactive-fg, #71717a);
+}
+
+.wp-win-row--main td { background: rgba(108, 108, 255, 0.03); }
+
+.wp-win-title-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ws-fg, #18181b);
+  padding: 0;
+  text-align: left;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  outline: none;
+
+  &:hover { color: var(--gl-accent, #6c6cff); text-decoration: underline; }
+  &:disabled { cursor: not-allowed; opacity: 0.5; }
+}
+
+.wp-win-label { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+
+.wp-win-badges { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
+
+.wp-win-controls { display: flex; gap: 3px; align-items: center; }
+
+/* add pinned/minimized/maximized badge variants */
+.wp-badge--pinned    { color: #6c6cff; background: rgba(108,108,255,0.1); border-color: rgba(108,108,255,0.3); }
+.wp-badge--minimized { color: #71717a; background: rgba(113,113,122,0.1); border-color: rgba(113,113,122,0.3); }
+.wp-badge--maximized { color: #0891b2; background: rgba(8,145,178,0.1);   border-color: rgba(8,145,178,0.3);   }
+
+/* active (pinned) state for icon button */
+.wp-icon-btn--active {
+  color: var(--gl-accent, #6c6cff);
+  border-color: var(--gl-accent, #6c6cff);
+  background: rgba(108, 108, 255, 0.08);
+}
+

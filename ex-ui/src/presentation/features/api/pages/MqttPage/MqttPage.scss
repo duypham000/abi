@@ -1,0 +1,234 @@
+.mqtt-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mqtt-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  flex-shrink: 0;
+}
+
+.mqtt-url-input { flex: 1; }
+.mqtt-client-id { width: 160px; flex-shrink: 0; }
+
+.mqtt-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.mqtt-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border, #e5e7eb);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mqtt-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mqtt-log-area {
+  flex: 1;
+  overflow: hidden;
+  border-top: 1px solid var(--color-border, #e5e7eb);
+}
+
+/* Subscriptions sidebar */
+.mqtt-subscriptions {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mqtt-sub-header {
+  padding: 8px;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  display: flex;
+  gap: 4px;
+}
+
+.mqtt-sub-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.mqtt-sub-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-secondary, #9ca3af);
+  line-height: 1.6;
+}
+
+.mqtt-sub-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border-light, #f9fafb);
+
+  &:hover {
+    background: var(--color-bg-hover, #f3f4f6);
+    .mqtt-sub-delete { opacity: 1; }
+  }
+
+  &.mqtt-sub-item--active {
+    background: var(--color-primary-light, #eff6ff);
+    color: var(--color-primary, #1677ff);
+  }
+
+  .mqtt-sub-delete { opacity: 0; transition: opacity 0.1s; }
+}
+
+.mqtt-sub-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mqtt-sub-dot-inline {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.mqtt-sub-topic {
+  flex: 1;
+  font-size: 12px;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Config section */
+.mqtt-config {
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  flex-shrink: 0;
+}
+
+.mqtt-config-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  user-select: none;
+
+  &:hover {
+    background: var(--color-bg-hover, #f3f4f6);
+  }
+}
+
+.mqtt-config-body {
+  padding: 8px 12px 12px;
+}
+
+.mqtt-config-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: flex-end;
+}
+
+.mqtt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+
+  label {
+    font-size: 11px;
+    color: var(--color-text-secondary, #6b7280);
+    font-weight: 500;
+  }
+}
+
+.mqtt-field--small { flex: 0 0 120px; }
+.mqtt-field--toggle { flex: 0 0 100px; }
+
+.mqtt-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #6b7280);
+  margin: 6px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Publish area */
+.mqtt-publish {
+  border-top: 1px solid var(--color-border, #e5e7eb);
+  padding: 8px 12px;
+  flex-shrink: 0;
+
+  .mqtt-publish-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+
+  .mqtt-publish-label {
+    font-size: 12px;
+    color: var(--color-text-secondary, #6b7280);
+    white-space: nowrap;
+  }
+
+  .mqtt-pub-topic { flex: 1; min-width: 120px; }
+  .mqtt-pub-qos { width: 60px; }
+
+  .mqtt-publish-payload {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+
+    .ant-input-affix-wrapper,
+    textarea {
+      flex: 1;
+    }
+  }
+}
+
+/* Log tabs */
+.mqtt-log-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  .ant-tabs-content-holder {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .ant-tabs-content {
+    height: 100%;
+  }
+
+  .ant-tabs-tabpane {
+    height: 100%;
+    overflow: hidden;
+  }
+}
