@@ -98,7 +98,8 @@ export const docsApi = baseApi.injectEndpoints({
                 try {
                   const token = await getAccessToken();
                   if (token && token !== "local-standalone-token") {
-                    const res = await fetchWithBaseQuery(`/base/docs/${id}`);
+                    const remoteId = local.backendUuid || id;
+                    const res = await fetchWithBaseQuery(`/base/docs/${remoteId}`);
                     if (res.data) {
                       await cacheDoc(res.data as DocDto);
                     }
@@ -181,10 +182,11 @@ export const docsApi = baseApi.injectEndpoints({
           }
         }
 
+        const remoteId = localDoc?.backendUuid || id;
         try {
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
-            const result = await fetchWithBaseQuery({ url: `/base/docs/${id}`, method: "PUT", body });
+            const result = await fetchWithBaseQuery({ url: `/base/docs/${remoteId}`, method: "PUT", body });
             if (result.data) {
               const remoteDoc = result.data as DocDto;
               if (isTauri()) await cacheDoc(remoteDoc);
@@ -221,8 +223,11 @@ export const docsApi = baseApi.injectEndpoints({
 
     deleteDoc: builder.mutation<void, number>({
       queryFn: async (id, _api, _extraOptions, fetchWithBaseQuery) => {
+        let remoteId: number | string = id;
         if (isTauri()) {
           try {
+            const existing = await getDocFromSqlite(id);
+            if (existing?.backendUuid) remoteId = existing.backendUuid;
             await deleteDocFromSqlite(id);
           } catch (err) {
             console.warn("SQLite deleteDoc error:", err);
@@ -232,7 +237,7 @@ export const docsApi = baseApi.injectEndpoints({
         try {
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
-            await fetchWithBaseQuery({ url: `/base/docs/${id}`, method: "DELETE" });
+            await fetchWithBaseQuery({ url: `/base/docs/${remoteId}`, method: "DELETE" });
             return { data: undefined };
           }
         } catch {

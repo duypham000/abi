@@ -37,7 +37,11 @@ export default function DocCard({ doc, onDelete, isDeleting }: DocCardProps) {
       <div className="doc-card-body">
         <h3 className="doc-card-title">
           <span className="doc-card-title-text">{doc.title || "Untitled"}</span>
-          <EntityGitBadge isOnGit={isDocOnGit(doc.id)} gitStatus={getDocGitStatus(doc.id)} size={12} />
+          <EntityGitBadge
+            isOnGit={isDocOnGit(doc.slug, doc.backendUuid, doc.id)}
+            gitStatus={getDocGitStatus(doc.slug, doc.backendUuid, doc.id)}
+            size={12}
+          />
           {doc.seriesName && (
             <span className="doc-card-badge doc-card-badge--series">
               {doc.seriesName}

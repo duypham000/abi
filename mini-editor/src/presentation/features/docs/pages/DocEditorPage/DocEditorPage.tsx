@@ -12,6 +12,7 @@ import { useDeleteDocMutation, useCreateDocMutation } from "@/infrastructure/api
 import { parseDocMetadata } from "@/core/interfaces/docs";
 import { useDocEditor } from "../../hooks/useDocEditor";
 import { usePersistedState } from "@/presentation/hooks/usePersistedState";
+import { parseOrHashId } from "@/core/utils/idUtils";
 import { useDocPopup } from "@/presentation/hooks/useDocPopup";
 import { DocEditorToolbar } from "./components/DocEditorToolbar";
 import { DocRightPanel } from "./components/DocRightPanel";
@@ -138,22 +139,54 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
 
   const checkStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const gitFilePath = `docs/doc-${docId}.json`;
-
   const { data: manifest } = useGetWorkspaceManifestQuery();
-  const { data: fileHistory } = useGetFileHistoryQuery(gitFilePath, { skip: !docId });
+
+  const gitFilePath = useMemo(() => {
+    const slugKey = doc?.slug || null;
+    const uuidKey = doc?.backendUuid || null;
+    const targetId = slugKey || uuidKey || String(docId);
+    const matched = manifest?.items?.find((item) => {
+      const candidates = [slugKey, uuidKey, String(docId)].filter(Boolean) as string[];
+      for (const c of candidates) {
+        const prefixed = c.startsWith("doc-") ? c : `doc-${c}`;
+        if (
+          item.id === c ||
+          item.id === prefixed ||
+          item.slug === c ||
+          item.slug === prefixed ||
+          item.path === `docs/${prefixed}.json`
+        ) {
+          return true;
+        }
+      }
+      return (
+        (item.type === "doc" || item.path.startsWith("docs/doc-")) &&
+        parseOrHashId(item.id.startsWith("doc-") ? item.id : `doc-${item.id}`, "doc-") === docId
+      );
+    });
+    if (matched?.path) return matched.path;
+    const fileStem = targetId.startsWith("doc-") ? targetId : `doc-${targetId}`;
+    return `docs/${fileStem}.json`;
+  }, [manifest, doc?.slug, doc?.backendUuid, docId]);
+
+  const { data: fileHistory } = useGetFileHistoryQuery(gitFilePath, { skip: !docId || isLoading });
 
   const isDocOnGit = useMemo(() => {
     if (!docId) return false;
-    const inManifest = manifest?.items?.some(
-      (item) => item.id === `doc-${docId}` || item.path === gitFilePath
-    );
+    const candidates = [doc?.slug, doc?.backendUuid, String(docId)].filter(Boolean) as string[];
+    const inManifest = manifest?.items?.some((item) => {
+      if (item.path === gitFilePath) return true;
+      return candidates.some((c) => {
+        const prefixed = c.startsWith("doc-") ? c : `doc-${c}`;
+        return item.id === c || item.id === prefixed || item.slug === c || item.slug === prefixed;
+      });
+    });
     const hasHistory = Array.isArray(fileHistory) && fileHistory.length > 0;
-    return Boolean(inManifest || hasHistory || gitFileStatus !== "untracked");
-  }, [manifest, fileHistory, docId, gitFilePath, gitFileStatus]);
+    return Boolean(inManifest || hasHistory);
+  }, [manifest, fileHistory, docId, doc?.slug, doc?.backendUuid, gitFilePath]);
 
   // Yjs real-time collaboration is only activated when document exists online on backend or git
-  const needsGitSync = Boolean(docId > 0 && isDocOnGit && !isSavedOnline);
+  const needsGitSync = Boolean(!isLoading && docId > 0 && isDocOnGit && !isSavedOnline);
   const { backendDocId: syncedBackendId, status: gitSyncStatus } = useGitDocSync(
     docId,
     gitFilePath,
@@ -164,7 +197,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   // Chỉ kích hoạt Yjs khi doc đã xác nhận có trên server (isSavedOnline) hoặc đã sync từ Git (gitSyncStatus === "synced")
   const isOnlineDoc = Boolean(docId > 0 && (isSavedOnline || gitSyncStatus === "synced"));
 
-  const { collaboration, isResolved: isCollabResolved } = useYjsCollaboration(
+  const { collaboration } = useYjsCollaboration(
     isOnlineDoc ? (syncedBackendId || doc?.backendUuid || docId) : -1,
     authUser,
     isOnlineDoc
@@ -740,7 +773,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
       )}
 
       <div className="doc-editor-content">
-        {effectivelyLoading || !isCollabResolved ? (
+        {effectivelyLoading ? (
           <Loading label="Đang tải tài liệu…" />
         ) : (
           <>
@@ -770,7 +803,11 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
               <DocEditorBody
                 key={`${docId}-${collaboration ? "collab" : "solo"}`}
                 docId={docId}
-                initialBlocks={initialBlocks as any}
+                initialBlocks={
+                  collaboration && editorRef.current?.document?.length
+                    ? editorRef.current.document
+                    : (initialBlocks as any)
+                }
                 onBlocksChange={handleBlocksChange}
                 onEditorReady={handleEditorReady}
                 collaboration={collaboration}

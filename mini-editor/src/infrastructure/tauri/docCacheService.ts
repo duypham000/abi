@@ -1,21 +1,5 @@
 
-function parseOrHashId(localId: string, prefix: string): number {
-  if (localId.startsWith(prefix)) {
-    const num = Number(localId.slice(prefix.length));
-    if (!isNaN(num) && num > 0) return num;
-  }
-  const digits = localId.replace(/\D/g, '');
-  if (digits.length > 0) {
-    const num = Number(digits.slice(-9));
-    if (!isNaN(num) && num > 0) return num;
-  }
-  let hash = 0;
-  for (let i = 0; i < localId.length; i++) {
-    hash = (hash << 5) - hash + localId.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash) || Date.now();
-}
+import { parseOrHashId } from "@/core/utils/idUtils";
 import type { DocDto, DocRequest } from "@/core/interfaces/docs";
 import type { PageResult } from "@/infrastructure/api/baseApi";
 import { getDb, isTauri, now } from "./sqliteDb";
@@ -25,6 +9,7 @@ export interface LocalDoc {
   local_id: string;
   backend_id: number | null;
   backend_uuid?: string | null;
+  slug?: string | null;
   title: string;
   content: string | null;
   metadata: string | null;
@@ -62,6 +47,7 @@ async function ensureDocSchema() {
   try { await db.execute(`ALTER TABLE docs ADD COLUMN series_id INTEGER`); } catch { /* already exists */ }
   try { await db.execute(`ALTER TABLE docs ADD COLUMN backend_uuid TEXT`); } catch { /* already exists */ }
   try { await db.execute(`ALTER TABLE docs ADD COLUMN content_hash TEXT`); } catch { /* already exists */ }
+  try { await db.execute(`ALTER TABLE docs ADD COLUMN slug TEXT`); } catch { /* already exists */ }
 }
 
 async function docDb() {
@@ -86,7 +72,38 @@ function rowToDocDto(r: LocalDoc): DocDto {
     createdBy: null,
     yjsState: r.yjs_state ?? null,
     backendUuid: r.backend_uuid ?? null,
+    slug: r.slug ?? null,
   };
+}
+
+const DOC_SELECT_COLS =
+  "local_id, backend_id, backend_uuid, slug, title, content, metadata, plain_text, yjs_state, series_id, status, last_synced, updated_at, is_dirty, content_hash";
+
+async function findLocalDocRow(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  id: number | string
+): Promise<LocalDoc | null> {
+  const numId = typeof id === "number" ? id : Number(id);
+  const strId = String(id);
+  const rows: LocalDoc[] = await db.select(
+    `SELECT ${DOC_SELECT_COLS} FROM docs WHERE backend_id = ? OR backend_uuid = ? OR local_id = ? OR local_id = ? LIMIT 1`,
+    [!isNaN(numId) && numId > 0 ? numId : -1, strId, strId, `doc-${strId}`]
+  );
+  if (rows.length > 0) return rows[0];
+
+  // Backfill legacy rows where UUID backend ids left backend_id = NULL
+  if (!isNaN(numId) && numId > 0) {
+    const nullRows: LocalDoc[] = await db.select(
+      `SELECT ${DOC_SELECT_COLS} FROM docs WHERE backend_id IS NULL`
+    );
+    const matched = nullRows.find((r) => parseOrHashId(r.local_id, "doc-") === numId);
+    if (matched) {
+      await db.execute("UPDATE docs SET backend_id = ? WHERE local_id = ?", [numId, matched.local_id]);
+      matched.backend_id = numId;
+      return matched;
+    }
+  }
+  return null;
 }
 
 // ─── SQLite Full CRUD API for Docs ─────────────────────────────────────────
@@ -96,9 +113,9 @@ export async function listDocsFromSqlite(params?: { page?: number; size?: number
   if (!db) return { items: [], total: 0, page: 0, pageSize: 20 };
   let rows: LocalDoc[];
   if (params?.seriesId) {
-    rows = await db.select("SELECT local_id, backend_id, title, content, metadata, plain_text, yjs_state, series_id, status, last_synced, updated_at, is_dirty FROM docs WHERE series_id = ? ORDER BY updated_at DESC", [params.seriesId]);
+    rows = await db.select(`SELECT ${DOC_SELECT_COLS} FROM docs WHERE series_id = ? ORDER BY updated_at DESC`, [params.seriesId]);
   } else {
-    rows = await db.select("SELECT local_id, backend_id, title, content, metadata, plain_text, yjs_state, series_id, status, last_synced, updated_at, is_dirty FROM docs ORDER BY updated_at DESC");
+    rows = await db.select(`SELECT ${DOC_SELECT_COLS} FROM docs ORDER BY updated_at DESC`);
   }
   const items = rows.map(rowToDocDto);
   return {
@@ -112,14 +129,9 @@ export async function listDocsFromSqlite(params?: { page?: number; size?: number
 export async function getDocFromSqlite(id: number | string): Promise<DocDto | null> {
   const db = await docDb();
   if (!db) return null;
-  const numId = typeof id === "number" ? id : Number(id);
-  const strId = String(id);
-  const rows: LocalDoc[] = await db.select(
-    "SELECT local_id, backend_id, title, content, metadata, plain_text, yjs_state, series_id, status, last_synced, updated_at, is_dirty FROM docs WHERE backend_id = ? OR local_id = ? OR local_id = ? LIMIT 1",
-    [numId || -1, strId, `doc-${strId}`]
-  );
-  if (!rows.length) return null;
-  return rowToDocDto(rows[0]);
+  const row = await findLocalDocRow(db, id);
+  if (!row) return null;
+  return rowToDocDto(row);
 }
 
 export async function createDocInSqlite(req: DocRequest): Promise<DocDto> {
@@ -165,55 +177,53 @@ export async function createDocInSqlite(req: DocRequest): Promise<DocDto> {
 export async function updateDocInSqlite(id: number, req: DocRequest): Promise<DocDto> {
   const db = await docDb();
   const ts = now();
-  const strId = String(id);
 
   if (db) {
-    if ("seriesId" in req) {
-      await db.execute(
-        `UPDATE docs SET
-           title = COALESCE(?, title),
-           content = COALESCE(?, content),
-           metadata = COALESCE(?, metadata),
-           plain_text = COALESCE(?, plain_text),
-           series_id = ?,
-           status = COALESCE(?, status),
-           updated_at = ?
-         WHERE backend_id = ? OR local_id = ? OR local_id = ?`,
-        [
-          req.title ?? null,
-          req.content ?? null,
-          req.metadata ?? null,
-          req.plainText ?? null,
-          req.seriesId ?? null,
-          req.status ?? null,
-          ts,
-          id,
-          strId,
-          `doc-${strId}`,
-        ]
-      );
-    } else {
-      await db.execute(
-        `UPDATE docs SET
-           title = COALESCE(?, title),
-           content = COALESCE(?, content),
-           metadata = COALESCE(?, metadata),
-           plain_text = COALESCE(?, plain_text),
-           status = COALESCE(?, status),
-           updated_at = ?
-         WHERE backend_id = ? OR local_id = ? OR local_id = ?`,
-        [
-          req.title ?? null,
-          req.content ?? null,
-          req.metadata ?? null,
-          req.plainText ?? null,
-          req.status ?? null,
-          ts,
-          id,
-          strId,
-          `doc-${strId}`,
-        ]
-      );
+    const existingRow = await findLocalDocRow(db, id);
+    if (existingRow) {
+      if ("seriesId" in req) {
+        await db.execute(
+          `UPDATE docs SET
+             title = COALESCE(?, title),
+             content = COALESCE(?, content),
+             metadata = COALESCE(?, metadata),
+             plain_text = COALESCE(?, plain_text),
+             series_id = ?,
+             status = COALESCE(?, status),
+             updated_at = ?
+           WHERE local_id = ?`,
+          [
+            req.title ?? null,
+            req.content ?? null,
+            req.metadata ?? null,
+            req.plainText ?? null,
+            req.seriesId ?? null,
+            req.status ?? null,
+            ts,
+            existingRow.local_id,
+          ]
+        );
+      } else {
+        await db.execute(
+          `UPDATE docs SET
+             title = COALESCE(?, title),
+             content = COALESCE(?, content),
+             metadata = COALESCE(?, metadata),
+             plain_text = COALESCE(?, plain_text),
+             status = COALESCE(?, status),
+             updated_at = ?
+           WHERE local_id = ?`,
+          [
+            req.title ?? null,
+            req.content ?? null,
+            req.metadata ?? null,
+            req.plainText ?? null,
+            req.status ?? null,
+            ts,
+            existingRow.local_id,
+          ]
+        );
+      }
     }
   }
 
@@ -235,12 +245,10 @@ export async function updateDocInSqlite(id: number, req: DocRequest): Promise<Do
 export async function deleteDocFromSqlite(id: number | string): Promise<void> {
   const db = await docDb();
   if (!db) return;
-  const numId = typeof id === "number" ? id : Number(id);
-  const strId = String(id);
-  await db.execute(
-    "DELETE FROM docs WHERE backend_id = ? OR local_id = ? OR local_id = ?",
-    [numId || -1, strId, `doc-${strId}`]
-  );
+  const row = await findLocalDocRow(db, id);
+  if (row) {
+    await db.execute("DELETE FROM docs WHERE local_id = ?", [row.local_id]);
+  }
 }
 
 export async function searchDocsInSqlite(q: string): Promise<DocDto[]> {
@@ -248,7 +256,7 @@ export async function searchDocsInSqlite(q: string): Promise<DocDto[]> {
   if (!db || !q.trim()) return [];
   const term = `%${q.trim()}%`;
   const rows: LocalDoc[] = await db.select(
-    "SELECT local_id, backend_id, title, content, metadata, plain_text, yjs_state, series_id, status, last_synced, updated_at, is_dirty FROM docs WHERE title LIKE ? OR plain_text LIKE ? OR content LIKE ? ORDER BY updated_at DESC",
+    `SELECT ${DOC_SELECT_COLS} FROM docs WHERE title LIKE ? OR plain_text LIKE ? OR content LIKE ? ORDER BY updated_at DESC`,
     [term, term, term]
   );
   return rows.map(rowToDocDto);
@@ -257,18 +265,8 @@ export async function searchDocsInSqlite(q: string): Promise<DocDto[]> {
 // ─── Legacy Cache / Draft exports ──────────────────────────────────────────
 
 export async function cacheDoc(doc: DocDto): Promise<void> {
-  await saveDocLocally(doc.id, doc, false);
-  const uuid = doc.backendUuid ?? (typeof (doc as any).id === "string" ? (doc as any).id : null);
-  if (uuid) {
-    const db = await docDb();
-    if (db) {
-      const strId = String(doc.id);
-      await db.execute(
-        "UPDATE docs SET backend_uuid = ? WHERE backend_id = ? OR local_id = ? OR local_id = ?",
-        [uuid, Number(doc.id) || -1, strId, `doc-${strId}`]
-      );
-    }
-  }
+  const uuid = doc.backendUuid ?? (typeof (doc as any).id === "string" && (doc as any).id.length > 10 ? (doc as any).id : null);
+  await saveDocLocally(doc.id, { ...doc, backendUuid: uuid }, false);
 }
 
 export async function getCachedDoc(backendId: number): Promise<DocDto | null> {
@@ -278,16 +276,11 @@ export async function getCachedDoc(backendId: number): Promise<DocDto | null> {
 export async function getCachedDocWithDirty(backendId: number): Promise<{ doc: DocDto | null; isDirty: boolean }> {
   const db = await docDb();
   if (!db) return { doc: null, isDirty: false };
-  const numId = typeof backendId === "number" ? backendId : Number(backendId);
-  const strId = String(backendId);
-  const rows: LocalDoc[] = await db.select(
-    "SELECT local_id, backend_id, title, content, metadata, plain_text, yjs_state, series_id, status, last_synced, updated_at, is_dirty FROM docs WHERE backend_id = ? OR local_id = ? OR local_id = ? LIMIT 1",
-    [numId || -1, strId, `doc-${strId}`]
-  );
-  if (!rows.length) return { doc: null, isDirty: false };
+  const row = await findLocalDocRow(db, backendId);
+  if (!row) return { doc: null, isDirty: false };
   return {
-    doc: rowToDocDto(rows[0]),
-    isDirty: rows[0].is_dirty === 1,
+    doc: rowToDocDto(row),
+    isDirty: row.is_dirty === 1,
   };
 }
 
@@ -297,20 +290,15 @@ export async function isContentChanged(
 ): Promise<boolean> {
   const db = await docDb();
   if (!db) return true;
-  const numId = typeof backendId === "number" ? backendId : Number(backendId);
-  const strId = String(backendId);
-  const rows: { content_hash: string | null }[] = await db.select(
-    "SELECT content_hash FROM docs WHERE backend_id = ? OR local_id = ? OR local_id = ? LIMIT 1",
-    [numId || -1, strId, `doc-${strId}`]
-  );
-  if (!rows.length || !rows[0].content_hash) return true;
+  const row = await findLocalDocRow(db, backendId);
+  if (!row || !row.content_hash) return true;
   const newHash = await computeDocHash(fields);
-  return rows[0].content_hash !== newHash;
+  return row.content_hash !== newHash;
 }
 
 export async function saveDocLocally(
   backendId: number | string,
-  fields: { title?: string; content?: string | null; metadata?: string | null; plainText?: string | null; status?: number; yjsState?: string | null; seriesId?: number | null; backendUuid?: string | null },
+  fields: { title?: string; content?: string | null; metadata?: string | null; plainText?: string | null; status?: number; yjsState?: string | null; seriesId?: number | null; backendUuid?: string | null; slug?: string | null },
   isDirty = false
 ): Promise<void> {
   const db = await docDb();
@@ -320,13 +308,11 @@ export async function saveDocLocally(
   const numId = typeof backendId === "number" ? backendId : Number(backendId);
   const hash = await computeDocHash({ title: fields.title, content: fields.content, metadata: fields.metadata });
   const uuid = fields.backendUuid ?? (typeof backendId === "string" && backendId.length > 10 ? backendId : null);
+  const slug = fields.slug ?? null;
 
-  const existing: { local_id: string }[] = await db.select(
-    "SELECT local_id FROM docs WHERE backend_id = ? OR local_id = ? OR local_id = ? LIMIT 1",
-    [numId || -1, strId, `doc-${strId}`]
-  );
+  const existing = await findLocalDocRow(db, backendId);
 
-  if (existing.length > 0) {
+  if (existing) {
     await db.execute(
       `UPDATE docs SET
          title = COALESCE(?, title),
@@ -334,6 +320,8 @@ export async function saveDocLocally(
          metadata = COALESCE(?, metadata),
          plain_text = COALESCE(?, plain_text),
          status = COALESCE(?, status),
+         backend_uuid = COALESCE(?, backend_uuid),
+         slug = COALESCE(?, slug),
          is_dirty = ?,
          content_hash = ?,
          updated_at = ?
@@ -344,20 +332,23 @@ export async function saveDocLocally(
         fields.metadata ?? null,
         fields.plainText ?? null,
         fields.status ?? null,
+        uuid,
+        slug,
         isDirty ? 1 : 0,
         hash,
         ts,
-        existing[0].local_id,
+        existing.local_id,
       ]
     );
   } else {
-    const localId = `doc-${strId}`;
+    const localId = strId.startsWith("doc-") ? strId : `doc-${strId}`;
+    const resolvedNumId = !isNaN(numId) && numId > 0 ? numId : parseOrHashId(localId, "doc-");
     await db.execute(
-      `INSERT INTO docs (local_id, backend_id, title, content, metadata, plain_text, status, last_synced, updated_at, is_dirty, backend_uuid, content_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO docs (local_id, backend_id, title, content, metadata, plain_text, status, last_synced, updated_at, is_dirty, backend_uuid, slug, content_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         localId,
-        !isNaN(numId) && numId > 0 ? numId : null,
+        resolvedNumId,
         fields.title || "Untitled",
         fields.content ?? null,
         fields.metadata ?? null,
@@ -367,6 +358,7 @@ export async function saveDocLocally(
         ts,
         isDirty ? 1 : 0,
         uuid,
+        slug,
         hash,
       ]
     );
@@ -376,12 +368,10 @@ export async function saveDocLocally(
 export async function markClean(backendId: number): Promise<void> {
   const db = await docDb();
   if (!db) return;
-  const numId = typeof backendId === "number" ? backendId : Number(backendId);
-  const strId = String(backendId);
-  await db.execute(
-    "UPDATE docs SET is_dirty = 0 WHERE backend_id = ? OR local_id = ? OR local_id = ?",
-    [numId || -1, strId, `doc-${strId}`]
-  );
+  const row = await findLocalDocRow(db, backendId);
+  if (row) {
+    await db.execute("UPDATE docs SET is_dirty = 0 WHERE local_id = ?", [row.local_id]);
+  }
 }
 
 export async function getPendingSync(): Promise<(LocalDoc & { backend_id: number })[]> {

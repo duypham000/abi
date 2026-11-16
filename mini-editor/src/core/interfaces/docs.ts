@@ -28,6 +28,7 @@ export interface DocDto {
   createdBy: { id: number; username: string; email: string } | null;
   yjsState?: string | null;
   backendUuid?: string | null;
+  slug?: string | null;
   preview?: string | null;
   highlights?: Record<string, string[]> | null;
 }
@@ -42,6 +43,7 @@ export interface DocRequest {
   status: DocStatus;
   yjsState?: string | null;
   backendUuid?: string | null;
+  slug?: string | null;
 }
 
 export interface DocMetadataProperty {

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { AuthUser } from "@/core/interfaces/auth";
 import type { AppDispatch } from "@/presentation/store";
+import { selectIsOnline } from "@/presentation/store/appSlice";
 import { docsApi } from "@/infrastructure/api/docsApi";
 
 function getDefaultWsUrl(): string {
@@ -81,11 +82,12 @@ export function useYjsCollaboration(
   enabled: boolean = true
 ): UseYjsCollaborationResult {
   const dispatch = useDispatch<AppDispatch>();
+  const isOnline = useSelector(selectIsOnline);
   const [isConnected, setIsConnected] = useState(false);
   const [collaborators, setCollaborators] = useState<CollaboratorUser[]>([]);
   const [providerState, setProviderState] = useState<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
 
-  const skip = !enabled || isInvalidDocId(docId);
+  const skip = !enabled || isInvalidDocId(docId) || !isOnline;
   const attemptKey = `${docId}|${user?.userId ?? ""}`;
   const [resolvedKey, setResolvedKey] = useState<string | null>(null);
   const isResolved = skip || resolvedKey === attemptKey;
@@ -154,8 +156,7 @@ export function useYjsCollaboration(
           serverUrl = res.url;
         }
       } catch (e) {
-        console.warn("[Yjs] token fetch failed — falling back to solo/local mode", e);
-        // Offline / token unavailable: fall back immediately to solo mode (cached SQLite content).
+        console.warn("[Yjs] token fetch failed — staying in solo/local mode", e);
         if (!cancelled) setResolvedKey(attemptKey);
         return;
       }
@@ -166,6 +167,7 @@ export function useYjsCollaboration(
       provider = new WebsocketProvider(serverUrl, roomName, ydoc, {
         params: { yauth: token },
       });
+      providerRef.current = { ydoc, provider };
 
       provider.on("status", ({ status }: { status: string }) => {
         setIsConnected(status === "connected");
@@ -180,12 +182,18 @@ export function useYjsCollaboration(
         setResolvedKey(attemptKey);
       };
 
-      provider.on("sync", (isSynced: boolean) => {
-        if (isSynced) markResolved();
-      });
-      if (provider.synced) markResolved();
+      const activateCollab = () => {
+        if (cancelled || !ydoc || !provider) return;
+        setProviderState({ ydoc, provider });
+        markResolved();
+      };
 
-      // Safety net: never block the editor indefinitely if sync stalls (server down, cold start).
+      provider.on("sync", (isSynced: boolean) => {
+        if (isSynced) activateCollab();
+      });
+      if (provider.synced) activateCollab();
+
+      // Safety net for isResolved status when running in background
       syncFallbackTimer = setTimeout(markResolved, 4000);
 
       provider.on("connection-close", () => {
@@ -203,9 +211,6 @@ export function useYjsCollaboration(
 
       provider.awareness.on("change", updateCollaborators);
       scheduleRefresh(expiresIn);
-
-      providerRef.current = { ydoc, provider };
-      setProviderState({ ydoc, provider });
     })();
 
     return () => {

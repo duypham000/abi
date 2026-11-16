@@ -3,6 +3,7 @@ import { useDispatch } from "react-redux";
 import type { AppDispatch } from "@/presentation/store";
 import { docsApi } from "@/infrastructure/api/docsApi";
 import { cacheDoc } from "@/infrastructure/tauri/docCacheService";
+import { parseOrHashId } from "@/core/utils/idUtils";
 import {
   useGetGithubUserQuery,
   useGetGitDiffQuery,
@@ -245,11 +246,10 @@ export function GitPanel() {
       }
     }
     if (item.type === "doc" || item.path.startsWith("docs/doc-")) {
-      const numericId = Number(item.id.replace("doc-", ""));
-      if (!isNaN(numericId)) {
-        openPanel(PANEL_TYPES.DOC_EDITOR, { docId: numericId }, { title: item.title, singleton: true });
-        return;
-      }
+      const prefixed = item.id.startsWith("doc-") ? item.id : `doc-${item.id}`;
+      const numericId = parseOrHashId(prefixed, "doc-");
+      openPanel(PANEL_TYPES.DOC_EDITOR, { id: numericId }, { title: item.title, singleton: true });
+      return;
     }
     if (item.type === "canvas" || item.path.startsWith("canvases/canvas-")) {
       const canvasId = item.id.replace("canvas-", "");
