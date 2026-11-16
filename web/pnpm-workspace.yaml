@@ -1,0 +1,12 @@
+packages:
+  - "."
+
+allowBuilds:
+  esbuild: true
+  "@parcel/watcher": true
+
+overrides:
+  prosemirror-model: 1.25.9
+  prosemirror-state: 1.4.4
+  prosemirror-view: 1.41.9
+  prosemirror-transform: 1.12.0

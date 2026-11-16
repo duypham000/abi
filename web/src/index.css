@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+/*
+ * Mobile light-lock gate. By default Tailwind v4 maps `dark:` to
+ * `@media (prefers-color-scheme: dark)`. We keep that on desktop but suppress it
+ * under `html.force-light` (added only on mobile — see main.tsx). `:where()` keeps
+ * specificity neutral so desktop's compiled `dark:` rules behave exactly as before.
+ */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(html:not(.force-light) *) {
+      @slot;
+    }
+  }
+}
+
+/*
+ * Safe-area insets — single source of truth for notch / status bar / home
+ * indicator / curved-corner padding. Resolve to 0px on desktop, so every
+ * consumer is a no-op outside real mobile WebViews. Requires
+ * `viewport-fit=cover` on the viewport meta (see index.html).
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* Tailwind v4 utilities for use directly in TSX className. */
+@utility pt-safe {
+  padding-top: var(--safe-top);
+}
+@utility pb-safe {
+  padding-bottom: var(--safe-bottom);
+}
+@utility pl-safe {
+  padding-left: var(--safe-left);
+}
+@utility pr-safe {
+  padding-right: var(--safe-right);
+}
+@utility p-safe {
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
+/* ── Global scrollbar — 4 px, auto-hide ──────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s;
+
+  &:hover,
+  &:focus-within {
+    scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+  }
+}
+
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+
+*:hover::-webkit-scrollbar-thumb,
+*:focus-within::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+/* ── Hide scrollbars while keeping scroll behaviour (used by the search overlay). */
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@theme {
+  --animate-fade-in-up: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-fade-in: fade-in 0.4s ease-out forwards;
+  --animate-scale-up: scale-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes scale-up {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+}

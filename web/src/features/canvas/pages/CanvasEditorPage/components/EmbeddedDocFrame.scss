@@ -1,0 +1,15 @@
+.embedded-doc-frame {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 8px 12px 16px;
+  overflow: visible;
+
+  &--loading {
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted, #71717a);
+    font-size: 0.875rem;
+    padding: 16px;
+  }
+}

@@ -1,0 +1,1 @@
+export { DocProperties } from "./DocProperties";

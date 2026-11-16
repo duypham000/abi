@@ -1,0 +1,31 @@
+.auth-bg {
+  background-color: #74b9ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.force-light) .auth-bg {
+    background-color: #0b0f11;
+  }
+}
+
+.auth-card-figma {
+  width: 100%;
+  max-width: 404px;
+  background-color: #ffffff;
+  border: 1px solid #ececed;
+  border-radius: 16px;
+  padding: 24px 20px;
+}
+
+@media (min-width: 480px) {
+  .auth-card-figma {
+    padding: 24px 32px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.force-light) .auth-card-figma {
+    background-color: #12181b;
+    border-color: #1f272a;
+  }
+}
