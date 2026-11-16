@@ -15,7 +15,7 @@ local = []
 
 [lib]
 name = "tomo_ui_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
 
 # Balance release size vs. build time. Thin LTO + parallel codegen build much
 # faster than fat LTO + codegen-units=1, for only a small size increase (~10%).
