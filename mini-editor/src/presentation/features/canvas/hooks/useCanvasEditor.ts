@@ -40,13 +40,15 @@ function parseScene(raw: string | null | undefined): CanvasScene {
 
 export function useCanvasEditor(id: number, autoSave = true) {
   const dispatch = useDispatch<AppDispatch>();
-  const { data, isLoading } = useGetCanvasByIdQuery(id);
+  const isValidId = Number.isFinite(id) && id > 0;
+  const { data, isLoading, isError } = useGetCanvasByIdQuery(id, { skip: !isValidId });
   const [updateCanvas] = useUpdateCanvasMutation();
   const [createCanvas] = useCreateCanvasMutation();
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
   const canvas = data ?? null;
+  const notFound = !isValidId || (!isLoading && isError && !canvas);
   const lastSavedRef = useRef<string>("");
   const latestSceneRef = useRef<CanvasScene>(EMPTY_SCENE);
   const autoSaveRef = useRef(autoSave);
@@ -56,18 +58,13 @@ export function useCanvasEditor(id: number, autoSave = true) {
 
   const initialScene = useMemo<CanvasScene | null>(() => {
     if (!canvas) {
-      if (!isLoading) {
-        latestSceneRef.current = EMPTY_SCENE;
-        lastSavedRef.current = JSON.stringify(EMPTY_SCENE);
-        return EMPTY_SCENE;
-      }
       return null;
     }
     const parsed = parseScene(canvas.scene);
     latestSceneRef.current = parsed;
     lastSavedRef.current = canvas.scene ?? "";
     return parsed;
-  }, [canvas?.id, isLoading]);
+  }, [canvas?.id, canvas?.scene]);
 
   useEffect(() => {
     if (!canvas) return;
@@ -101,9 +98,7 @@ export function useCanvasEditor(id: number, autoSave = true) {
         status: (canvas?.status ?? 1) as 0 | 1,
       };
 
-      const result = canvas
-        ? await updateCanvas({ id, body: payload })
-        : await createCanvas(payload);
+      const result = await updateCanvas({ id, body: payload });
 
       if ("error" in result) {
         setSaveStatus("error");
@@ -113,7 +108,21 @@ export function useCanvasEditor(id: number, autoSave = true) {
         successTimerRef.current = setTimeout(() => setSaveStatus("idle"), SUCCESS_RESET_DELAY);
       }
     },
-    [canvas, id, updateCanvas, createCanvas]
+    [canvas, id, updateCanvas]
+  );
+
+  const createNewCanvas = useCallback(
+    async (title = "Untitled Canvas") => {
+      const payload = {
+        title,
+        scene: JSON.stringify(EMPTY_SCENE),
+        metadata: null,
+        lastSync: new Date().toISOString(),
+        status: 1 as const,
+      };
+      return await createCanvas(payload).unwrap();
+    },
+    [createCanvas]
   );
 
   const handleSceneChange = useCallback(
@@ -157,10 +166,12 @@ export function useCanvasEditor(id: number, autoSave = true) {
   return {
     canvas,
     isLoading,
+    notFound,
     saveStatus,
     initialScene,
     handleSceneChange,
     triggerSave,
     getLatestScene,
+    createNewCanvas,
   };
 }

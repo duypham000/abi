@@ -50,7 +50,6 @@ export default function DocsPage({ panelMode }: DocsPageProps) {
   );
 
   const displayDocs = debouncedQuery ? (searchResults ?? []) : docs;
-  // Drafts are local-only; search hits the backend, so hide them while searching.
   const isLoadingDisplay = debouncedQuery ? isSearching : isLoading;
 
   useEffect(() => {

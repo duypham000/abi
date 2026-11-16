@@ -87,11 +87,12 @@ export function useCanvasYjsCollaboration(
   const dispatch = useDispatch<AppDispatch>();
   const [isConnected, setIsConnected] = useState(false);
   const collabRef = useRef<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
-  const [isResolved, setIsResolved] = useState(canvasId < 0);
+  const isInvalidCanvasId = !canvasId || canvasId <= 0;
+  const [isResolved, setIsResolved] = useState(isInvalidCanvasId);
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    if (canvasId < 0) {
+    if (isInvalidCanvasId) {
       setIsResolved(true);
       return;
     }
@@ -139,7 +140,6 @@ export function useCanvasYjsCollaboration(
         const res = await fetchToken();
         token = res.token;
         expiresIn = res.expiresIn || 86400;
-        if (res.url) serverUrl = res.url;
         // Only let backend override if client has no explicit WS URL configured in .env
         if (res.url && !import.meta.env.VITE_NODE_WS_URL && !import.meta.env.VITE_YJS_SERVER_URL) {
           serverUrl = res.url;

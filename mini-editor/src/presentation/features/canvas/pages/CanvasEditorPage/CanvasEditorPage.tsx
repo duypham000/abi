@@ -10,7 +10,7 @@ import {
   SaveOutlined,
   CloudUploadOutlined,
 } from "@ant-design/icons";
-import { Button, Tooltip, message } from "antd";
+import { Button, Tooltip, message, Empty } from "antd";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
 import { nanoid } from "nanoid";
@@ -51,8 +51,8 @@ interface CanvasEditorPageProps {
 
 export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEditorPageProps) {
   const params = useParams<{ id: string }>();
-  const rawId = canvasIdProp ?? (params.id ? Number(params.id) : 1);
-  const canvasId = isNaN(rawId) ? 1 : rawId;
+  const rawId = canvasIdProp ?? (params.id ? Number(params.id) : 0);
+  const canvasId = isNaN(rawId) ? 0 : rawId;
   const navigate = useNavigate();
   const { openPanel } = useGoldenLayout();
   const { theme } = useSelector((state: RootState) => state.app);
@@ -60,11 +60,13 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   const {
     canvas,
     isLoading,
+    notFound,
     saveStatus,
     initialScene,
     handleSceneChange,
     triggerSave,
     getLatestScene,
+    createNewCanvas,
   } = useCanvasEditor(canvasId);
   const isTouch = useTouchDevice();
   const [canvasMode, setCanvasMode] = useState<"navigate" | "edit">(isTouch ? "navigate" : "edit");
@@ -73,9 +75,9 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
     setCanvasMode(isTouch ? "navigate" : "edit");
   }, [isTouch]);
 
+  const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const [api, setApiState] = useState<ExcalidrawImperativeAPI | null>(null);
   const setExcalidrawAPIStore = useCanvasUiStore((s) => s.setExcalidrawAPI);
-  const [excalidrawAPIState, _setExcalidrawAPIState] = useState<ExcalidrawImperativeAPI | null>(null);
-  const api = excalidrawAPIState;
 
   const authUser = useSelector((state: RootState) => state.auth.user);
   const { collaboration, isResolved } = useCanvasYjsCollaboration(
@@ -112,10 +114,11 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   }, [manifest, fileHistory, canvasId, gitFilePath, gitFileStatus]);
 
   const getCurrentScene = useCallback((): CanvasScene => {
-    if (api) {
-      const elements = api.getSceneElements();
-      const appState = api.getAppState() as Record<string, unknown>;
-      const files = api.getFiles() as Record<string, unknown>;
+    const activeApi = excalidrawAPIRef.current;
+    if (activeApi) {
+      const elements = activeApi.getSceneElements();
+      const appState = activeApi.getAppState() as Record<string, unknown>;
+      const files = activeApi.getFiles() as Record<string, unknown>;
       return {
         elements,
         appState: sanitizeAppState(appState),
@@ -123,7 +126,7 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
       };
     }
     return getLatestScene();
-  }, [api, getLatestScene]);
+  }, [getLatestScene]);
 
   const checkCurrentFileStatus = useCallback(
     async (currentScene?: CanvasScene, currentTitle?: string) => {
@@ -296,9 +299,12 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
     };
   }, [isAltHeld]);
 
+  const lastElementsSigRef = useRef<string>("");
+
   const setExcalidrawAPI = useCallback(
     (excalidrawApi: ExcalidrawImperativeAPI) => {
-      _setExcalidrawAPIState(excalidrawApi);
+      excalidrawAPIRef.current = excalidrawApi;
+      setApiState(excalidrawApi);
       setExcalidrawAPIStore(excalidrawApi);
     },
     [setExcalidrawAPIStore]
@@ -306,8 +312,9 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
 
   const updateElementById = useCallback(
     (elementId: string, patch: (el: any) => Partial<any>) => {
-      if (!api) return;
-      const next = api.getSceneElements().map((el: any) => {
+      const activeApi = excalidrawAPIRef.current;
+      if (!activeApi) return;
+      const next = activeApi.getSceneElements().map((el: any) => {
         if (el.id !== elementId) return el;
         const update = patch(el);
         return {
@@ -318,7 +325,7 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
           updated: Date.now(),
         };
       });
-      api.updateScene({ elements: next as any });
+      activeApi.updateScene({ elements: next as any });
     },
     []
   );
@@ -326,6 +333,10 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   const handleChange = useCallback(
     (elements: readonly any[], appState: any, files: any) => {
       handleSceneChange(elements, appState, files);
+
+      // Keep docs picker sidebar open state in sync if closed from Excalidraw UI
+      const isDocsOpen = appState?.openSidebar?.name === "docs-picker";
+      setDocsSidebarOpen((p) => (p === isDocsOpen ? p : isDocsOpen));
 
       // Sync local drawing changes to Yjs map
       if (collaboration && collaboration.isConnected) {
@@ -352,14 +363,19 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
         }, "local-draw");
       }
 
-      if (checkStatusTimerRef.current) clearTimeout(checkStatusTimerRef.current);
-      checkStatusTimerRef.current = setTimeout(() => {
-        checkCurrentFileStatus({
-          elements,
-          appState: sanitizeAppState(appState),
-          files,
-        });
-      }, 1000);
+      // Avoid re-checking Git status on selection, cursor moves, or panning
+      const sig = `${elements.length}:${elements.reduce((acc, el: any) => acc + (el.version ?? 0), 0)}`;
+      if (sig !== lastElementsSigRef.current) {
+        lastElementsSigRef.current = sig;
+        if (checkStatusTimerRef.current) clearTimeout(checkStatusTimerRef.current);
+        checkStatusTimerRef.current = setTimeout(() => {
+          checkCurrentFileStatus({
+            elements,
+            appState: sanitizeAppState(appState),
+            files,
+          });
+        }, 1000);
+      }
 
       const knownDims = knownDimsRef.current;
       const liveIds = new Set<string>();
@@ -446,17 +462,18 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   );
 
   const insertEmbeddable = useCallback((link: string, dropPoint?: { clientX: number; clientY: number }) => {
-    if (!api) return;
+    const activeApi = excalidrawAPIRef.current;
+    if (!activeApi) return;
 
     let x = 100;
     let y = 100;
 
     if (dropPoint) {
-      const appState = api.getAppState() as any;
+      const appState = activeApi.getAppState() as any;
       x = (dropPoint.clientX - appState.offsetLeft - appState.scrollX) / appState.zoom.value;
       y = (dropPoint.clientY - appState.offsetTop - appState.scrollY) / appState.zoom.value;
     } else {
-      const appState = api.getAppState() as any;
+      const appState = activeApi.getAppState() as any;
       x = (-appState.scrollX + appState.width / 2) / appState.zoom.value - EMBED_WIDTH / 2;
       y = (-appState.scrollY + appState.height / 2) / appState.zoom.value - EMBED_HEIGHT / 2;
     }
@@ -490,8 +507,8 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
       customData: { isCollapsed: false },
     };
 
-    const currentElements = api.getSceneElements();
-    api.updateScene({ elements: [...currentElements, newElement as any] });
+    const currentElements = activeApi.getSceneElements();
+    activeApi.updateScene({ elements: [...currentElements, newElement as any] });
   }, []);
 
   const handleInsertDoc = useCallback(
@@ -608,13 +625,14 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
 
   const handleToolbarDelete = useCallback(() => {
     if (!toolbarSnapshot) return;
-    if (!api) return;
-    const next = api.getSceneElements().map((el: any) =>
+    const activeApi = excalidrawAPIRef.current;
+    if (!activeApi) return;
+    const next = activeApi.getSceneElements().map((el: any) =>
       el.id === toolbarSnapshot.elementId
         ? { ...el, isDeleted: true, version: (el.version ?? 0) + 1, updated: Date.now() }
         : el
     );
-    api.updateScene({ elements: next as any });
+    activeApi.updateScene({ elements: next as any });
   }, [toolbarSnapshot]);
 
   const handleToolbarUnlink = useCallback(() => {
@@ -644,12 +662,14 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   const [docsSidebarOpen, setDocsSidebarOpen] = useState(false);
 
   const handleToggleDocsSidebar = useCallback(() => {
-    setDocsSidebarOpen((prev) => !prev);
+    const opened = excalidrawAPIRef.current?.toggleSidebar({ name: "docs-picker" });
+    setDocsSidebarOpen(Boolean(opened));
   }, []);
 
   const handleSidebarSelect = useCallback(
     (docId: number) => {
       handleInsertDoc(docId);
+      excalidrawAPIRef.current?.toggleSidebar({ name: "docs-picker", force: false });
       setDocsSidebarOpen(false);
     },
     [handleInsertDoc]
@@ -716,6 +736,44 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
       </button>
     </div>
   ), [docsSidebarOpen, handleToggleDocsSidebar, handleAddNote]);
+
+  if (notFound) {
+    const notFoundContent = (
+      <main
+        className="dashboard-main canvas-editor-loading"
+        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}
+      >
+        <Empty description="Canvas không tồn tại hoặc đã bị xóa" />
+        <Button
+          type="primary"
+          onClick={async () => {
+            try {
+              const newCanvas = await createNewCanvas();
+              if (panelMode) {
+                openPanel(PANEL_TYPES.CANVAS_EDITOR, { id: newCanvas.id }, { title: newCanvas.title || "Canvas" });
+              } else {
+                navigate(`/canvas/${newCanvas.id}`);
+              }
+            } catch (e) {
+              message.error("Không thể tạo canvas mới");
+            }
+          }}
+        >
+          Tạo canvas mới
+        </Button>
+      </main>
+    );
+    if (panelMode) return notFoundContent;
+    return (
+      <div className={`dashboard-layout theme-${theme}`}>
+        <AppBar variant="dashboard" />
+        <div className="dashboard-body">
+          <Sidebar />
+          {notFoundContent}
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || !initialScene || !isResolved) {
     const loadingContent = (

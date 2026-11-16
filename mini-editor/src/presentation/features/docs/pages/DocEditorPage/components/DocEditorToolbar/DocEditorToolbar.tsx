@@ -213,12 +213,12 @@ export function DocEditorToolbar({
     gitIcon = <CloudUploadOutlined className="toolbar-btn-icon" />;
     gitClass = "toolbar-git-btn--untracked";
     gitTooltip = "Save and Push lên GitHub (Ctrl+Shift+S)";
-    isGitDisabled = Boolean(isDraft && saveStatus === "idle");
+    isGitDisabled = false;
   } else if (hasGitChanges || gitFileStatus === "modified") {
     gitIcon = <BranchesOutlined className="toolbar-btn-icon" />;
     gitClass = "toolbar-git-btn--modified";
     gitTooltip = "Save and Commit lên Git (Ctrl+Shift+S)";
-    isGitDisabled = Boolean(isDraft && saveStatus === "idle");
+    isGitDisabled = false;
   } else {
     // Clean / No changes -> disable commit button as requested
     gitIcon = <BranchesOutlined className="toolbar-btn-icon" />;
@@ -296,10 +296,10 @@ export function DocEditorToolbar({
       label: hasConflict
         ? "Resolve Git Conflict"
         : remoteUpdated
-        ? "Pull changes from Git"
-        : isOnGit
-        ? "Commit nhanh lên Git"
-        : "Push to GitHub",
+          ? "Pull changes from Git"
+          : isOnGit
+            ? "Commit nhanh lên Git"
+            : "Push to GitHub",
       icon: gitIcon,
       disabled: isGitDisabled,
       onClick: handleGitAction,

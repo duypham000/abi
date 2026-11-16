@@ -40,6 +40,13 @@ export interface PopupEditorSettings {
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+const MINI_WIDTH = 320;
+const MINI_HEIGHT = 56;
+const NORMAL_WIDTH = 700;
+const NORMAL_HEIGHT = 520;
+const MIN_NORMAL_WIDTH = 400;
+const MIN_NORMAL_HEIGHT = 280;
+
 const EXIT_DURATION = 200;
 
 function useSaveStatusDisplay(saveStatus: SaveStatus) {
@@ -73,6 +80,8 @@ function useSaveStatusDisplay(saveStatus: SaveStatus) {
 
 interface DocPopupAppBarProps {
   docTitle: string;
+  isMini: boolean;
+  onToggleMini: () => void;
   saveStatus: SaveStatus;
   isDraft?: boolean;
   isDirty: boolean;
@@ -101,6 +110,8 @@ interface DocPopupAppBarProps {
 
 export function DocPopupAppBar({
   docTitle,
+  isMini,
+  onToggleMini,
   saveStatus,
   isDraft,
   isDirty,
@@ -174,6 +185,27 @@ export function DocPopupAppBar({
     await getCurrentWindow().setAlwaysOnTop(next);
     setIsAlwaysOnTop(next);
   }, [isAlwaysOnTop]);
+
+  // Collapse row 2 when switching to mini mode
+  useEffect(() => {
+    if (isMini) setIsExpanded(false);
+  }, [isMini]);
+
+  const toggleMini = useCallback(async () => {
+    if (!isTauri()) return;
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    const { LogicalSize } = await import("@tauri-apps/api/dpi");
+    const win = getCurrentWindow();
+    if (isMini) {
+      await win.setSize(new LogicalSize(NORMAL_WIDTH, NORMAL_HEIGHT));
+      await win.setResizable(true);
+      await win.setMinSize(new LogicalSize(MIN_NORMAL_WIDTH, MIN_NORMAL_HEIGHT));
+    } else {
+      await win.setResizable(false);
+      await win.setSize(new LogicalSize(MINI_WIDTH, MINI_HEIGHT));
+    }
+    onToggleMini();
+  }, [isMini, onToggleMini]);
 
   const menuItems: MenuProps["items"] = [
     {
@@ -393,6 +425,13 @@ export function DocPopupAppBar({
             title={isAlwaysOnTop ? "Unpin" : "Pin (always on top)"}
           >
             {isAlwaysOnTop ? <PinFilledIcon /> : <PinIcon />}
+          </button>
+          <button
+            className="doc-popup-btn"
+            onClick={toggleMini}
+            title={isMini ? "Restore compact" : "Compact mode"}
+          >
+            {isMini ? <MaximizeIcon /> : <MinimizeIcon />}
           </button>
           <button
             className="doc-popup-btn"

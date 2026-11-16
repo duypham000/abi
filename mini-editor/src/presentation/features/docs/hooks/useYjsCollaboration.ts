@@ -84,18 +84,18 @@ export function useYjsCollaboration(
   const [isConnected, setIsConnected] = useState(false);
   const [collaborators, setCollaborators] = useState<CollaboratorUser[]>([]);
   const [providerState, setProviderState] = useState<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
-  // Drafts (docId < 0 or !enabled) have no collaboration, so they're resolved immediately in solo mode.
-  const [isResolved, setIsResolved] = useState(!enabled || isInvalidDocId(docId));
+
+  const skip = !enabled || isInvalidDocId(docId);
+  const attemptKey = `${docId}|${user?.userId ?? ""}`;
+  const [resolvedKey, setResolvedKey] = useState<string | null>(null);
+  const isResolved = skip || resolvedKey === attemptKey;
 
   const providerRef = useRef<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
 
   useEffect(() => {
-    if (!enabled || isInvalidDocId(docId)) {
-      setIsResolved(true);
+    if (skip) {
       return;
     }
-    // New doc: gate the editor until this attempt settles (success or failure).
-    setIsResolved(false);
 
     let cancelled = false;
     let ydoc: Y.Doc | null = null;
@@ -156,7 +156,7 @@ export function useYjsCollaboration(
       } catch (e) {
         console.warn("[Yjs] token fetch failed — falling back to solo/local mode", e);
         // Offline / token unavailable: fall back immediately to solo mode (cached SQLite content).
-        if (!cancelled) setIsResolved(true);
+        if (!cancelled) setResolvedKey(attemptKey);
         return;
       }
       if (cancelled) return;
@@ -177,7 +177,7 @@ export function useYjsCollaboration(
           clearTimeout(syncFallbackTimer);
           syncFallbackTimer = null;
         }
-        setIsResolved(true);
+        setResolvedKey(attemptKey);
       };
 
       provider.on("sync", (isSynced: boolean) => {
@@ -221,8 +221,9 @@ export function useYjsCollaboration(
       setProviderState(null);
       setIsConnected(false);
       setCollaborators([]);
+      setResolvedKey(null);
     };
-  }, [docId, user?.userId, dispatch, enabled]);
+  }, [docId, user?.userId, dispatch, enabled, skip, attemptKey]);
 
   const currentUser = useMemo<CollaboratorUser | null>(() => {
     if (!user) return null;
