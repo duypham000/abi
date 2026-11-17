@@ -31,7 +31,7 @@ export default function DocsPage() {
 
   const { docs, isLoading, isDeleting, deleteDoc } = useDocs(
     0,
-    50,
+    20,
     selectedSeriesId
   );
 

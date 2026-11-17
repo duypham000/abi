@@ -3,12 +3,27 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 export default defineConfig(function (_a) {
-    var _b;
     var mode = _a.mode;
     var env = loadEnv(mode, process.cwd(), "");
-    var target = (_b = env.VITE_PROXY_TARGET) !== null && _b !== void 0 ? _b : "https://api.tomoo.uk";
-    var wsTarget = target.replace(/^http/, "ws");
-    var secure = target.startsWith("https");
+    var goApiTarget = env.VITE_GO_API_URL || env.VITE_PROXY_TARGET || "http://api.tomoo.uk/go";
+    var nodeApiTarget = env.VITE_NODE_API_URL || "http://api.tomoo.uk/node";
+    var wsTarget = (env.VITE_NODE_WS_URL || "wss://ws.tomoo.uk").replace(/\/ws\/yjs\/?$/, "").replace(/\/+$/, "");
+    var parseTarget = function (urlStr) {
+        try {
+            var u = new URL(urlStr);
+            return {
+                origin: u.origin,
+                basePath: u.pathname.replace(/\/+$/, ""),
+            };
+        }
+        catch (_a) {
+            return { origin: urlStr, basePath: "" };
+        }
+    };
+    var goParsed = parseTarget(goApiTarget);
+    var nodeParsed = parseTarget(nodeApiTarget);
+    var secure = false;
+    var changeOrigin = true;
     return {
         plugins: [react(), tailwindcss()],
         resolve: {
@@ -25,15 +40,28 @@ export default defineConfig(function (_a) {
         server: {
             port: 5173,
             proxy: {
+                "/api/v1/translate": {
+                    target: nodeParsed.origin,
+                    rewrite: function (p) { return (nodeParsed.basePath ? "".concat(nodeParsed.basePath).concat(p) : p); },
+                    changeOrigin: changeOrigin,
+                    secure: secure,
+                },
                 "/api": {
-                    target: target,
-                    changeOrigin: true,
+                    target: goParsed.origin,
+                    rewrite: function (p) { return (goParsed.basePath ? "".concat(goParsed.basePath).concat(p) : p); },
+                    changeOrigin: changeOrigin,
+                    secure: secure,
+                },
+                "/actuator": {
+                    target: goParsed.origin,
+                    rewrite: function (p) { return (goParsed.basePath ? "".concat(goParsed.basePath).concat(p) : p); },
+                    changeOrigin: changeOrigin,
                     secure: secure,
                 },
                 "/ws/yjs": {
                     target: wsTarget,
                     ws: true,
-                    changeOrigin: true,
+                    changeOrigin: changeOrigin,
                     secure: secure,
                 },
             },

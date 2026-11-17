@@ -55,7 +55,12 @@ export const canvasApi = baseApi.injectEndpoints({
       providesTags: ["Canvas"],
     }),
     getYjsCanvasToken: builder.query<{ token: string; url: string; expiresIn: number }, number>({
-      query: (canvasId) => ({ url: "/base/yjs/token", params: { canvasId } }),
+      query: (canvasId) => ({
+        url: "/base/yjs/auth/token",
+        method: "POST",
+        body: { canvas_id: String(canvasId), access_mode: "write" },
+      }),
+      transformResponse: (res: any) => res.data ?? res,
     }),
   }),
   overrideExisting: false,

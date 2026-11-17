@@ -6,7 +6,20 @@ import { AuthUser } from "@/core/interfaces/auth";
 import type { AppDispatch } from "@/store";
 import { docsApi } from "@/infrastructure/api/docsApi";
 
-const ENV_SERVER_URL = import.meta.env.VITE_YJS_SERVER_URL ?? "ws://127.0.0.1/ws/yjs";
+function getDefaultWsUrl(): string {
+  if (import.meta.env.VITE_YJS_SERVER_URL) {
+    return import.meta.env.VITE_YJS_SERVER_URL;
+  }
+  if (import.meta.env.VITE_NODE_WS_URL) {
+    const wsBase = (import.meta.env.VITE_NODE_WS_URL as string).replace(/\/+$/, "");
+    return `${wsBase}/ws/yjs`;
+  }
+  if (typeof window !== "undefined" && window.location?.host) {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}//${window.location.host}/ws/yjs`;
+  }
+  return "ws://127.0.0.1:1234/ws/yjs";
+}
 
 // Refresh the yauth token this many ms before it expires.
 const REFRESH_LEAD_MS = 60_000;
@@ -15,7 +28,7 @@ const MIN_REFRESH_MS = 5_000;
 export interface CollaboratorUser {
   name: string;
   color: string;
-  userId: number;
+  userId: string | number;
 }
 
 export interface YjsCollaboration {
@@ -30,41 +43,54 @@ export interface UseYjsCollaborationResult {
   /** Null until the provider is built; stays null when offline/draft (solo mode). */
   collaboration: YjsCollaboration | null;
   /**
-   * True once the collaboration attempt has settled — provider created, or
-   * token fetch failed (offline), or draft mode. Consumers must wait for this
+   * True once the collaboration attempt has settled — provider created and synced,
+   * or token fetch failed (offline/solo), or draft mode. Consumers must wait for this
    * before mounting the editor, otherwise the editor may be created in solo
    * mode while collaboration is still loading (race → empty content).
    */
   isResolved: boolean;
 }
 
-function hashColor(userId: number): string {
+function hashColor(userId: string | number): string {
+  const str = String(userId);
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
   const COLORS = [
     "#e03131", "#c2255c", "#9c36b5", "#6741d9", "#3b5bdb",
     "#1971c2", "#0c8599", "#2f9e44", "#e8590c", "#f08c00",
   ];
-  return COLORS[userId % COLORS.length];
+  return COLORS[Math.abs(hash) % COLORS.length];
 }
 
-export function useYjsCollaboration(docId: number, user: AuthUser | null): UseYjsCollaborationResult {
+function isInvalidDocId(id: number | string): boolean {
+  if (typeof id === "number") return id < 0;
+  return !id || id === "-1" || id === "0";
+}
+
+export function useYjsCollaboration(
+  docId: number | string,
+  user: AuthUser | null,
+  enabled: boolean = true
+): UseYjsCollaborationResult {
   const dispatch = useDispatch<AppDispatch>();
   const [isConnected, setIsConnected] = useState(false);
   const [collaborators, setCollaborators] = useState<CollaboratorUser[]>([]);
-  // Use state (not ref + tick) so useMemo deps are trackable
   const [providerState, setProviderState] = useState<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
-  // Drafts (docId < 0) have no collaboration, so they're resolved immediately.
-  const [isResolved, setIsResolved] = useState(docId < 0);
 
-  // Keep a ref so cleanup can destroy the provider without depending on state
+  const skip = !enabled || isInvalidDocId(docId);
+  const attemptKey = `${docId}|${user?.userId ?? ""}`;
+  const [resolvedKey, setResolvedKey] = useState<string | null>(null);
+  const isResolved = skip || resolvedKey === attemptKey;
+
   const providerRef = useRef<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
 
   useEffect(() => {
-    if (docId < 0) {
-      setIsResolved(true);
+    if (skip) {
       return;
     }
-    // New doc: gate the editor until this attempt settles (success or failure).
-    setIsResolved(false);
 
     let cancelled = false;
     let ydoc: Y.Doc | null = null;
@@ -78,7 +104,7 @@ export function useYjsCollaboration(docId: number, user: AuthUser | null): UseYj
         docsApi.endpoints.getYjsToken.initiate(docId, { forceRefetch: true })
       ).unwrap();
 
-    let serverUrl = ENV_SERVER_URL;
+    let serverUrl = getDefaultWsUrl();
 
     const scheduleRefresh = (expiresIn: number) => {
       if (refreshTimer) clearTimeout(refreshTimer);
@@ -90,12 +116,10 @@ export function useYjsCollaboration(docId: number, user: AuthUser | null): UseYj
       if (cancelled || refreshing || !provider) return;
       refreshing = true;
       try {
-        const { token, expiresIn } = await fetchToken();
+        const res = await fetchToken();
         if (cancelled || !provider) return;
-        // provider.params is writable; y-websocket re-reads it on the next
-        // (re)connection, so the fresh token is used without a disruptive reconnect.
-        provider.params = { yauth: token };
-        scheduleRefresh(expiresIn);
+        provider.params = { yauth: res.token };
+        scheduleRefresh(res.expiresIn || 86400);
       } catch (e) {
         console.warn("[Yjs] token refresh failed", e);
       } finally {
@@ -119,44 +143,50 @@ export function useYjsCollaboration(docId: number, user: AuthUser | null): UseYj
       try {
         const res = await fetchToken();
         token = res.token;
-        expiresIn = res.expiresIn;
-        if (res.url) serverUrl = res.url;
+        expiresIn = res.expiresIn || 86400;
+        if (res.url && !import.meta.env.VITE_NODE_WS_URL && !import.meta.env.VITE_YJS_SERVER_URL) {
+          serverUrl = res.url;
+        }
       } catch (e) {
-        console.warn("[Yjs] token fetch failed — collaboration disabled", e);
-        // Offline / token unavailable: fall back to solo mode (cached content).
-        if (!cancelled) setIsResolved(true);
+        console.warn("[Yjs] token fetch failed — staying in solo/local mode", e);
+        if (!cancelled) setResolvedKey(attemptKey);
         return;
       }
       if (cancelled) return;
 
       ydoc = new Y.Doc();
-      provider = new WebsocketProvider(serverUrl, `doc-${docId}`, ydoc, {
+      const roomName = String(docId).startsWith("doc-") ? String(docId) : `doc-${docId}`;
+      provider = new WebsocketProvider(serverUrl, roomName, ydoc, {
         params: { yauth: token },
       });
+      providerRef.current = { ydoc, provider };
 
       provider.on("status", ({ status }: { status: string }) => {
         setIsConnected(status === "connected");
       });
 
-      // Resolve only once the initial server state has been applied to the Y.Doc.
-      // The editor mounts on `isResolved`, so gating on `sync` (not on provider
-      // creation) guarantees the document content is already in the fragment when
-      // BlockNote binds — otherwise it binds to an empty doc and the first open
-      // shows blank content.
       const markResolved = () => {
         if (cancelled) return;
-        if (syncFallbackTimer) { clearTimeout(syncFallbackTimer); syncFallbackTimer = null; }
-        setIsResolved(true);
+        if (syncFallbackTimer) {
+          clearTimeout(syncFallbackTimer);
+          syncFallbackTimer = null;
+        }
+        setResolvedKey(attemptKey);
       };
-      provider.on("sync", (isSynced: boolean) => {
-        if (isSynced) markResolved();
-      });
-      if (provider.synced) markResolved();
-      // Safety net: never block the editor forever if sync stalls (server down,
-      // perm callback cold). Fall back to whatever is in the Y.Doc / cached seed.
-      syncFallbackTimer = setTimeout(markResolved, 8000);
 
-      // yhub may reject an expired token on reconnect — refetch eagerly.
+      const activateCollab = () => {
+        if (cancelled || !ydoc || !provider) return;
+        setProviderState({ ydoc, provider });
+        markResolved();
+      };
+
+      provider.on("sync", (isSynced: boolean) => {
+        if (isSynced) activateCollab();
+      });
+      if (provider.synced) activateCollab();
+
+      syncFallbackTimer = setTimeout(markResolved, 4000);
+
       provider.on("connection-close", () => {
         refresh();
       });
@@ -171,11 +201,7 @@ export function useYjsCollaboration(docId: number, user: AuthUser | null): UseYj
       }
 
       provider.awareness.on("change", updateCollaborators);
-
       scheduleRefresh(expiresIn);
-
-      providerRef.current = { ydoc, provider };
-      setProviderState({ ydoc, provider });
     })();
 
     return () => {
@@ -191,18 +217,15 @@ export function useYjsCollaboration(docId: number, user: AuthUser | null): UseYj
       setProviderState(null);
       setIsConnected(false);
       setCollaborators([]);
+      setResolvedKey(null);
     };
-  }, [docId, user?.userId, dispatch]);
+  }, [docId, user?.userId, dispatch, enabled, skip, attemptKey]);
 
-  // Stable currentUser reference — only recreated when user identity changes.
   const currentUser = useMemo<CollaboratorUser | null>(() => {
     if (!user) return null;
     return { name: user.username, color: hashColor(user.userId), userId: user.userId };
   }, [user?.userId, user?.username]);
 
-  // Stable collaboration reference — only recreated when the provider/connection
-  // state or collaborator list actually changes. This prevents DocEditorBody from
-  // re-rendering on every parent render just because collaboration is a new object.
   const collaboration = useMemo<YjsCollaboration | null>(() => {
     if (!providerState) return null;
     return {

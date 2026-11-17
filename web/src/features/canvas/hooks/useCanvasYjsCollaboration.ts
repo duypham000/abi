@@ -7,7 +7,21 @@ import type { AppDispatch } from "@/store";
 import { canvasApi } from "@/infrastructure/api/canvasApi";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
-const ENV_SERVER_URL = import.meta.env.VITE_YJS_SERVER_URL ?? "ws://127.0.0.1/ws/yjs";
+function getDefaultWsUrl(): string {
+  if (import.meta.env.VITE_YJS_SERVER_URL) {
+    return import.meta.env.VITE_YJS_SERVER_URL;
+  }
+  if (import.meta.env.VITE_NODE_WS_URL) {
+    const wsBase = (import.meta.env.VITE_NODE_WS_URL as string).replace(/\/+$/, "");
+    return `${wsBase}/ws/yjs`;
+  }
+  if (typeof window !== "undefined" && window.location?.host) {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}//${window.location.host}/ws/yjs`;
+  }
+  return "ws://127.0.0.1:1234/ws/yjs";
+}
+
 const REFRESH_LEAD_MS = 60_000;
 const MIN_REFRESH_MS = 5_000;
 
@@ -31,7 +45,7 @@ export function hasVisualChange(a: any, b: any): boolean {
 export interface CollaboratorUser {
   name: string;
   color: string;
-  userId: number;
+  userId: string | number;
 }
 
 export interface YjsCanvasCollaboration {
@@ -45,12 +59,18 @@ export interface UseCanvasYjsCollaborationResult {
   isResolved: boolean;
 }
 
-function hashColor(userId: number): string {
+function hashColor(userId: string | number): string {
+  const str = String(userId);
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
   const COLORS = [
     "#e03131", "#c2255c", "#9c36b5", "#6741d9", "#3b5bdb",
     "#1971c2", "#0c8599", "#2f9e44", "#e8590c", "#f08c00",
   ];
-  return COLORS[userId % COLORS.length];
+  return COLORS[Math.abs(hash) % COLORS.length];
 }
 
 export function useCanvasYjsCollaboration(
@@ -62,11 +82,12 @@ export function useCanvasYjsCollaboration(
   const dispatch = useDispatch<AppDispatch>();
   const [isConnected, setIsConnected] = useState(false);
   const collabRef = useRef<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
-  const [isResolved, setIsResolved] = useState(canvasId < 0);
+  const isInvalidCanvasId = !canvasId || canvasId <= 0;
+  const [isResolved, setIsResolved] = useState(isInvalidCanvasId);
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    if (canvasId < 0) {
+    if (isInvalidCanvasId) {
       setIsResolved(true);
       return;
     }
@@ -84,7 +105,7 @@ export function useCanvasYjsCollaboration(
         canvasApi.endpoints.getYjsCanvasToken.initiate(canvasId, { forceRefetch: true })
       ).unwrap();
 
-    let serverUrl = ENV_SERVER_URL;
+    let serverUrl = getDefaultWsUrl();
 
     const scheduleRefresh = (expiresIn: number) => {
       if (refreshTimer) clearTimeout(refreshTimer);
@@ -96,10 +117,10 @@ export function useCanvasYjsCollaboration(
       if (cancelled || refreshing || !provider) return;
       refreshing = true;
       try {
-        const { token, expiresIn } = await fetchToken();
+        const res = await fetchToken();
         if (cancelled || !provider) return;
-        provider.params = { yauth: token };
-        scheduleRefresh(expiresIn);
+        provider.params = { yauth: res.token };
+        scheduleRefresh(res.expiresIn || 86400);
       } catch (e) {
         console.warn("[Yjs-Canvas] token refresh failed", e);
       } finally {
@@ -113,10 +134,13 @@ export function useCanvasYjsCollaboration(
       try {
         const res = await fetchToken();
         token = res.token;
-        expiresIn = res.expiresIn;
-        if (res.url) serverUrl = res.url;
+        expiresIn = res.expiresIn || 86400;
+        // Only let backend override if client has no explicit WS URL configured in .env
+        if (res.url && !import.meta.env.VITE_NODE_WS_URL && !import.meta.env.VITE_YJS_SERVER_URL) {
+          serverUrl = res.url;
+        }
       } catch (e) {
-        console.warn("[Yjs-Canvas] token fetch failed — collaboration disabled", e);
+        console.warn("[Yjs-Canvas] token fetch failed — falling back to solo mode", e);
         if (!cancelled) setIsResolved(true);
         return;
       }
@@ -142,7 +166,7 @@ export function useCanvasYjsCollaboration(
 
       provider.on("sync", (isSynced: boolean) => {
         if (isSynced) {
-          // If the map is empty, seed from initial database state
+          // If the map is empty, seed from initial scene state
           const elementsMap = ydoc!.getMap<any>("elements");
           if (elementsMap.size === 0 && initialElements && initialElements.length > 0) {
             ydoc!.transact(() => {
@@ -159,7 +183,8 @@ export function useCanvasYjsCollaboration(
         markResolved();
       }
 
-      syncFallbackTimer = setTimeout(markResolved, 8000);
+      // Safety timeout: don't freeze canvas if server is cold or sync is slow
+      syncFallbackTimer = setTimeout(markResolved, 4000);
 
       provider.on("connection-close", () => {
         refresh();
@@ -219,9 +244,6 @@ export function useCanvasYjsCollaboration(
         if (newVal) {
           if (idx >= 0) {
             const local = nextElements[idx];
-            // Apply if version is strictly higher (normal case), OR if there is a real
-            // visual change at equal/higher version — prevents selection-bump inflation
-            // from blocking a remote resize/move made from the same base version.
             const remoteWins =
               newVal.version > local.version ||
               (newVal.version >= local.version && hasVisualChange(newVal, local));
@@ -252,7 +274,7 @@ export function useCanvasYjsCollaboration(
       const filesObj = Object.fromEntries(
         Array.from(filesMap.entries()).map(([id, val]) => [
           id,
-          val && typeof val.toJSON === "function" ? val.toJSON() : val
+          val && typeof val.toJSON === "function" ? val.toJSON() : val,
         ])
       );
       excalidrawAPI.addFiles?.(Object.values(filesObj));
@@ -287,13 +309,13 @@ export function useCanvasYjsCollaboration(
 
     // Initial load sync if Y.Doc already has data (e.g. from websocket stream)
     if (elementsMap.size > 0) {
-      const allElems = Array.from(elementsMap.values()).map(val =>
+      const allElems = Array.from(elementsMap.values()).map((val) =>
         val && typeof val.toJSON === "function" ? val.toJSON() : val
       );
       excalidrawAPI.updateScene({ elements: allElems });
     }
     if (filesMap.size > 0) {
-      const filesList = Array.from(filesMap.values()).map(val =>
+      const filesList = Array.from(filesMap.values()).map((val) =>
         val && typeof val.toJSON === "function" ? val.toJSON() : val
       );
       excalidrawAPI.addFiles?.(filesList);

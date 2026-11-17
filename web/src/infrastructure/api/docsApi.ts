@@ -59,8 +59,13 @@ export const docsApi = baseApi.injectEndpoints({
 
     // yhub collaboration auth token (ES384). Fetched imperatively in
     // useYjsCollaboration via endpoints.getYjsToken.initiate(docId, { forceRefetch: true }).
-    getYjsToken: builder.query<{ token: string; url: string; expiresIn: number }, number>({
-      query: (docId) => ({ url: "/base/yjs/token", params: { docId } }),
+    getYjsToken: builder.query<{ token: string; url: string; expiresIn: number }, number | string>({
+      query: (docId) => ({
+        url: "/base/yjs/auth/token",
+        method: "POST",
+        body: { doc_id: String(docId), access_mode: "write" },
+      }),
+      transformResponse: (res: any) => res.data ?? res,
     }),
 
     // Revision history

@@ -12,10 +12,13 @@ import { flushDraftCanvases } from "./canvasFlushHelper";
 
 export type SaveStatus = "idle" | "saving" | "success" | "error";
 
-const SUCCESS_RESET_DELAY = 1200;
+const SUCCESS_RESET_DELAY = 500;
 const CONTENT_DEBOUNCE_MS = 1500;
 const TITLE_DEBOUNCE_MS = 800;
 const META_DEBOUNCE_MS = 500;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const noop = async (..._args: any[]) => {};
 
 export function useDocEditor(
   id: number,
@@ -23,10 +26,10 @@ export function useDocEditor(
   editorRef?: React.MutableRefObject<any>
 ) {
   const dispatch = useDispatch<AppDispatch>();
-  const skip = !Number.isFinite(id) || id <= 0;
+  const skip = id < 0;
 
   const {
-    data: doc = null,
+    data: backendData = null,
     error,
     isLoading,
     isFetching,
@@ -35,11 +38,14 @@ export function useDocEditor(
     refetchOnMountOrArgChange: true,
   });
 
+  const doc = backendData;
+
   const [updateDoc] = useUpdateDocMutation();
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
   const isOffline = !skip && !!error && !isLoading;
   const isDraft = doc?.status === 0;
+  const isSavedOnline = Boolean(!skip && backendData && !error);
 
   const contentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -90,6 +96,10 @@ export function useDocEditor(
 
   const performSave = useCallback(
     async (explicit = false) => {
+      const current = docRef.current;
+      if (!current) return;
+      if (current.status === 0 && !explicit) return;
+
       const request = buildRequest(explicit);
       if (!request) return;
 
@@ -212,8 +222,32 @@ export function useDocEditor(
     }
   }, []);
 
+  if (skip) {
+    return {
+      doc: null,
+      backendData: null,
+      isSavedOnline: false,
+      isSyncedToServer: false,
+      isLoading: false,
+      isFetching: false,
+      saveStatus: "idle" as SaveStatus,
+      isDraft: false,
+      isOffline: false,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      handleBlocksChange: noop as (blocks: any[]) => void,
+      handleTitleChange: noop as (title: string) => void,
+      handleMetadataChange: noop as (meta: import("@/core/interfaces/docs").DocMetadata) => void,
+      handleSeriesIdChange: noop as (seriesId: number | null) => void,
+      triggerSave: noop,
+      runWithSaveStatus: noop as typeof runWithSaveStatus,
+    };
+  }
+
   return {
     doc,
+    backendData,
+    isSavedOnline,
+    isSyncedToServer: isSavedOnline,
     isLoading,
     isFetching,
     saveStatus,

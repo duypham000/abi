@@ -30,8 +30,15 @@ export default function CanvasEditorPage() {
   const canvasId = Number(params.id);
   const navigate = useNavigate();
 
-  const { canvas, isLoading, saveStatus, initialScene, handleSceneChange } =
-    useCanvasEditor(canvasId);
+  const {
+    canvas,
+    isLoading,
+    notFound,
+    saveStatus,
+    initialScene,
+    handleSceneChange,
+    createNewCanvas,
+  } = useCanvasEditor(canvasId);
   const isTouch = useTouchDevice();
   const [canvasMode, setCanvasMode] = useState<"navigate" | "edit">(isTouch ? "navigate" : "edit");
 
@@ -489,6 +496,40 @@ export default function CanvasEditorPage() {
       </button>
     </div>
   ), [docsSidebarOpen, handleToggleDocsSidebar, handleAddNote]);
+
+  if (notFound) {
+    return (
+      <main
+        className="dashboard-main canvas-editor-loading"
+        style={{
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 16,
+        }}
+      >
+        <p style={{ color: "rgba(255,255,255,0.65)", fontSize: 16 }}>
+          Canvas không tồn tại hoặc đã bị xóa
+        </p>
+        <button
+          type="button"
+          className="canvas-new-btn"
+          onClick={async () => {
+            try {
+              const newCanvas = await createNewCanvas();
+              navigate(`/canvas/${newCanvas.id}`);
+            } catch {
+              // ignore
+            }
+          }}
+        >
+          Tạo canvas mới
+        </button>
+      </main>
+    );
+  }
 
   if (isLoading || !initialScene || !isResolved) {
     return (

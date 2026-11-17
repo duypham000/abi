@@ -79,10 +79,10 @@ export default function DocEditorPage() {
     editorRef.current = e;
   }, []);
 
-  const { collaboration, isResolved: isCollabResolved } = useYjsCollaboration(docId, authUser);
-
   const {
     doc,
+    isSavedOnline,
+    isSyncedToServer,
     isLoading,
     isFetching,
     saveStatus,
@@ -94,6 +94,14 @@ export default function DocEditorPage() {
     triggerSave,
     runWithSaveStatus,
   } = useDocEditor(docId, editorRef);
+
+  const isOnlineDoc = Boolean(docId > 0 && isSavedOnline);
+
+  const { collaboration, isResolved: isCollabResolved } = useYjsCollaboration(
+    isOnlineDoc ? docId : -1,
+    authUser,
+    isOnlineDoc
+  );
 
   // Wait for the first fresh server round-trip before mounting the editor,
   // so stale RTK Query cache data never seeds the editor's initial content.
@@ -418,6 +426,7 @@ export default function DocEditorPage() {
           settings={editorSettings}
           saveStatus={saveStatus}
           isDirty={isDirty}
+          isSyncedToServer={isSyncedToServer}
           onBack={handleBack}
           onUndo={handleUndo}
           onRedo={handleRedo}
@@ -475,9 +484,13 @@ export default function DocEditorPage() {
                 />
               )}
               <DocEditorBody
-                key={docId}
+                key={`${docId}-${collaboration ? "collab" : "solo"}`}
                 docId={docId}
-                initialBlocks={initialBlocks as any}
+                initialBlocks={
+                  collaboration && editorRef.current?.document?.length
+                    ? editorRef.current.document
+                    : (initialBlocks as any)
+                }
                 onBlocksChange={handleBlocksChange}
                 onEditorReady={handleEditorReady}
                 collaboration={collaboration}

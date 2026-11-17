@@ -42,6 +42,9 @@ interface DocEditorToolbarProps {
   saveStatus: SaveStatus;
   isDraft?: boolean;
   isDirty: boolean;
+  isSyncedToServer?: boolean;
+  collaborators?: CollaboratorUser[];
+  isCollabConnected?: boolean;
   canUndo: boolean;
   canRedo: boolean;
   undoTooltip?: string;
@@ -66,7 +69,6 @@ interface DocEditorToolbarProps {
   onDuplicate: () => void;
   onImport: () => void;
   onExport: () => void;
-  collaborators?: CollaboratorUser[];
 }
 
 const EXIT_DURATION = 200; // ms — must match CSS animation duration

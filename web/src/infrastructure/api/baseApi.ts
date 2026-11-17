@@ -22,11 +22,8 @@ export interface ScrollResult<T> {
   nextCursor: number | null;
 }
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1/api/v1";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
-// The Rust auth core (via authBridge) is the single source of truth for tokens
-// and performs refresh transparently + single-flight. Each request just asks it
-// for a currently-valid access token.
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: BASE_URL,
   prepareHeaders: async (headers) => {
@@ -43,8 +40,6 @@ const baseQueryWithReauth: BaseQueryFn<
 > = async (args, api, extraOptions) => {
   let result = await rawBaseQuery(args, api, extraOptions);
 
-  // A 401 should be rare (Rust refreshes proactively). If it happens, force a
-  // token refresh once and retry; if still unauthorized, the session is gone.
   if (result.error?.status === 401) {
     try {
       const token = await getAccessToken();
@@ -55,8 +50,7 @@ const baseQueryWithReauth: BaseQueryFn<
         api.dispatch(setUser(null));
       }
     } catch {
-      // Network/server error during refresh — keep the session and let the
-      // caller handle it as a network error.
+      // Network/server error during refresh
     }
   }
 
@@ -84,11 +78,30 @@ const baseQueryWithTransform: BaseQueryFn<
 
   if (result.data && typeof result.data === "object") {
     const raw = result.data as Record<string, unknown>;
-    if ("status" in raw && "message" in raw && "data" in raw) {
-      if ("total" in raw) {
+    const isEnvelope = ("status" in raw || "success" in raw) && "data" in raw;
+    if (isEnvelope) {
+      const payload = raw.data;
+      // Case 1: envelope data is a paginated object: { items: [...], total_items: ... }
+      if (payload && typeof payload === "object" && "items" in (payload as Record<string, unknown>)) {
+        const p = payload as Record<string, unknown>;
+        const items = Array.isArray(p.items) ? (p.items as unknown[]) : [];
+        const total = Number(p.total ?? p.total_items ?? p.totalItems ?? items.length);
+        const page = Number(p.page ?? 0);
+        const pageSize = Number(p.pageSize ?? p.page_size ?? p.pageSize ?? 20);
         return {
           ...result,
-          data: { items: raw.data, total: raw.total, page: raw.page, pageSize: raw.pageSize },
+          data: { items, total, page, pageSize },
+        };
+      }
+
+      // Case 2: envelope total is on the outer envelope: { data: [...], total: ... }
+      if ("total" in raw || "total_items" in raw) {
+        const total = Number(raw.total ?? raw.total_items ?? 0);
+        const page = Number(raw.page ?? 0);
+        const pageSize = Number(raw.pageSize ?? raw.page_size ?? 20);
+        return {
+          ...result,
+          data: { items: Array.isArray(raw.data) ? raw.data : [], total, page, pageSize },
         };
       } else if ("hasMore" in raw) {
         return {
