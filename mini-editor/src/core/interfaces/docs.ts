@@ -29,6 +29,11 @@ export interface DocDto {
   yjsState?: string | null;
   backendUuid?: string | null;
   slug?: string | null;
+  remoteStatus?: "pending" | "online" | "local-only";
+  remoteSyncError?: string | null;
+  remoteSyncNetworkError?: boolean;
+  localHash?: string | null;
+  syncedHash?: string | null;
   preview?: string | null;
   highlights?: Record<string, string[]> | null;
 }

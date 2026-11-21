@@ -199,7 +199,7 @@ export function DocSnapshotModal({
       width="90vw"
       style={{ maxWidth: 1040, top: 24 }}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
       className="doc-snapshot-modal"
     >
       {/* Modal Header */}

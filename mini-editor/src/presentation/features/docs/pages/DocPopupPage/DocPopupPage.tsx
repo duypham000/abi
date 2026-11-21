@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useSelector } from "react-redux";
 import { message, Drawer } from "antd";
-import type { RootState } from "@/presentation/store";
 import { useDeleteDocMutation, useCreateDocMutation } from "@/infrastructure/api/docsApi";
 import { openInMainWindow } from "@/presentation/hooks/useOpenInMainWindow";
 import { PANEL_TYPES } from "@/presentation/layout/golden/panelRegistry";
@@ -44,11 +42,12 @@ export default function DocPopupPage() {
   const { id } = useParams<{ id?: string }>();
   const docId = Number(id);
   const [isMini, setIsMini] = useState(false);
-  const isDirty = useSelector((state: RootState) => state.docs.isDirty);
 
   const [editorSettings, setEditorSettings] = usePersistedState<PopupEditorSettings>("popup-editor-settings", DEFAULT_POPUP_SETTINGS);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editor, setEditor] = useState<any | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const editorRef = useRef<any>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
@@ -65,12 +64,19 @@ export default function DocPopupPage() {
     isLoading,
     isFetching,
     saveStatus,
+    persistenceState,
+    isDirty,
+    justSaved,
+    lastError,
+    lastSavedLocalAt,
+    lastSyncedRemoteAt,
+    isDraft,
     handleBlocksChange,
     handleTitleChange,
     handleMetadataChange,
     triggerSave,
     runWithSaveStatus,
-  } = useDocEditor(docId);
+  } = useDocEditor(docId, { editorRef, autoSave: editorSettings.autoSave });
   // Wait for the first fresh server round-trip before showing the editor (avoids
   // mounting with stale RTK Query cache data that hasn't been refreshed yet).
   const initialFetchDoneRef = useRef(false);
@@ -393,6 +399,12 @@ export default function DocPopupPage() {
         isMini={isMini}
         onToggleMini={() => setIsMini((p) => !p)}
         saveStatus={saveStatus}
+        persistenceState={persistenceState}
+        justSaved={justSaved}
+        saveError={lastError}
+        lastSavedLocalAt={lastSavedLocalAt}
+        lastSyncedRemoteAt={lastSyncedRemoteAt}
+        isDraft={isDraft}
         isDirty={isDirty}
         canUndo={canUndo}
         canRedo={canRedo}
@@ -434,7 +446,7 @@ export default function DocPopupPage() {
                   docId={docId}
                   initialBlocks={initialBlocks}
                   onBlocksChange={handleBlocksChange}
-                  onEditorReady={(e) => { setEditor(e); }}
+                  onEditorReady={(e) => { setEditor(e); editorRef.current = e; }}
                 />
               </div>
 

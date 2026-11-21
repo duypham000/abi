@@ -186,7 +186,7 @@ export default function AccountSection() {
         onCancel={() => setShowLoginModal(false)}
         footer={null}
         width={420}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ padding: "16px 8px" }}>
           <LoginForm step={loginStep} setStep={setLoginStep} />

@@ -31,10 +31,13 @@ export async function peekAccessToken(): Promise<string | null> {
 
 export async function login(identifier: string, password: string): Promise<string> {
   if (isTauri()) {
+    const goUrl = (import.meta.env.VITE_GO_API_URL as string | undefined)?.replace(/\/+$/, "");
     const apiBase =
       (import.meta.env.TOMO_API_BASE as string | undefined) ||
-      (import.meta.env.VITE_GO_API_URL
-        ? `${(import.meta.env.VITE_GO_API_URL as string).replace(/\/+$/, "")}/v1`
+      (goUrl
+        ? goUrl.endsWith("/go")
+          ? `${goUrl}/v1`
+          : `${goUrl}/api/v1`
         : undefined);
     return await invoke<string>("auth_login", { identifier, password, apiBase });
   }

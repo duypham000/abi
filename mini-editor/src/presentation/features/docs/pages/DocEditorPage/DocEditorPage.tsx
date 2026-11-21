@@ -22,12 +22,14 @@ import { DocEditorBody } from "./components/DocEditorBody";
 import { Loading } from "@/presentation/components/ui/Loading/Loading";
 import { useYjsCollaboration } from "../../hooks/useYjsCollaboration";
 import { useGitDocSync } from "../../hooks/useGitDocSync";
+import type { BlockNoteChangeMeta } from "@/presentation/components/BlockNote/useBlockNoteEditor";
 import { DocRevisionPanel } from "./components/DocRevisionPanel/DocRevisionPanel";
 import { FindReplaceBar } from "./components/FindReplaceBar/FindReplaceBar";
 import { useFindAndReplace } from "./hooks/useFindAndReplace";
 import { DocGitHistoryDrawer } from "@/presentation/features/git/components/DocGitHistoryDrawer";
 import { GitConflictModal } from "@/presentation/features/git/components/GitConflictModal";
 import {
+  useGetGithubUserQuery,
   useSaveGitFileMutation,
   useGetWorkspaceManifestQuery,
   useGetFileHistoryQuery,
@@ -78,7 +80,6 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   const docId = docIdProp ?? Number(params.id);
   const dispatch = useDispatch<AppDispatch>();
   const theme = useSelector((state: RootState) => state.app.theme);
-  const isDirty = useSelector((state: RootState) => state.docs.isDirty);
   const authUser = useSelector((state: RootState) => state.auth.user);
 
   const [editorSettings, setEditorSettings] = usePersistedState<EditorSettings>("editor-settings-v2", DEFAULT_SETTINGS);
@@ -102,17 +103,26 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   const {
     doc,
     isSavedOnline,
+    isCheckingRemote,
     isSyncedToServer,
     isLoading,
     isFetching,
     saveStatus,
+    persistenceState,
+    isDirty,
+    justSaved,
+    lastError,
+    lastSavedLocalAt,
+    lastSyncedRemoteAt,
+    isDraft,
     handleBlocksChange: baseHandleBlocksChange,
     handleTitleChange: baseHandleTitleChange,
     handleMetadataChange,
     handleSeriesIdChange,
     triggerSave,
     runWithSaveStatus,
-  } = useDocEditor(docId, editorRef);
+    getLatestSnapshot,
+  } = useDocEditor(docId, { editorRef, autoSave: editorSettings.autoSave });
 
   const initialFetchDoneRef = useRef(false);
   if (doc && !isFetching) initialFetchDoneRef.current = true;
@@ -139,7 +149,12 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
 
   const checkStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: manifest } = useGetWorkspaceManifestQuery();
+  const { data: githubUser } = useGetGithubUserQuery();
+  const hasGit = Boolean(
+    githubUser?.connected && (githubUser?.activeRepoName || githubUser?.active_repo_name)
+  );
+
+  const { data: manifest } = useGetWorkspaceManifestQuery(undefined, { skip: !hasGit });
 
   const gitFilePath = useMemo(() => {
     const slugKey = doc?.slug || null;
@@ -169,7 +184,9 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
     return `docs/${fileStem}.json`;
   }, [manifest, doc?.slug, doc?.backendUuid, docId]);
 
-  const { data: fileHistory } = useGetFileHistoryQuery(gitFilePath, { skip: !docId || isLoading });
+  const { data: fileHistory } = useGetFileHistoryQuery(gitFilePath, {
+    skip: !hasGit || !docId || isLoading,
+  });
 
   const isDocOnGit = useMemo(() => {
     if (!docId) return false;
@@ -186,7 +203,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   }, [manifest, fileHistory, docId, doc?.slug, doc?.backendUuid, gitFilePath]);
 
   // Yjs real-time collaboration is only activated when document exists online on backend or git
-  const needsGitSync = Boolean(!isLoading && docId > 0 && isDocOnGit && !isSavedOnline);
+  const needsGitSync = Boolean(!isLoading && !isCheckingRemote && docId > 0 && isDocOnGit && !isSavedOnline);
   const { backendDocId: syncedBackendId, status: gitSyncStatus } = useGitDocSync(
     docId,
     gitFilePath,
@@ -205,22 +222,24 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
 
   const checkCurrentFileStatus = useCallback(
     async (currentContent?: unknown, currentTitle?: string) => {
-      if (!docId) return;
+      if (!docId || !hasGit) return;
       try {
+        const snap = getLatestSnapshot();
         let contentData = currentContent;
         if (contentData === undefined) {
+          const rawContent = snap?.content ?? doc?.content ?? "[]";
           try {
-            contentData = JSON.parse(doc?.content || "[]");
+            contentData = JSON.parse(rawContent || "[]");
           } catch {
-            contentData = doc?.content;
+            contentData = rawContent;
           }
         }
         const payload = {
           id: doc?.id ?? docId,
-          title: currentTitle ?? doc?.title,
+          title: currentTitle ?? snap?.title ?? doc?.title,
           slug: `doc-${docId}`,
-          status: doc?.status,
-          metadata: doc?.metadata,
+          status: snap?.status ?? doc?.status,
+          metadata: snap?.metadata ?? doc?.metadata,
           content: contentData,
         };
         const res = await checkFileStatus({
@@ -236,37 +255,39 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
         console.warn("[DocEditor] checkFileStatus error:", err);
       }
     },
-    [docId, doc?.id, doc?.title, doc?.content, doc?.status, doc?.metadata, gitFilePath, checkFileStatus]
+    [docId, hasGit, doc?.id, doc?.title, doc?.content, doc?.status, doc?.metadata, gitFilePath, checkFileStatus, getLatestSnapshot]
   );
 
   const handleBlocksChange = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (blocks: any[]) => {
-      baseHandleBlocksChange(blocks);
+    (blocks: any[], meta?: BlockNoteChangeMeta) => {
+      baseHandleBlocksChange(blocks, meta);
+      if (!hasGit) return;
       if (checkStatusTimerRef.current) clearTimeout(checkStatusTimerRef.current);
       checkStatusTimerRef.current = setTimeout(() => {
         checkCurrentFileStatus(blocks);
       }, 500);
     },
-    [baseHandleBlocksChange, checkCurrentFileStatus]
+    [baseHandleBlocksChange, checkCurrentFileStatus, hasGit]
   );
 
   const handleTitleChange = useCallback(
     (newTitle: string) => {
       baseHandleTitleChange(newTitle);
+      if (!hasGit) return;
       if (checkStatusTimerRef.current) clearTimeout(checkStatusTimerRef.current);
       checkStatusTimerRef.current = setTimeout(() => {
         checkCurrentFileStatus(undefined, newTitle);
       }, 500);
     },
-    [baseHandleTitleChange, checkCurrentFileStatus]
+    [baseHandleTitleChange, checkCurrentFileStatus, hasGit]
   );
 
   useEffect(() => {
-    if (doc?.id) {
+    if (doc?.id && hasGit) {
       checkCurrentFileStatus();
     }
-  }, [doc?.id, checkCurrentFileStatus]);
+  }, [doc?.id, hasGit, checkCurrentFileStatus]);
 
   const applyGitContentToEditor = useCallback(
     async (rawContent: string | unknown, actionLabel: string) => {
@@ -355,7 +376,11 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
     if (!doc) return;
     try {
       await triggerSave();
-      let contentData: unknown = editorRef.current?.document ?? doc.content;
+      const snap = getLatestSnapshot();
+      const latestTitle = snap?.title ?? doc.title;
+      const latestStatus = snap?.status ?? doc.status;
+      const latestMeta = snap?.metadata ?? doc.metadata;
+      let contentData: unknown = editorRef.current?.document ?? snap?.content ?? doc.content;
       if (typeof contentData === "string") {
         try {
           contentData = JSON.parse(contentData || "[]");
@@ -365,16 +390,16 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
       }
       const payload = {
         id: doc.id,
-        title: doc.title,
+        title: latestTitle,
         slug: `doc-${doc.id}`,
-        status: doc.status,
-        metadata: doc.metadata,
+        status: latestStatus,
+        metadata: latestMeta,
         content: contentData,
         saved_at: new Date().toISOString(),
       };
       const commitMsg = isDocOnGit
-        ? `Update ${doc.title || `doc-${doc.id}`}`
-        : `Add ${doc.title || `doc-${doc.id}`} to Git workspace`;
+        ? `Update ${latestTitle || `doc-${doc.id}`}`
+        : `Add ${latestTitle || `doc-${doc.id}`} to Git workspace`;
 
       await saveGitFile({
         path: gitFilePath,
@@ -389,7 +414,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
           ? `Đã lưu và commit lên GitHub: ${gitFilePath}`
           : `Đã lưu và đẩy lên GitHub: ${gitFilePath}`
       );
-      checkCurrentFileStatus(contentData, doc.title);
+      checkCurrentFileStatus(contentData, latestTitle);
     } catch (err) {
       const errMsg = (err as { data?: { message?: string } })?.data?.message;
       message.error(errMsg ? `Failed to push to GitHub: ${errMsg}` : "Failed to push to GitHub");
@@ -731,6 +756,12 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
           isRightPanelOpen={isRightPanelOpen}
           settings={editorSettings}
           saveStatus={saveStatus}
+          persistenceState={persistenceState}
+          justSaved={justSaved}
+          saveError={lastError}
+          lastSavedLocalAt={lastSavedLocalAt}
+          lastSyncedRemoteAt={lastSyncedRemoteAt}
+          isDraft={isDraft}
           isDirty={isDirty}
           isSyncedToServer={isSyncedToServer}
           collaborators={collaboration?.collaborators}

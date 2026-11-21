@@ -25,12 +25,14 @@ import {
   UndoOutlined,
   RedoOutlined,
   ThunderboltOutlined,
+  CloudSyncOutlined,
   DownOutlined,
   UpOutlined,
 } from "@ant-design/icons";
 import { CloseIcon, PinIcon, PinFilledIcon, MinimizeIcon, MaximizeIcon, RestoreIcon } from "@/presentation/components/icons";
 import { useWindowControls } from "@/presentation/hooks/useWindowControls";
 import type { SaveStatus } from "../../hooks/useDocEditor";
+import type { DocPersistenceState } from "@/presentation/store/docsSlice";
 import "./DocPopupAppBar.scss";
 
 export interface PopupEditorSettings {
@@ -47,35 +49,13 @@ const NORMAL_HEIGHT = 520;
 const MIN_NORMAL_WIDTH = 400;
 const MIN_NORMAL_HEIGHT = 280;
 
-const EXIT_DURATION = 200;
-
-function useSaveStatusDisplay(saveStatus: SaveStatus) {
-  const [displayed, setDisplayed] = useState<SaveStatus>("idle");
-  const [phase, setPhase] = useState<"in" | "active" | "out">("in");
-  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearExit = useCallback(() => {
-    if (exitTimerRef.current) { clearTimeout(exitTimerRef.current); exitTimerRef.current = null; }
-  }, []);
-
-  useEffect(() => {
-    if (saveStatus !== "idle") {
-      clearExit();
-      setDisplayed(saveStatus);
-      setPhase("in");
-      const t = setTimeout(() => setPhase("active"), 10);
-      return () => clearTimeout(t);
-    } else if (displayed !== "idle" && displayed !== "error") {
-      setPhase("out");
-      exitTimerRef.current = setTimeout(() => {
-        setDisplayed("idle");
-        setPhase("in");
-      }, EXIT_DURATION);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saveStatus]);
-
-  return { displayed, phase };
+function formatSyncTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
 }
 
 interface DocPopupAppBarProps {
@@ -83,6 +63,11 @@ interface DocPopupAppBarProps {
   isMini: boolean;
   onToggleMini: () => void;
   saveStatus: SaveStatus;
+  persistenceState?: DocPersistenceState;
+  justSaved?: boolean;
+  saveError?: string | null;
+  lastSavedLocalAt?: string | null;
+  lastSyncedRemoteAt?: string | null;
   isDraft?: boolean;
   isDirty: boolean;
   canUndo: boolean;
@@ -113,6 +98,11 @@ export function DocPopupAppBar({
   isMini,
   onToggleMini,
   saveStatus,
+  persistenceState,
+  justSaved = false,
+  saveError = null,
+  lastSavedLocalAt = null,
+  lastSyncedRemoteAt = null,
   isDraft,
   isDirty,
   canUndo,
@@ -144,7 +134,16 @@ export function DocPopupAppBar({
   const [localTitle, setLocalTitle] = useState(docTitle);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleInputRef = useRef<InputRef>(null);
-  const { displayed: displayedStatus, phase } = useSaveStatusDisplay(saveStatus);
+
+  const effectiveState: DocPersistenceState =
+    persistenceState ??
+    (saveStatus === "saving"
+      ? "saving"
+      : saveStatus === "error"
+        ? "error"
+        : isDirty
+          ? "unsaved"
+          : "synced");
 
   // Sync external title changes only when not editing
   useEffect(() => {
@@ -362,45 +361,82 @@ export function DocPopupAppBar({
         )}
 
         {/* Draft badge */}
-        {isDraft && saveStatus === "idle" && (
+        {isDraft && (
           <span className="popup-draft-badge">DRAFT · Ctrl+S</span>
         )}
 
-        {/* Save status */}
-        {(!isDraft || saveStatus !== "idle") && displayedStatus !== "idle" && (
-          displayedStatus === "error" ? (
-            <Tooltip title="Click to retry">
-              <button
-                className={`popup-save-status popup-save-status--error popup-save-status--clickable popup-save-status--${phase}`}
-                onClick={onRetry}
-              >
-                <CloseCircleOutlined /> Retry
-              </button>
-            </Tooltip>
-          ) : (
-            <span
-              className={[
-                "popup-save-status",
-                displayedStatus === "success" ? "popup-save-status--success" : "",
-                `popup-save-status--${phase}`,
-              ].filter(Boolean).join(" ")}
-            >
-              {displayedStatus === "saving" && <LoadingOutlined spin />}
-              {displayedStatus === "success" && <CheckCircleOutlined />}
+        {/* Unified real persistence status */}
+        {effectiveState === "saving" && (
+          <Tooltip title="Đang lưu…">
+            <span className="popup-save-status popup-save-status--active popup-save-status--saving">
+              <LoadingOutlined spin />
             </span>
-          )
+          </Tooltip>
+        )}
+        {effectiveState === "error" && (
+          <Tooltip title={saveError || "Lưu thất bại — nhấn để thử lại"}>
+            <button
+              className="popup-save-status popup-save-status--active popup-save-status--error popup-save-status--clickable"
+              onClick={onRetry}
+            >
+              <CloseCircleOutlined /> Lỗi
+            </button>
+          </Tooltip>
+        )}
+        {effectiveState === "unsaved" && (
+          <Tooltip title="Có thay đổi chưa lưu — nhấn hoặc Ctrl+S để lưu">
+            <button
+              className="popup-save-status popup-save-status--active popup-save-status--unsaved popup-save-status--clickable"
+              onClick={onManualSave}
+            >
+              <span className="popup-status-dot" /> Chưa lưu
+            </button>
+          </Tooltip>
+        )}
+        {effectiveState === "saved-local" && (
+          <Tooltip
+            title={
+              lastSavedLocalAt
+                ? `Đã lưu máy lúc ${formatSyncTime(lastSavedLocalAt)}, chưa đồng bộ server — nhấn hoặc Ctrl+S`
+                : "Đã lưu máy, chưa đồng bộ server — nhấn hoặc Ctrl+S"
+            }
+          >
+            <button
+              className="popup-save-status popup-save-status--active popup-save-status--local popup-save-status--clickable"
+              onClick={onManualSave}
+            >
+              <CloudSyncOutlined /> Lưu máy
+            </button>
+          </Tooltip>
+        )}
+        {effectiveState === "synced" && (
+          <Tooltip
+            title={
+              lastSyncedRemoteAt
+                ? `Đã đồng bộ server lúc ${formatSyncTime(lastSyncedRemoteAt)}`
+                : "Đã đồng bộ với server"
+            }
+          >
+            <span
+              className={`popup-save-status popup-save-status--active ${
+                justSaved || saveStatus === "success" ? "popup-save-status--success" : "popup-save-status--synced"
+              }`}
+            >
+              <CheckCircleOutlined />
+            </span>
+          </Tooltip>
         )}
 
-        {/* Manual save (autosave off, idle) */}
-        {!settings.autoSave && saveStatus === "idle" && (
-          <Tooltip title={isDirty ? "Save (Ctrl+S)" : "No unsaved changes"}>
+        {/* Manual save (autosave off) */}
+        {!settings.autoSave && effectiveState !== "saving" && (
+          <Tooltip title={isDirty || effectiveState === "error" ? "Lưu & đồng bộ (Ctrl+S)" : "Đã đồng bộ"}>
             <button
-              className={`popup-row1-btn ${isDirty ? "popup-row1-btn--dirty" : ""}`}
+              className={`popup-row1-btn ${isDirty || effectiveState === "error" ? "popup-row1-btn--dirty" : ""}`}
               onClick={onManualSave}
-              disabled={!isDirty}
+              disabled={!isDirty && effectiveState !== "error"}
             >
               <SaveOutlined />
-              {isDirty && <span className="popup-dirty-dot" />}
+              {(isDirty || effectiveState === "error") && <span className="popup-dirty-dot" />}
             </button>
           </Tooltip>
         )}

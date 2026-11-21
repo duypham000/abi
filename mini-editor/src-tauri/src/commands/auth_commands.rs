@@ -66,10 +66,15 @@ pub struct AuthCore {
 
 impl AuthCore {
     pub fn new() -> Self {
-        // Load environment files if present
+        // Load environment files if present.
+        // In debug/dev builds, prefer .env.development over .env so local Docker
+        // endpoints win (dotenvy never overwrites already-set env vars).
+        #[cfg(debug_assertions)]
+        {
+            let _ = dotenvy::from_filename(".env.development");
+            let _ = dotenvy::from_filename("../.env.development");
+        }
         let _ = dotenvy::dotenv();
-        let _ = dotenvy::from_filename(".env.development");
-        let _ = dotenvy::from_filename("../.env.development");
         let _ = dotenvy::from_filename("../.env");
 
         // Runtime env wins; otherwise fall back to the compiled-in default. With the
@@ -80,7 +85,16 @@ impl AuthCore {
         #[cfg(not(feature = "local"))]
         let default_base = "http://api.tomoo.uk/go/v1";
         let api_base = std::env::var("TOMO_API_BASE")
-            .or_else(|_| std::env::var("VITE_GO_API_URL").map(|u| format!("{}/v1", u.trim_end_matches('/'))))
+            .or_else(|_| {
+                std::env::var("VITE_GO_API_URL").map(|u| {
+                    let trimmed = u.trim_end_matches('/');
+                    if trimmed.ends_with("/go") {
+                        format!("{trimmed}/v1")
+                    } else {
+                        format!("{trimmed}/api/v1")
+                    }
+                })
+            })
             .unwrap_or_else(|_| default_base.to_string());
         // Always bound network calls so a slow/unreachable backend can never hang
         // a window's bootstrap indefinitely.

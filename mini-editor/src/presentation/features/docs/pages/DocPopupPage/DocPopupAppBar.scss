@@ -104,6 +104,10 @@
   &--active { opacity: 1; }
   &--out { opacity: 0; }
 
+  &--saving { color: #71717a; }
+  &--unsaved { color: #ea580c; }
+  &--local { color: #0284c7; }
+  &--synced { color: #71717a; opacity: 0.75; }
   &--success { color: #16a34a; }
 
   &--error {
@@ -112,13 +116,28 @@
     &:hover { text-decoration: underline; }
   }
 
-  &--clickable { cursor: pointer; }
+  &--clickable {
+    cursor: pointer;
+    &:hover {
+      background: rgba(113, 113, 122, 0.12);
+    }
+  }
 
   @media (prefers-color-scheme: dark) {
     color: #a1a1aa;
+    &--unsaved { color: #fb923c; }
+    &--local { color: #38bdf8; }
     &--success { color: #4ade80; }
     &--error { color: #f87171; }
   }
+}
+
+.popup-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 // Compact row-1 action buttons

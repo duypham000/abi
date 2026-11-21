@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { docsApi } from "@/infrastructure/api/docsApi";
 import { githubApi } from "@/infrastructure/api/githubApi";
-import { cacheDoc } from "@/infrastructure/tauri/docCacheService";
+import { linkRemoteDocToLocal } from "@/infrastructure/tauri/docCacheService";
 import type { AppDispatch } from "@/presentation/store";
 
 export type GitSyncStatus = "idle" | "syncing" | "synced" | "failed" | "not-on-git";
@@ -86,14 +86,11 @@ export function useGitDocSync(
 
         if (doc && doc.id) {
           const docIdStr = String(doc.id);
-          // 3. Cache into local SQLite
+          // 3. Link & cache into local SQLite without duplicating row
           try {
-            await cacheDoc({
-              ...doc,
-              backendUuid: docIdStr,
-            });
+            await linkRemoteDocToLocal(localDocId, doc as unknown as Record<string, unknown>);
           } catch (e) {
-            console.warn("[useGitDocSync] cacheDoc failed:", e);
+            console.warn("[useGitDocSync] linkRemoteDocToLocal failed:", e);
           }
 
           setBackendDocId(docIdStr);

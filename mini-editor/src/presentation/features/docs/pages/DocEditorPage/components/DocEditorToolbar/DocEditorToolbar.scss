@@ -200,6 +200,31 @@
     animation: statusSlideOut 0.2s ease forwards;
   }
 
+  &--saving {
+    color: var(--text-muted, #71717a);
+  }
+
+  &--unsaved {
+    color: #ea580c;
+
+    .theme-dark & {
+      color: #fb923c;
+    }
+  }
+
+  &--local {
+    color: #0284c7;
+
+    .theme-dark & {
+      color: #38bdf8;
+    }
+  }
+
+  &--synced {
+    color: var(--text-muted, #71717a);
+    opacity: 0.85;
+  }
+
   &--success {
     color: #16a34a;
   }
@@ -214,13 +239,22 @@
     cursor: pointer;
     font-size: inherit;
     font-family: inherit;
-    padding: 0 6px;
+    padding: 3px 7px;
     border-radius: 6px;
+    transition: background-color 0.12s ease;
 
     &:hover {
-      background: rgba(220, 38, 38, 0.08);
+      background: rgba(113, 113, 122, 0.1);
     }
   }
+}
+
+.toolbar-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .toolbar-save-btn {

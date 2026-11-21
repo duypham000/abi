@@ -46,7 +46,18 @@ async function authFetch(
 // ─── Per-entity sync handlers ──────────────────────────────────────────────
 
 async function syncDocItem(item: OutboxItem): Promise<void> {
-  const payload = item.payload_json ? JSON.parse(item.payload_json) : {};
+  const rawPayload = item.payload_json ? JSON.parse(item.payload_json) : {};
+  const statusVal =
+    rawPayload.status === 1 ||
+    rawPayload.status === "1" ||
+    (typeof rawPayload.status === "string" && rawPayload.status.toUpperCase() === "PUBLISHED")
+      ? "PUBLISHED"
+      : "DRAFT";
+  const payload = {
+    title: rawPayload.title || "Untitled",
+    content: rawPayload.content ?? "",
+    status: statusVal,
+  };
 
   if (item.op === "create") {
     const res = await authFetch("/base/docs", {

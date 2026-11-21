@@ -29,11 +29,15 @@ export const COLLAB_FRAGMENT = "document-store";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type WorkspaceEditor = ReturnType<typeof useCreateBlockNote<any>>;
 
+export interface BlockNoteChangeMeta {
+  isRemote?: boolean;
+}
+
 interface UseBlockNoteEditorOptions {
   docId: string;
   initialBlocks: PartialBlock[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onChange: (docId: string, blocks: any[]) => void;
+  onChange: (docId: string, blocks: any[], meta?: BlockNoteChangeMeta) => void;
   onAskAI?: OnAskAI;
   collaboration?: YjsCollaboration | null;
 }
@@ -104,6 +108,7 @@ export function useWorkspaceBlockNoteEditor({
 
   // Programmatically seed initial blocks if collaboration is active and the remote doc is empty
   const seededRef = useRef(false);
+  const isSeedingRef = useRef(false);
   useEffect(() => {
     if (!editor || !collaboration) return;
     if (seededRef.current) return;
@@ -112,34 +117,48 @@ export function useWorkspaceBlockNoteEditor({
     const xmlFragment = collaboration.ydoc.getXmlFragment(COLLAB_FRAGMENT);
     if (xmlFragment.length === 0 && initialBlocks && initialBlocks.length > 0) {
       seededRef.current = true;
+      isSeedingRef.current = true;
       try {
         editor.replaceBlocks(editor.document, initialBlocks);
       } catch (e) {
         console.warn("[BlockNoteCollabInit] failed to seed initial content:", e);
+      } finally {
+        isSeedingRef.current = false;
       }
     } else if (xmlFragment.length > 0) {
       seededRef.current = true;
     }
   }, [editor, collaboration, collaboration?.provider.synced, initialBlocks]);
 
-  
+  const isRemoteTxRef = useRef(false);
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tt = (editor as any)?._tiptapEditor;
+    if (!tt?.on || !tt?.off) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const onTx = ({ transaction }: { transaction: any }) => {
+      if (transaction?.docChanged) {
+        isRemoteTxRef.current = Boolean(transaction.getMeta?.("y-sync$"));
+      }
+    };
+    tt.on("transaction", onTx);
+    return () => {
+      tt.off("transaction", onTx);
+    };
+  }, [editor]);
+
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const unsub = (editor as any).onChange(() => {
+      if (isSeedingRef.current) return;
+      const isRemote = isRemoteTxRef.current;
+      isRemoteTxRef.current = false;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const blocks = (editor as any).document;
-      onChangeRef.current(docId, blocks);
+      onChangeRef.current(docId, blocks, { isRemote });
     });
     return () => {
       unsub();
-    };
-  }, [editor, docId]);
-
-  useEffect(() => {
-    return () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const blocks = (editor as any).document;
-      onChangeRef.current(docId, blocks);
     };
   }, [editor, docId]);
 

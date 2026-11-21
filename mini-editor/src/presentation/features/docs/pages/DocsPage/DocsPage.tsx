@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import { message, Modal, Select } from "antd";
+import { message, Select } from "antd";
 import Sidebar from "@/presentation/features/dashboard/components/Sidebar";
 import { AppBar } from "@/presentation/components/AppBar";
 import { type RootState, type AppDispatch } from "@/presentation/store";
@@ -9,7 +9,7 @@ import { setPageTitle } from "@/presentation/store/appSlice";
 import { useGoldenLayout } from "@/presentation/layout/golden/GoldenLayoutContext";
 import { PANEL_TYPES } from "@/presentation/layout/golden/panelRegistry";
 import { useDocs } from "../../hooks/useDocs";
-import { useSearchDocsQuery, useReindexAllMutation, useCreateDocMutation } from "@/infrastructure/api/docsApi";
+import { useSearchDocsQuery, useCreateDocMutation } from "@/infrastructure/api/docsApi";
 import { useListSeriesQuery } from "@/infrastructure/api/seriesApi";
 import { ImportModal, type ImportFormat, type ImportTextFormat } from "../DocEditorPage/components/ImportModal/ImportModal";
 import DocList from "../../components/DocList";
@@ -35,7 +35,6 @@ export default function DocsPage({ panelMode }: DocsPageProps) {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [reindexAll, { isLoading: isReindexing }] = useReindexAllMutation();
   const [createDoc] = useCreateDocMutation();
   const [importModalOpen, setImportModalOpen] = useState(false);
 
@@ -74,23 +73,6 @@ export default function DocsPage({ panelMode }: DocsPageProps) {
       console.error("[New Doc] failed:", err);
       message.error("Failed to create document");
     }
-  };
-
-  const handleReindex = () => {
-    Modal.confirm({
-      title: "Reindex search?",
-      content: "Toàn bộ docs sẽ được đánh lại index từ DB. Thao tác này có thể mất vài giây.",
-      okText: "Reindex",
-      cancelText: "Huỷ",
-      onOk: async () => {
-        try {
-          const result = await reindexAll().unwrap();
-          message.success(`Reindex thành công: ${result} documents`);
-        } catch {
-          message.error("Reindex thất bại");
-        }
-      },
-    });
   };
 
   const handleImport = useCallback(async (format: ImportFormat, file: File) => {
@@ -258,13 +240,6 @@ export default function DocsPage({ panelMode }: DocsPageProps) {
             <div className="docs-page-header">
               <h2 className="docs-page-title">Docs</h2>
               <div className="docs-page-actions">
-                <button
-                  className="docs-reindex-btn"
-                  onClick={handleReindex}
-                  disabled={isReindexing}
-                >
-                  {isReindexing ? "Reindexing…" : "Reindex"}
-                </button>
                 <button
                   className="docs-import-btn"
                   onClick={() => setSeriesManagerOpen(true)}

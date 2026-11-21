@@ -34,7 +34,6 @@ interface SettingsPageProps {
 export default function SettingsPage({ panelMode, initialSection }: SettingsPageProps) {
   const dispatch = useDispatch<AppDispatch>();
   const { theme } = useSelector((state: RootState) => state.app);
-  const { user } = useSelector((state: RootState) => state.auth);
   const [activeSection, setActiveSection] = useState<SettingsSection>(
     (initialSection as SettingsSection) ?? "general"
   );
@@ -48,7 +47,6 @@ export default function SettingsPage({ panelMode, initialSection }: SettingsPage
     { path: "account", label: "Account" },
     { path: "github", label: "GitHub" },
     { path: "shortcut", label: "Shortcut" },
-    ...(user?.role === "ADMIN" ? [{ path: "search", label: "Search" }] : []),
     { path: "about", label: "About" },
   ];
 

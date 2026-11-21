@@ -6,7 +6,7 @@ import { BlockNoteView } from "@blocknote/mantine";
 import type { RootState } from "@/presentation/store";
 import "@blocknote/mantine/style.css";
 import "@/presentation/components/BlockNote/code-block-affine.css";
-import { useWorkspaceBlockNoteEditor } from "@/presentation/components/BlockNote/useBlockNoteEditor";
+import { useWorkspaceBlockNoteEditor, type BlockNoteChangeMeta } from "@/presentation/components/BlockNote/useBlockNoteEditor";
 import type { AskAIPayload } from "@/presentation/components/BlockNote/blocks/code-block-enhanced";
 import "./DocEditorBody.scss";
 
@@ -47,7 +47,7 @@ interface DocEditorBodyProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialBlocks: any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onBlocksChange: (blocks: any[]) => void;
+  onBlocksChange: (blocks: any[], meta?: BlockNoteChangeMeta) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onEditorReady?: (editor: any) => void;
   onAskAI?: (payload: AskAIPayload) => void;
@@ -68,7 +68,7 @@ export const DocEditorBody = memo(function DocEditorBody({
   const editor = useWorkspaceBlockNoteEditor({
     docId: String(docId),
     initialBlocks,
-    onChange: (_id, blocks) => onBlocksChange(blocks),
+    onChange: (_id, blocks, meta) => onBlocksChange(blocks, meta),
     onAskAI,
     collaboration,
   });

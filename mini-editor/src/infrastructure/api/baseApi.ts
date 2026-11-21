@@ -86,6 +86,26 @@ const baseQueryWithTransform: BaseQueryFn<
     const raw = result.data as Record<string, unknown>;
     const isEnvelope = ("status" in raw || "success" in raw) && "data" in raw;
     if (isEnvelope) {
+      const payload = raw.data;
+      if (
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        "items" in (payload as Record<string, unknown>) &&
+        ("total_items" in (payload as Record<string, unknown>) ||
+          "total_pages" in (payload as Record<string, unknown>))
+      ) {
+        const p = payload as Record<string, unknown>;
+        const items = Array.isArray(p.items) ? (p.items as unknown[]) : [];
+        const total = Number(p.total ?? p.total_items ?? p.totalItems ?? items.length);
+        const page = Number(p.page ?? 0);
+        const pageSize = Number(p.pageSize ?? p.page_size ?? 20);
+        return {
+          ...result,
+          data: { items, total, page, pageSize },
+        };
+      }
+
       if ("total" in raw || "total_items" in raw) {
         const total = Number(raw.total ?? raw.total_items ?? 0);
         const page = Number(raw.page ?? 0);

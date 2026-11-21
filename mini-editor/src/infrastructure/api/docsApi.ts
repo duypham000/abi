@@ -1,18 +1,73 @@
 import { baseApi, PageResult, ScrollResult } from "./baseApi";
 import type { DocDto, DocRequest, DocRevisionDto, DocRevisionSummaryDto, BinAnalysisDto } from "@/core/interfaces/docs";
 import type { EsIndexInfo } from "@/core/interfaces/search";
+import { parseOrHashId } from "@/core/utils/idUtils";
 import { isTauri } from "@/infrastructure/tauri/sqliteDb";
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
 import { enqueue } from "@/infrastructure/tauri/outboxService";
+import { computeDocRemoteHashSync } from "@/core/utils/contentHash";
 import {
   listDocsFromSqlite,
   getDocFromSqlite,
+  getDocSyncSnapshot,
   createDocInSqlite,
   updateDocInSqlite,
   deleteDocFromSqlite,
   searchDocsInSqlite,
   cacheDoc,
+  clearBackendUuid,
+  linkRemoteDocToLocal,
+  normalizeDocStatus,
 } from "@/infrastructure/tauri/docCacheService";
+
+function extractRemoteSyncError(err: unknown): { message: string; isNetwork: boolean } {
+  if (!err || typeof err !== "object") {
+    return { message: String(err || "Không thể đồng bộ lên server"), isNetwork: false };
+  }
+  const obj = err as { status?: number | string; error?: string; data?: { message?: string; error?: string } };
+  const isNetwork = obj.status === "FETCH_ERROR" || obj.status === "TIMEOUT_ERROR";
+  const msg =
+    obj.data?.message ||
+    obj.data?.error ||
+    obj.error ||
+    (typeof obj.status === "number" ? `Lỗi server (${obj.status})` : "Không thể kết nối server");
+  return { message: msg, isNetwork };
+}
+
+function toGoDocPayload(body: DocRequest) {
+  return {
+    title: body.title || "Untitled",
+    content: body.content ?? "",
+    status: normalizeDocStatus(body.status) === 1 ? "PUBLISHED" : "DRAFT",
+  };
+}
+
+function normalizeRemoteDoc(raw: unknown): DocDto {
+  const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const rawId = obj.id;
+  const uuid =
+    typeof rawId === "string" && rawId.length > 10
+      ? rawId
+      : (obj.backendUuid as string | null) ?? null;
+  const numId =
+    typeof rawId === "number"
+      ? rawId
+      : parseOrHashId(String(rawId ?? uuid ?? Date.now()), "doc-");
+  return {
+    id: numId,
+    title: typeof obj.title === "string" ? obj.title : "Untitled",
+    content: (obj.content as string | null) ?? null,
+    plainText: (obj.plainText as string | null) ?? null,
+    metadata: (obj.metadata as string | null) ?? null,
+    status: normalizeDocStatus(obj.status),
+    lastSync: (obj.lastSync as string | null) ?? (obj.updated_at as string | null) ?? null,
+    createdBy: (obj.createdBy as DocDto["createdBy"]) ?? null,
+    yjsState: (obj.yjsState as string | null) ?? null,
+    backendUuid: uuid,
+    slug: (obj.slug as string | null) ?? null,
+    remoteStatus: "online",
+  };
+}
 
 export const docsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
@@ -20,7 +75,7 @@ export const docsApi = baseApi.injectEndpoints({
       PageResult<DocDto>,
       { seriesId?: number; page?: number; size?: number; sortBy?: string; sortDirection?: string } | void
     >({
-      queryFn: async (args, _api, _extraOptions, fetchWithBaseQuery) => {
+      queryFn: async (args, api, _extraOptions, fetchWithBaseQuery) => {
         if (isTauri()) {
           try {
             const data = await listDocsFromSqlite(args || undefined);
@@ -31,14 +86,16 @@ export const docsApi = baseApi.injectEndpoints({
                   const { seriesId, page = 0, size = 20, sortBy = "id", sortDirection = "ASC" } = args || {};
                   const res = await fetchWithBaseQuery({
                     url: "/base/docs/list",
-                    params: { seriesId, page, size, sortBy, sortDirection },
+                    params: { seriesId, page: page + 1, page_size: size, size, sortBy, sortDirection },
                   });
                   if (res.data && typeof res.data === "object" && "items" in (res.data as Record<string, unknown>)) {
                     const items = (res.data as PageResult<DocDto>).items;
-                    if (Array.isArray(items)) {
+                    if (Array.isArray(items) && items.length > 0) {
                       for (const item of items) {
                         await cacheDoc(item);
                       }
+                      const fresh = await listDocsFromSqlite(args || undefined);
+                      api.dispatch(docsApi.util.upsertQueryData("listDocs", args, fresh));
                     }
                   }
                 }
@@ -46,7 +103,9 @@ export const docsApi = baseApi.injectEndpoints({
                 // offline
               }
             };
-            void syncRemote();
+            setTimeout(() => {
+              void syncRemote();
+            }, 0);
             return { data };
           } catch (err: unknown) {
             return { error: { status: 500, statusText: String(err), data: String(err) } };
@@ -55,7 +114,7 @@ export const docsApi = baseApi.injectEndpoints({
         const { seriesId, page = 0, size = 20, sortBy = "id", sortDirection = "ASC" } = args || {};
         const result = await fetchWithBaseQuery({
           url: "/base/docs/list",
-          params: { seriesId, page, size, sortBy, sortDirection },
+          params: { seriesId, page: page + 1, page_size: size, size, sortBy, sortDirection },
         });
         return result.data
           ? { data: result.data as PageResult<DocDto> }
@@ -89,39 +148,80 @@ export const docsApi = baseApi.injectEndpoints({
     }),
 
     getDocById: builder.query<DocDto, number>({
-      queryFn: async (id, _api, _extraOptions, fetchWithBaseQuery) => {
+      queryFn: async (id, api, _extraOptions, fetchWithBaseQuery) => {
         if (isTauri()) {
           try {
             const local = await getDocFromSqlite(id);
             if (local) {
+              const connectivity = (api.getState() as { app?: { connectivity?: string } })?.app?.connectivity;
+              if (!local.backendUuid || connectivity === "offline") {
+                return { data: { ...local, remoteStatus: "local-only" } };
+              }
+
+              const token = await getAccessToken();
+              if (!token || token === "local-standalone-token") {
+                return { data: { ...local, remoteStatus: "local-only" } };
+              }
+
+              const remoteUuid = local.backendUuid;
               const syncSingle = async () => {
                 try {
-                  const token = await getAccessToken();
-                  if (token && token !== "local-standalone-token") {
-                    const remoteId = local.backendUuid || id;
-                    const res = await fetchWithBaseQuery(`/base/docs/${remoteId}`);
-                    if (res.data) {
-                      await cacheDoc(res.data as DocDto);
-                    }
+                  const res = await fetchWithBaseQuery(`/base/docs/${remoteUuid}`);
+                  if (res.data) {
+                    const linked = await linkRemoteDocToLocal(id, res.data as Record<string, unknown>, { force: false });
+                    const snap = await getDocSyncSnapshot(id);
+                    const nextDoc = snap?.doc ?? linked ?? local;
+                    api.dispatch(
+                      docsApi.util.upsertQueryData("getDocById", id, {
+                        ...nextDoc,
+                        remoteStatus: snap?.hasUnsyncedRemoteChanges ? "local-only" : "online",
+                      })
+                    );
+                  } else if (res.error && (res.error as { status?: number }).status === 404) {
+                    await clearBackendUuid(id);
+                    api.dispatch(
+                      docsApi.util.upsertQueryData("getDocById", id, {
+                        ...local,
+                        backendUuid: null,
+                        syncedHash: null,
+                        remoteStatus: "local-only",
+                      })
+                    );
+                  } else {
+                    api.dispatch(
+                      docsApi.util.upsertQueryData("getDocById", id, {
+                        ...local,
+                        remoteStatus: "local-only",
+                      })
+                    );
                   }
                 } catch {
-                  // offline
+                  api.dispatch(
+                    docsApi.util.upsertQueryData("getDocById", id, {
+                      ...local,
+                      remoteStatus: "local-only",
+                    })
+                  );
                 }
               };
-              void syncSingle();
-              return { data: local };
+              setTimeout(() => {
+                void syncSingle();
+              }, 0);
+              return { data: { ...local, remoteStatus: "pending" } };
             }
           } catch {
             // fallback sang backend fetch
           }
         }
         const result = await fetchWithBaseQuery(`/base/docs/${id}`);
-        if (result.data && isTauri()) {
-          cacheDoc(result.data as DocDto);
+        if (result.data) {
+          const normalized = normalizeRemoteDoc(result.data);
+          if (isTauri()) {
+            await cacheDoc(result.data as DocDto);
+          }
+          return { data: normalized };
         }
-        return result.data
-          ? { data: result.data as DocDto }
-          : { error: result.error as any };
+        return { error: result.error as any };
       },
       providesTags: (_res, _err, id) => [{ type: "Doc" as const, id }],
     }),
@@ -137,14 +237,17 @@ export const docsApi = baseApi.injectEndpoints({
           }
         }
 
+        const goPayload = toGoDocPayload(body);
         try {
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
-            const result = await fetchWithBaseQuery({ url: "/base/docs", method: "POST", body });
+            const result = await fetchWithBaseQuery({ url: "/base/docs", method: "POST", body: goPayload });
             if (result.data) {
-              const remoteDoc = result.data as DocDto;
-              if (isTauri()) await cacheDoc(remoteDoc);
-              return { data: remoteDoc };
+              if (isTauri() && localDoc) {
+                const linked = await linkRemoteDocToLocal(localDoc.id, result.data as Record<string, unknown>, { force: true });
+                return { data: { ...(linked ?? normalizeRemoteDoc(result.data)), remoteStatus: "online" } };
+              }
+              return { data: normalizeRemoteDoc(result.data) };
             }
           }
         } catch {
@@ -160,12 +263,12 @@ export const docsApi = baseApi.injectEndpoints({
               payload: body,
             });
           }
-          return { data: localDoc };
+          return { data: { ...localDoc, remoteStatus: "local-only" } };
         }
 
-        const result = await fetchWithBaseQuery({ url: "/base/docs", method: "POST", body });
+        const result = await fetchWithBaseQuery({ url: "/base/docs", method: "POST", body: goPayload });
         return result.data
-          ? { data: result.data as DocDto }
+          ? { data: normalizeRemoteDoc(result.data) }
           : { error: result.error as any };
       },
       invalidatesTags: ["Doc"],
@@ -182,19 +285,86 @@ export const docsApi = baseApi.injectEndpoints({
           }
         }
 
-        const remoteId = localDoc?.backendUuid || id;
+        const sentRemoteHash = computeDocRemoteHashSync({
+          title: body.title,
+          content: body.content,
+          status: body.status,
+        });
+        const goPayload = toGoDocPayload(body);
+        let remoteSyncError: string | null = null;
+        let remoteSyncNetworkError = false;
+
         try {
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
-            const result = await fetchWithBaseQuery({ url: `/base/docs/${remoteId}`, method: "PUT", body });
-            if (result.data) {
-              const remoteDoc = result.data as DocDto;
-              if (isTauri()) await cacheDoc(remoteDoc);
-              return { data: remoteDoc };
+            let shouldCreateRemote = !localDoc?.backendUuid;
+
+            if (localDoc?.backendUuid) {
+              const result = await fetchWithBaseQuery({
+                url: `/base/docs/${localDoc.backendUuid}`,
+                method: "PUT",
+                body: goPayload,
+              });
+              if (result.data) {
+                const linked = isTauri()
+                  ? await linkRemoteDocToLocal(id, result.data as Record<string, unknown>, {
+                      force: true,
+                      confirmedRemoteHash: sentRemoteHash,
+                    })
+                  : null;
+                return {
+                  data: {
+                    ...(linked ?? normalizeRemoteDoc(result.data)),
+                    remoteStatus: "online",
+                    remoteSyncError: null,
+                    remoteSyncNetworkError: false,
+                  },
+                };
+              }
+              const errStatus = (result.error as { status?: number } | undefined)?.status;
+              if (errStatus === 404 || errStatus === 500) {
+                shouldCreateRemote = true;
+              } else {
+                const extracted = extractRemoteSyncError(result.error);
+                remoteSyncError = extracted.message;
+                remoteSyncNetworkError = extracted.isNetwork;
+              }
+            }
+
+            if (shouldCreateRemote) {
+              // No backendUuid yet, or remote PUT returned 404/500 (missing in active DB) -> register via POST
+              const createRes = await fetchWithBaseQuery({
+                url: "/base/docs",
+                method: "POST",
+                body: goPayload,
+              });
+              if (createRes.data) {
+                const linked = isTauri()
+                  ? await linkRemoteDocToLocal(id, createRes.data as Record<string, unknown>, {
+                      force: true,
+                      confirmedRemoteHash: sentRemoteHash,
+                    })
+                  : null;
+                return {
+                  data: {
+                    ...(linked ?? normalizeRemoteDoc(createRes.data)),
+                    remoteStatus: "online",
+                    remoteSyncError: null,
+                    remoteSyncNetworkError: false,
+                  },
+                };
+              }
+              if (createRes.error) {
+                const extracted = extractRemoteSyncError(createRes.error);
+                remoteSyncError = extracted.message;
+                remoteSyncNetworkError = extracted.isNetwork;
+              }
             }
           }
-        } catch {
-          // offline mode
+        } catch (err) {
+          const extracted = extractRemoteSyncError(err);
+          remoteSyncError = extracted.message;
+          remoteSyncNetworkError = extracted.isNetwork;
         }
 
         if (localDoc) {
@@ -207,12 +377,19 @@ export const docsApi = baseApi.injectEndpoints({
               payload: body,
             });
           }
-          return { data: localDoc };
+          return {
+            data: {
+              ...localDoc,
+              remoteStatus: "local-only",
+              remoteSyncError,
+              remoteSyncNetworkError,
+            },
+          };
         }
 
-        const result = await fetchWithBaseQuery({ url: `/base/docs/${id}`, method: "PUT", body });
+        const result = await fetchWithBaseQuery({ url: `/base/docs/${id}`, method: "PUT", body: goPayload });
         return result.data
-          ? { data: result.data as DocDto }
+          ? { data: normalizeRemoteDoc(result.data) }
           : { error: result.error as any };
       },
       invalidatesTags: (_res, _err, { id }) => [
