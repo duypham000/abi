@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Input, Modal, Tooltip, Dropdown, Popover, Radio, Select, Switch } from "antd";
 import type { InputRef, MenuProps } from "antd";
 import {
@@ -27,9 +27,15 @@ import {
   ThunderboltOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  BranchesOutlined,
+  CloudUploadOutlined,
+  WarningOutlined,
+  CloudDownloadOutlined,
+  CloudSyncOutlined,
 } from "@ant-design/icons";
 import type { EditorSettings } from "@/features/docs/pages/DocEditorPage/DocEditorPage";
 import type { SaveStatus } from "../../../../hooks/useDocEditor";
+import type { DocPersistenceState } from "@/store/docsSlice";
 import type { CollaboratorUser } from "@/features/docs/hooks/useYjsCollaboration";
 import { CollaboratorAvatars } from "../CollaboratorAvatars";
 import "./DocEditorToolbar.scss";
@@ -40,6 +46,11 @@ interface DocEditorToolbarProps {
   isRightPanelOpen: boolean;
   settings: EditorSettings;
   saveStatus: SaveStatus;
+  persistenceState?: DocPersistenceState;
+  justSaved?: boolean;
+  saveError?: string | null;
+  lastSavedLocalAt?: string | null;
+  lastSyncedRemoteAt?: string | null;
   isDraft?: boolean;
   isDirty: boolean;
   isSyncedToServer?: boolean;
@@ -66,41 +77,28 @@ interface DocEditorToolbarProps {
   onViewInfo: () => void;
   onViewTableOfContents: () => void;
   onViewHistoryVersion: () => void;
+  onViewGitHistory?: () => void;
+  onSaveToGit?: () => void;
+  isOnGit?: boolean;
+  isSavingGit?: boolean;
+  gitFileStatus?: "clean" | "modified" | "untracked" | "conflict" | "behind";
+  hasGitChanges?: boolean;
+  hasConflict?: boolean;
+  remoteUpdated?: boolean;
+  onPull?: () => void;
+  onResolveConflict?: () => void;
   onDuplicate: () => void;
   onImport: () => void;
   onExport: () => void;
 }
 
-const EXIT_DURATION = 200; // ms — must match CSS animation duration
-
-function useSaveStatusDisplay(saveStatus: SaveStatus) {
-  const [displayed, setDisplayed] = useState<SaveStatus>("idle");
-  const [phase, setPhase] = useState<"in" | "active" | "out">("in");
-  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearExit = useCallback(() => {
-    if (exitTimerRef.current) { clearTimeout(exitTimerRef.current); exitTimerRef.current = null; }
-  }, []);
-
-  useEffect(() => {
-    if (saveStatus !== "idle") {
-      clearExit();
-      setDisplayed(saveStatus);
-      setPhase("in");
-      const t = setTimeout(() => setPhase("active"), 10);
-      return () => clearTimeout(t);
-    } else if (displayed !== "idle" && displayed !== "error") {
-      // Exit animation for success/saving states; error stays until retried
-      setPhase("out");
-      exitTimerRef.current = setTimeout(() => {
-        setDisplayed("idle");
-        setPhase("in");
-      }, EXIT_DURATION);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saveStatus]);
-
-  return { displayed, phase };
+function formatSyncTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
 }
 
 const WIDTH_OPTIONS = [
@@ -121,8 +119,16 @@ export function DocEditorToolbar({
   isRightPanelOpen,
   settings,
   saveStatus,
+  persistenceState,
+  justSaved = false,
+  saveError = null,
+  lastSavedLocalAt = null,
+  lastSyncedRemoteAt = null,
   isDraft,
   isDirty,
+  isSyncedToServer,
+  collaborators = [],
+  isCollabConnected = false,
   canUndo,
   canRedo,
   undoTooltip = "Undo (Ctrl+Z)",
@@ -144,16 +150,81 @@ export function DocEditorToolbar({
   onViewInfo,
   onViewTableOfContents,
   onViewHistoryVersion,
+  onViewGitHistory,
+  onSaveToGit,
+  isOnGit = false,
+  isSavingGit = false,
+  gitFileStatus = "clean",
+  hasGitChanges = false,
+  hasConflict = false,
+  remoteUpdated = false,
+  onPull,
+  onResolveConflict,
   onDuplicate,
   onImport,
   onExport,
-  collaborators = [],
 }: DocEditorToolbarProps) {
   const titleInputRef = useRef<InputRef>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [localTitle, setLocalTitle] = useState(title);
   const isFocusedRef = useRef(false);
-  const { displayed: displayedStatus, phase } = useSaveStatusDisplay(saveStatus);
+
+  const effectiveState: DocPersistenceState =
+    persistenceState ??
+    (saveStatus === "saving"
+      ? "saving"
+      : saveStatus === "error"
+        ? "error"
+        : isDirty
+          ? "unsaved"
+          : isSyncedToServer === false
+            ? "saved-local"
+            : "synced");
+
+  const isGitSaving = isSavingGit || effectiveState === "saving";
+
+  let gitIcon = <BranchesOutlined className="toolbar-btn-icon" />;
+  let gitClass = "toolbar-git-btn--clean";
+  let gitTooltip = "";
+  let isGitDisabled = false;
+  let handleGitAction = onSaveToGit;
+
+  if (isGitSaving) {
+    gitIcon = <LoadingOutlined className="toolbar-btn-icon" spin />;
+    gitTooltip = isSavingGit ? "Đang lưu & đẩy lên GitHub…" : "Đang lưu tài liệu…";
+    isGitDisabled = true;
+  } else if (saveStatus === "error") {
+    gitTooltip = "Lưu tài liệu thất bại — Vui lòng thử lại";
+    isGitDisabled = true;
+  } else if (hasConflict || gitFileStatus === "conflict") {
+    gitIcon = <WarningOutlined className="toolbar-btn-icon" />;
+    gitClass = "toolbar-git-btn--conflict";
+    gitTooltip = "Phát hiện xung đột Git trên file này — Nhấn để giải quyết";
+    handleGitAction = onResolveConflict || onSaveToGit;
+    isGitDisabled = false;
+  } else if (remoteUpdated || gitFileStatus === "behind") {
+    gitIcon = <CloudDownloadOutlined className="toolbar-btn-icon" />;
+    gitClass = "toolbar-git-btn--behind";
+    gitTooltip = "Nội dung trên Git đã được cập nhật — Nhấn để Pull về";
+    handleGitAction = onPull || onSaveToGit;
+    isGitDisabled = false;
+  } else if (!isOnGit || gitFileStatus === "untracked") {
+    gitIcon = <CloudUploadOutlined className="toolbar-btn-icon" />;
+    gitClass = "toolbar-git-btn--untracked";
+    gitTooltip = "Save and Push lên GitHub (Ctrl+Shift+S)";
+    isGitDisabled = false;
+  } else if (hasGitChanges || gitFileStatus === "modified") {
+    gitIcon = <BranchesOutlined className="toolbar-btn-icon" />;
+    gitClass = "toolbar-git-btn--modified";
+    gitTooltip = "Save and Commit lên Git (Ctrl+Shift+S)";
+    isGitDisabled = false;
+  } else {
+    // Clean / No changes -> disable commit button as requested
+    gitIcon = <BranchesOutlined className="toolbar-btn-icon" />;
+    gitClass = "toolbar-git-btn--clean";
+    gitTooltip = "Save and Commit (Ctrl+Shift+S) — Đã đồng bộ với Git";
+    isGitDisabled = true;
+  }
 
   useEffect(() => {
     if (!isFocusedRef.current) {
@@ -213,6 +284,25 @@ export function DocEditorToolbar({
       icon: <HistoryOutlined />,
       onClick: onViewHistoryVersion,
     },
+    ...(onViewGitHistory ? [{
+      key: "view-git-history",
+      label: "View Git history",
+      icon: <BranchesOutlined />,
+      onClick: onViewGitHistory,
+    }] : []),
+    ...(onSaveToGit ? [{
+      key: "save-to-git",
+      label: hasConflict
+        ? "Resolve Git Conflict"
+        : remoteUpdated
+          ? "Pull changes from Git"
+          : isOnGit
+            ? "Commit nhanh lên Git"
+            : "Push to GitHub",
+      icon: gitIcon,
+      disabled: isGitDisabled,
+      onClick: handleGitAction,
+    }] : []),
     { type: "divider" },
     {
       key: "duplicate",
@@ -298,7 +388,7 @@ export function DocEditorToolbar({
             size="small"
           />
           <span className="editor-settings-autosave-label">
-            {settings.autoSave ? "Bật" : "Tắt — dùng Ctrl+S hoặc nút Save"}
+            {settings.autoSave ? "Bật — tự động lưu & đồng bộ" : "Tắt — dùng Ctrl+S hoặc nút Save"}
           </span>
         </div>
       </div>
@@ -357,54 +447,106 @@ export function DocEditorToolbar({
       />
 
       {/* Draft badge */}
-      {isDraft && saveStatus === "idle" && (
-        <span className="toolbar-draft-badge">DRAFT · Ctrl+S to save</span>
+      {isDraft && (
+        <span className="toolbar-draft-badge">DRAFT · Ctrl+S</span>
       )}
 
-      {/* Save status indicator */}
-      {(!isDraft || saveStatus !== "idle") && displayedStatus !== "idle" && (
-        displayedStatus === "error" ? (
-          <Tooltip title="Click to retry">
-            <button
-              key="error"
-              className={`toolbar-autosave toolbar-autosave--error toolbar-autosave--clickable toolbar-autosave--${phase}`}
-              onClick={onRetry}
-            >
-              <CloseCircleOutlined /> Save failed — retry
-            </button>
-          </Tooltip>
-        ) : (
-          <span
-            key={displayedStatus}
-            className={[
-              "toolbar-autosave",
-              displayedStatus === "success" ? "toolbar-autosave--success" : "",
-              `toolbar-autosave--${phase}`,
-            ].filter(Boolean).join(" ")}
+      {/* Unified real persistence state indicator */}
+      {effectiveState === "saving" && (
+        <span className="toolbar-autosave toolbar-autosave--saving">
+          <LoadingOutlined spin /> Đang lưu…
+        </span>
+      )}
+      {effectiveState === "error" && (
+        <Tooltip title={saveError || "Lưu thất bại — nhấn để thử lại"}>
+          <button
+            className="toolbar-autosave toolbar-autosave--error toolbar-autosave--clickable"
+            onClick={onRetry}
           >
-            {displayedStatus === "saving" && <><LoadingOutlined spin /> Saving…</>}
-            {displayedStatus === "success" && <><CheckCircleOutlined /> Saved</>}
+            <CloseCircleOutlined /> Lưu lỗi — Thử lại
+          </button>
+        </Tooltip>
+      )}
+      {effectiveState === "unsaved" && (
+        <Tooltip title="Có thay đổi chưa lưu — Nhấn hoặc Ctrl+S để lưu">
+          <button
+            className="toolbar-autosave toolbar-autosave--unsaved toolbar-autosave--clickable"
+            onClick={onManualSave}
+          >
+            <span className="toolbar-status-dot" /> Chưa lưu
+          </button>
+        </Tooltip>
+      )}
+      {effectiveState === "saved-local" && (
+        <Tooltip
+          title={
+            lastSavedLocalAt
+              ? `Đã lưu trên máy lúc ${formatSyncTime(lastSavedLocalAt)}, chưa đồng bộ server — Nhấn hoặc Ctrl+S`
+              : "Đã lưu trên máy, chưa đồng bộ server — Nhấn hoặc Ctrl+S"
+          }
+        >
+          <button
+            className="toolbar-autosave toolbar-autosave--local toolbar-autosave--clickable"
+            onClick={onManualSave}
+          >
+            <CloudSyncOutlined /> Đã lưu máy
+          </button>
+        </Tooltip>
+      )}
+      {effectiveState === "synced" && (
+        justSaved || saveStatus === "success" ? (
+          <span className="toolbar-autosave toolbar-autosave--success">
+            <CheckCircleOutlined /> Đã lưu
           </span>
+        ) : (
+          <Tooltip
+            title={
+              lastSyncedRemoteAt
+                ? `Đã đồng bộ server lúc ${formatSyncTime(lastSyncedRemoteAt)}`
+                : "Đã đồng bộ với server"
+            }
+          >
+            <span className="toolbar-autosave toolbar-autosave--synced">
+              <CheckCircleOutlined /> Đã đồng bộ
+            </span>
+          </Tooltip>
         )
       )}
 
-      {/* Manual Save button (autosave off, idle) */}
-      {!settings.autoSave && saveStatus === "idle" && (
-        <Tooltip title={isDirty ? "Save changes (Ctrl+S)" : "No unsaved changes"}>
+      {/* Manual Save button (autosave off) */}
+      {!settings.autoSave && effectiveState !== "saving" && (
+        <Tooltip
+          title={
+            isDirty || effectiveState === "error"
+              ? "Lưu & đồng bộ (Ctrl+S)"
+              : "Tất cả thay đổi đã được đồng bộ"
+          }
+        >
           <button
-            className={`toolbar-btn toolbar-save-btn ${isDirty ? "toolbar-save-btn--dirty" : ""}`}
+            className={`toolbar-btn toolbar-save-btn ${isDirty || effectiveState === "error" ? "toolbar-save-btn--dirty" : ""}`}
             onClick={onManualSave}
-            disabled={!isDirty}
+            disabled={!isDirty && effectiveState !== "error"}
           >
             <SaveOutlined className="toolbar-btn-icon" />
-            {isDirty && <span className="toolbar-save-btn__dot" />}
+            {(isDirty || effectiveState === "error") && <span className="toolbar-save-btn__dot" />}
           </button>
         </Tooltip>
       )}
 
-      <CollaboratorAvatars collaborators={collaborators} />
-
       <div className="doc-editor-toolbar-actions">
+        {isCollabConnected && (
+          <Tooltip title="Đang kết nối thời gian thực (Yjs)">
+            <span style={{ display: "inline-flex", alignItems: "center", marginRight: 6 }} aria-label="Live">
+              <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#52c41a" }} />
+            </span>
+          </Tooltip>
+        )}
+        {collaborators && collaborators.length > 0 && (
+          <>
+            <CollaboratorAvatars collaborators={collaborators} />
+            <span className="toolbar-divider" />
+          </>
+        )}
         {/* Undo / Redo */}
         <Tooltip title={undoTooltip}>
           <button className="toolbar-btn" onClick={onUndo} disabled={!canUndo}>
@@ -453,6 +595,19 @@ export function DocEditorToolbar({
             <InfoCircleOutlined className="toolbar-btn-icon" />
           </button>
         </Tooltip>
+
+        {onSaveToGit && (
+          <Tooltip title={gitTooltip}>
+            <button
+              className={`toolbar-btn toolbar-git-btn ${gitClass}`}
+              onClick={handleGitAction}
+              disabled={isGitDisabled}
+              aria-label={gitTooltip}
+            >
+              {gitIcon}
+            </button>
+          </Tooltip>
+        )}
 
         <Dropdown menu={{ items: menuItems }} trigger={["click"]} placement="bottomRight">
           <Tooltip title="More actions">

@@ -1,19 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { AuthUser } from "@/core/interfaces/auth";
 import type { AppDispatch } from "@/store";
+import { selectIsOnline } from "@/store/appSlice";
 import { docsApi } from "@/infrastructure/api/docsApi";
 
 function getDefaultWsUrl(): string {
+  // 1. Explicit override (e.g. custom Yjs server)
   if (import.meta.env.VITE_YJS_SERVER_URL) {
     return import.meta.env.VITE_YJS_SERVER_URL;
   }
+  // 2. Use VITE_NODE_WS_URL from .env — works in both dev (ws://127.0.0.1:1234)
+  //    and production (wss://ws.tomoo.uk), bypassing window.location.
   if (import.meta.env.VITE_NODE_WS_URL) {
     const wsBase = (import.meta.env.VITE_NODE_WS_URL as string).replace(/\/+$/, "");
     return `${wsBase}/ws/yjs`;
   }
+  // 3. Dev proxy fallback: relative path via window.location
   if (typeof window !== "undefined" && window.location?.host) {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${proto}//${window.location.host}/ws/yjs`;
@@ -76,11 +81,12 @@ export function useYjsCollaboration(
   enabled: boolean = true
 ): UseYjsCollaborationResult {
   const dispatch = useDispatch<AppDispatch>();
+  const isOnline = useSelector(selectIsOnline);
   const [isConnected, setIsConnected] = useState(false);
   const [collaborators, setCollaborators] = useState<CollaboratorUser[]>([]);
   const [providerState, setProviderState] = useState<{ ydoc: Y.Doc; provider: WebsocketProvider } | null>(null);
 
-  const skip = !enabled || isInvalidDocId(docId);
+  const skip = !enabled || isInvalidDocId(docId) || !isOnline;
   const attemptKey = `${docId}|${user?.userId ?? ""}`;
   const [resolvedKey, setResolvedKey] = useState<string | null>(null);
   const isResolved = skip || resolvedKey === attemptKey;
@@ -144,6 +150,7 @@ export function useYjsCollaboration(
         const res = await fetchToken();
         token = res.token;
         expiresIn = res.expiresIn || 86400;
+        // Only let backend override if client has no explicit WS URL configured in .env
         if (res.url && !import.meta.env.VITE_NODE_WS_URL && !import.meta.env.VITE_YJS_SERVER_URL) {
           serverUrl = res.url;
         }
@@ -185,6 +192,7 @@ export function useYjsCollaboration(
       });
       if (provider.synced) activateCollab();
 
+      // Safety net for isResolved status when running in background
       syncFallbackTimer = setTimeout(markResolved, 4000);
 
       provider.on("connection-close", () => {

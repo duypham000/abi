@@ -27,6 +27,13 @@ export interface DocDto {
   status: DocStatus;
   createdBy: { id: number; username: string; email: string } | null;
   yjsState?: string | null;
+  backendUuid?: string | null;
+  slug?: string | null;
+  remoteStatus?: "pending" | "online" | "local-only";
+  remoteSyncError?: string | null;
+  remoteSyncNetworkError?: boolean;
+  localHash?: string | null;
+  syncedHash?: string | null;
   preview?: string | null;
   highlights?: Record<string, string[]> | null;
 }
@@ -40,6 +47,8 @@ export interface DocRequest {
   lastSync: string | null;
   status: DocStatus;
   yjsState?: string | null;
+  backendUuid?: string | null;
+  slug?: string | null;
 }
 
 export interface DocMetadataProperty {

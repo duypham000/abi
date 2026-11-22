@@ -72,7 +72,7 @@ export function SeriesManagerModal({ open, onClose }: SeriesManagerModalProps) {
       title="Manage Series"
       footer={null}
       width={650}
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         {/* Creation/Editing Form */}

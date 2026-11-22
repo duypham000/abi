@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
-import { message, Modal, Select } from "antd";
+import { message, Select } from "antd";
 import { type AppDispatch } from "@/store";
 import { setPageTitle } from "@/store/appSlice";
 import { useDocs } from "../../hooks/useDocs";
 import {
   useSearchDocsQuery,
-  useReindexAllMutation,
   useCreateDocMutation,
 } from "@/infrastructure/api/docsApi";
 import { useListSeriesQuery } from "@/infrastructure/api/seriesApi";
@@ -42,7 +41,6 @@ export default function DocsPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [reindexAll, { isLoading: isReindexing }] = useReindexAllMutation();
   const [createDoc, { isLoading: isCreating }] = useCreateDocMutation();
   const [importModalOpen, setImportModalOpen] = useState(false);
 
@@ -76,24 +74,6 @@ export default function DocsPage() {
     } catch {
       message.error("Không thể tạo tài liệu mới");
     }
-  };
-
-  const handleReindex = () => {
-    Modal.confirm({
-      title: "Reindex search?",
-      content:
-        "Toàn bộ docs sẽ được đánh lại index từ DB. Thao tác này có thể mất vài giây.",
-      okText: "Reindex",
-      cancelText: "Huỷ",
-      onOk: async () => {
-        try {
-          const result = await reindexAll().unwrap();
-          message.success(`Reindex thành công: ${result} documents`);
-        } catch {
-          message.error("Reindex thất bại");
-        }
-      },
-    });
   };
 
   const handleImport = useCallback(
@@ -269,13 +249,6 @@ export default function DocsPage() {
           <div className="docs-page-header">
             <h2 className="docs-page-title">Docs</h2>
             <div className="docs-page-actions">
-              <button
-                className="docs-reindex-btn"
-                onClick={handleReindex}
-                disabled={isReindexing}
-              >
-                {isReindexing ? "Reindexing…" : "Reindex"}
-              </button>
               <button
                 className="docs-import-btn"
                 onClick={() => setSeriesManagerOpen(true)}

@@ -6,16 +6,16 @@ interface CollaboratorAvatarsProps {
 }
 
 export function CollaboratorAvatars({ collaborators }: CollaboratorAvatarsProps) {
-  if (collaborators.length === 0) return null;
+  if (!collaborators || collaborators.length === 0) return null;
 
   const MAX_VISIBLE = 4;
   const visible = collaborators.slice(0, MAX_VISIBLE);
   const overflow = collaborators.length - MAX_VISIBLE;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 0, marginRight: 8 }}>
       {visible.map((user, i) => (
-        <Tooltip key={user.userId} title={user.name}>
+        <Tooltip key={user.userId || i} title={user.name}>
           <div
             style={{
               width: 28,

@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import * as Y from "yjs";
-import { base64ToUint8Array } from "@/core/utils/yjsUtils";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { message } from "antd";
@@ -44,9 +42,10 @@ function parseInitialBlocks(content: string | null | undefined): unknown[] {
   try {
     const parsed = JSON.parse(content);
     if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.content)) return parsed.content;
     return [];
   } catch {
-    return [];
+    return [{ type: "paragraph", content: [{ type: "text", text: content, styles: {} }] }];
   }
 }
 
@@ -56,7 +55,6 @@ export default function DocEditorPage() {
 
   const docId = Number(params.id);
   const dispatch = useDispatch<AppDispatch>();
-  const isDirty = useSelector((state: RootState) => state.docs.isDirty);
   const authUser = useSelector((state: RootState) => state.auth.user);
 
   const [editorSettings, setEditorSettings] = usePersistedState<EditorSettings>("editor-settings-v2", DEFAULT_SETTINGS);
@@ -86,6 +84,12 @@ export default function DocEditorPage() {
     isLoading,
     isFetching,
     saveStatus,
+    persistenceState,
+    isDirty,
+    justSaved,
+    lastError,
+    lastSavedLocalAt,
+    lastSyncedRemoteAt,
     isDraft,
     handleBlocksChange,
     handleTitleChange,
@@ -93,12 +97,12 @@ export default function DocEditorPage() {
     handleSeriesIdChange,
     triggerSave,
     runWithSaveStatus,
-  } = useDocEditor(docId, editorRef);
+  } = useDocEditor(docId, { editorRef, autoSave: editorSettings.autoSave });
 
   const isOnlineDoc = Boolean(docId > 0 && isSavedOnline);
 
   const { collaboration, isResolved: isCollabResolved } = useYjsCollaboration(
-    isOnlineDoc ? docId : -1,
+    isOnlineDoc ? (doc?.backendUuid || docId) : -1,
     authUser,
     isOnlineDoc
   );
@@ -106,6 +110,11 @@ export default function DocEditorPage() {
   // Wait for the first fresh server round-trip before mounting the editor,
   // so stale RTK Query cache data never seeds the editor's initial content.
   const initialFetchDoneRef = useRef(false);
+  const initialFetchDocIdRef = useRef(docId);
+  if (initialFetchDocIdRef.current !== docId) {
+    initialFetchDocIdRef.current = docId;
+    initialFetchDoneRef.current = false;
+  }
   if (doc && !isFetching) initialFetchDoneRef.current = true;
   const effectivelyLoading = isLoading || (isFetching && !initialFetchDoneRef.current);
 
@@ -116,21 +125,6 @@ export default function DocEditorPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [isRevisionPanelOpen, setIsRevisionPanelOpen] = useState(false);
-
-  // Seed Y.Doc from cached yjsState only when WS is unavailable (true offline).
-  // When connected, yhub provides initial state via bindState on connect.
-  const yjsSeededRef = useRef(false);
-  useEffect(() => { yjsSeededRef.current = false; }, [docId]);
-  useEffect(() => {
-    if (yjsSeededRef.current || !doc?.yjsState || !collaboration?.ydoc) return;
-    if (collaboration.isConnected) { yjsSeededRef.current = true; return; }
-    try {
-      Y.applyUpdate(collaboration.ydoc, base64ToUint8Array(doc.yjsState));
-      yjsSeededRef.current = true;
-    } catch (e) {
-      console.warn("[YjsSeed]", e);
-    }
-  }, [doc?.yjsState, collaboration?.ydoc, collaboration?.isConnected]);
 
   const docMeta = useMemo(() => parseDocMetadata(doc?.metadata ?? null), [doc?.metadata]);
   const initialBlocks = useMemo(() => parseInitialBlocks(doc?.content), [doc?.id]);
@@ -149,7 +143,7 @@ export default function DocEditorPage() {
   // not on every search state update (matches, currentIndex, etc.).
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
         triggerSave();
         return;
@@ -268,152 +262,164 @@ export default function DocEditorPage() {
     }
   }
 
-  const handleImport = useCallback(async (format: ImportFormat, file: File) => {
-    try {
-      if (format === "markdown") {
-        const text = await file.text();
-        const { blocknoteMarkdownToBlocks } = await import("./importHelpers");
-        const blocks = await blocknoteMarkdownToBlocks(text, editor);
-        await runWithSaveStatus(async () => {
-          const result = await createDoc({
-            title: file.name.replace(/\.md$/, ""),
-            content: JSON.stringify(blocks),
-            metadata: null,
-            lastSync: null,
-            status: 1,
-          }).unwrap();
-          navigate(`/docs/${result.id}`);
-        });
-        return;
+  const applyImportToCurrentDoc = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async (blocks: any[], newTitle?: string, newMeta?: any) => {
+      if (!editor) throw new Error("Editor not ready");
+      editor.replaceBlocks(editor.document, blocks.length > 0 ? blocks : [{ type: "paragraph" }]);
+      if (newTitle) {
+        handleTitleChange(newTitle);
       }
-
-      if (format === "html") {
-        const text = await file.text();
-        const { blocknoteHTMLToBlocks } = await import("./importHelpers");
-        const blocks = await blocknoteHTMLToBlocks(text, editor);
-        await runWithSaveStatus(async () => {
-          const result = await createDoc({
-            title: file.name.replace(/\.html?$/, ""),
-            content: JSON.stringify(blocks),
-            metadata: null,
-            lastSync: null,
-            status: 1,
-          }).unwrap();
-          navigate(`/docs/${result.id}`);
-        });
-        return;
+      if (newMeta !== undefined && newMeta !== null) {
+        handleMetadataChange(newMeta);
       }
+      await triggerSave();
+    },
+    [editor, handleTitleChange, handleMetadataChange, triggerSave]
+  );
 
-      if (format === "markdown-zip") {
-        const { importMarkdownZip } = await import("@/features/docs/importers/markdownZipImporter");
-        const docs = await importMarkdownZip(file);
-        for (const d of docs) {
-          await createDoc({
-            title: d.title,
-            content: JSON.stringify(d.blocks),
-            metadata: null,
-            lastSync: null,
-            status: 1,
+  const handleImport = useCallback(
+    async (format: ImportFormat, file: File) => {
+      try {
+        if (format === "markdown") {
+          const text = await file.text();
+          const { blocknoteMarkdownToBlocks } = await import("./importHelpers");
+          const blocks = await blocknoteMarkdownToBlocks(text, editor);
+          const newTitle = file.name.replace(/\.md$/, "");
+          await runWithSaveStatus(async () => {
+            await applyImportToCurrentDoc(blocks, newTitle);
           });
+          message.success("Imported Markdown into current document");
+          return;
         }
-        message.success(`Imported ${docs.length} document(s) from zip`);
-        return;
-      }
 
-      if (format === "notion") {
-        const { importNotionZip } = await import("@/features/docs/importers/notionZipImporter");
-        const docs = await importNotionZip(file);
-        for (const d of docs) {
-          await createDoc({
-            title: d.title,
-            content: JSON.stringify(d.blocks),
-            metadata: null,
-            lastSync: null,
-            status: 1,
+        if (format === "html") {
+          const text = await file.text();
+          const { blocknoteHTMLToBlocks } = await import("./importHelpers");
+          const blocks = await blocknoteHTMLToBlocks(text, editor);
+          const newTitle = file.name.replace(/\.html?$/, "");
+          await runWithSaveStatus(async () => {
+            await applyImportToCurrentDoc(blocks, newTitle);
           });
+          message.success("Imported HTML into current document");
+          return;
         }
-        message.success(`Imported ${docs.length} Notion page(s)`);
-        return;
-      }
 
-      if (format === "snapshot") {
-        const text = await file.text();
-        const parsed = JSON.parse(text);
-        await runWithSaveStatus(async () => {
-          const result = await createDoc({
-            title: parsed.title || file.name.replace(/\.json$/, ""),
-            content: typeof parsed.content === "string" ? parsed.content : JSON.stringify(parsed.content ?? []),
-            metadata: typeof parsed.metadata === "string" || parsed.metadata === null
-              ? parsed.metadata
-              : JSON.stringify(parsed.metadata),
-            lastSync: null,
-            status: 1,
-          }).unwrap();
-          navigate(`/docs/${result.id}`);
-        });
-        return;
-      }
-    } catch (err) {
-      console.error("[Import] failed:", format, err);
-      message.error(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }, [createDoc, navigate, runWithSaveStatus]);
+        if (format === "markdown-zip") {
+          const { importMarkdownZip } = await import("@/features/docs/importers/markdownZipImporter");
+          const docs = await importMarkdownZip(file);
+          if (docs.length === 0) {
+            message.warning("No documents found in zip");
+            return;
+          }
+          await runWithSaveStatus(async () => {
+            await applyImportToCurrentDoc(docs[0].blocks, docs[0].title);
+            for (let i = 1; i < docs.length; i++) {
+              await createDoc({
+                title: docs[i].title,
+                content: JSON.stringify(docs[i].blocks),
+                metadata: null,
+                lastSync: null,
+                status: 1,
+              });
+            }
+          });
+          if (docs.length > 1) {
+            message.success(`Overwrote current document and created ${docs.length - 1} extra document(s)`);
+          } else {
+            message.success("Imported zip into current document");
+          }
+          return;
+        }
 
-  const handleImportText = useCallback(async (format: ImportTextFormat, text: string) => {
-    try {
-      if (format === "markdown") {
-        const { blocknoteMarkdownToBlocks } = await import("./importHelpers");
-        const blocks = await blocknoteMarkdownToBlocks(text, editor);
-        await runWithSaveStatus(async () => {
-          const result = await createDoc({
-            title: "Imported markdown",
-            content: JSON.stringify(blocks),
-            metadata: null,
-            lastSync: null,
-            status: 1,
-          }).unwrap();
-          navigate(`/docs/${result.id}`);
-        });
-        return;
-      }
+        if (format === "notion") {
+          const { importNotionZip } = await import("@/features/docs/importers/notionZipImporter");
+          const docs = await importNotionZip(file);
+          if (docs.length === 0) {
+            message.warning("No Notion pages found in zip");
+            return;
+          }
+          await runWithSaveStatus(async () => {
+            await applyImportToCurrentDoc(docs[0].blocks, docs[0].title);
+            for (let i = 1; i < docs.length; i++) {
+              await createDoc({
+                title: docs[i].title,
+                content: JSON.stringify(docs[i].blocks),
+                metadata: null,
+                lastSync: null,
+                status: 1,
+              });
+            }
+          });
+          if (docs.length > 1) {
+            message.success(`Overwrote current document and created ${docs.length - 1} extra Notion page(s)`);
+          } else {
+            message.success("Imported Notion page into current document");
+          }
+          return;
+        }
 
-      if (format === "html") {
-        const { blocknoteHTMLToBlocks } = await import("./importHelpers");
-        const blocks = await blocknoteHTMLToBlocks(text, editor);
-        await runWithSaveStatus(async () => {
-          const result = await createDoc({
-            title: "Imported HTML",
-            content: JSON.stringify(blocks),
-            metadata: null,
-            lastSync: null,
-            status: 1,
-          }).unwrap();
-          navigate(`/docs/${result.id}`);
-        });
-        return;
+        if (format === "snapshot") {
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          const newTitle = parsed.title || file.name.replace(/\.json$/, "");
+          const blocks = typeof parsed.content === "string" ? JSON.parse(parsed.content) : (parsed.content ?? []);
+          const meta = typeof parsed.metadata === "string" ? JSON.parse(parsed.metadata) : parsed.metadata;
+          await runWithSaveStatus(async () => {
+            await applyImportToCurrentDoc(blocks, newTitle, meta);
+          });
+          message.success("Imported snapshot into current document");
+          return;
+        }
+      } catch (err) {
+        console.error("[Import] failed:", format, err);
+        message.error(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
       }
+    },
+    [editor, applyImportToCurrentDoc, runWithSaveStatus, createDoc]
+  );
 
-      if (format === "snapshot") {
-        const parsed = JSON.parse(text);
-        await runWithSaveStatus(async () => {
-          const result = await createDoc({
-            title: parsed.title || "Imported snapshot",
-            content: typeof parsed.content === "string" ? parsed.content : JSON.stringify(parsed.content ?? []),
-            metadata: typeof parsed.metadata === "string" || parsed.metadata === null
-              ? parsed.metadata
-              : JSON.stringify(parsed.metadata),
-            lastSync: null,
-            status: 1,
-          }).unwrap();
-          navigate(`/docs/${result.id}`);
-        });
-        return;
+  const handleImportText = useCallback(
+    async (format: ImportTextFormat, text: string) => {
+      try {
+        if (format === "markdown") {
+          const { blocknoteMarkdownToBlocks } = await import("./importHelpers");
+          const blocks = await blocknoteMarkdownToBlocks(text, editor);
+          await runWithSaveStatus(async () => {
+            await applyImportToCurrentDoc(blocks);
+          });
+          message.success("Imported Markdown into current document");
+          return;
+        }
+
+        if (format === "html") {
+          const { blocknoteHTMLToBlocks } = await import("./importHelpers");
+          const blocks = await blocknoteHTMLToBlocks(text, editor);
+          await runWithSaveStatus(async () => {
+            await applyImportToCurrentDoc(blocks);
+          });
+          message.success("Imported HTML into current document");
+          return;
+        }
+
+        if (format === "snapshot") {
+          const parsed = JSON.parse(text);
+          const newTitle = parsed.title;
+          const blocks = typeof parsed.content === "string" ? JSON.parse(parsed.content) : (parsed.content ?? []);
+          const meta = typeof parsed.metadata === "string" ? JSON.parse(parsed.metadata) : parsed.metadata;
+          await runWithSaveStatus(async () => {
+            await applyImportToCurrentDoc(blocks, newTitle, meta);
+          });
+          message.success("Imported snapshot into current document");
+          return;
+        }
+      } catch (err) {
+        console.error("[Import text] failed:", format, err);
+        message.error(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
       }
-    } catch (err) {
-      console.error("[Import text] failed:", format, err);
-      message.error(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }, [createDoc, navigate, runWithSaveStatus]);
+    },
+    [editor, applyImportToCurrentDoc, runWithSaveStatus]
+  );
 
   const editorContent = (
     <div className="doc-editor-wrapper" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -425,8 +431,14 @@ export default function DocEditorPage() {
           isRightPanelOpen={isRightPanelOpen}
           settings={editorSettings}
           saveStatus={saveStatus}
+          persistenceState={persistenceState}
+          justSaved={justSaved}
+          saveError={lastError}
+          lastSavedLocalAt={lastSavedLocalAt}
+          lastSyncedRemoteAt={lastSyncedRemoteAt}
           isDirty={isDirty}
           isSyncedToServer={isSyncedToServer}
+          isCollabConnected={collaboration?.isConnected}
           onBack={handleBack}
           onUndo={handleUndo}
           onRedo={handleRedo}
@@ -451,7 +463,7 @@ export default function DocEditorPage() {
           onDuplicate={handleDuplicate}
           onImport={() => setImportModalOpen(true)}
           onExport={() => setExportModalOpen(true)}
-          collaborators={collaboration?.collaborators ?? []}
+          collaborators={collaboration?.collaborators}
         />
       )}
 
