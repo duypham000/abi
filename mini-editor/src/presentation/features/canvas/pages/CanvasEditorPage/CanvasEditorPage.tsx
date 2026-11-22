@@ -31,7 +31,7 @@ import {
 import type { CanvasScene } from "@/core/interfaces/canvas";
 import { useCanvasEditor, sanitizeAppState } from "../../hooks/useCanvasEditor";
 import { useCanvasUiStore } from "../../store/canvasUiStore";
-import { useCanvasYjsCollaboration, hasVisualChange as hasVisualChangePush } from "../../hooks/useCanvasYjsCollaboration";
+import { useCanvasYjsCollaboration } from "../../hooks/useCanvasYjsCollaboration";
 import { EmbeddedDocFrame } from "./components/EmbeddedDocFrame";
 import { EmbeddedNoteFrame } from "./components/EmbeddedNoteFrame";
 import { DocsSidebarPanel, DOC_DRAG_TYPE } from "./components/DocsSidebarPanel";
@@ -79,12 +79,18 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   const [api, setApiState] = useState<ExcalidrawImperativeAPI | null>(null);
   const setExcalidrawAPIStore = useCanvasUiStore((s) => s.setExcalidrawAPI);
 
+  useEffect(() => {
+    excalidrawAPIRef.current = null;
+    setApiState(null);
+    setExcalidrawAPIStore(null);
+  }, [canvasId, setExcalidrawAPIStore]);
+
   const authUser = useSelector((state: RootState) => state.auth.user);
   const { collaboration, isResolved } = useCanvasYjsCollaboration(
     canvasId,
     authUser,
     api,
-    initialScene?.elements ?? []
+    initialScene
   );
 
   const { data: user } = useGetGithubUserQuery();
@@ -314,18 +320,26 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
     (elementId: string, patch: (el: any) => Partial<any>) => {
       const activeApi = excalidrawAPIRef.current;
       if (!activeApi) return;
-      const next = activeApi.getSceneElements().map((el: any) => {
+      const current =
+        activeApi.getSceneElementsIncludingDeleted?.() ??
+        activeApi.getSceneElements();
+      let modified = false;
+      const next = current.map((el: any) => {
         if (el.id !== elementId) return el;
         const update = patch(el);
+        if (!update || Object.keys(update).length === 0) return el;
+        modified = true;
         return {
           ...el,
           ...update,
           version: (el.version ?? 0) + 1,
-          versionNonce: Math.floor(Math.random() * 1e6),
+          versionNonce: Math.floor(Math.random() * 1e9),
           updated: Date.now(),
         };
       });
-      activeApi.updateScene({ elements: next as any });
+      if (modified) {
+        activeApi.updateScene({ elements: next as any });
+      }
     },
     []
   );
@@ -338,30 +352,8 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
       const isDocsOpen = appState?.openSidebar?.name === "docs-picker";
       setDocsSidebarOpen((p) => (p === isDocsOpen ? p : isDocsOpen));
 
-      // Sync local drawing changes to Yjs map
-      if (collaboration && collaboration.isConnected) {
-        const elementsMap = collaboration.ydoc.getMap<any>("elements");
-        const filesMap = collaboration.ydoc.getMap<any>("files");
-        collaboration.ydoc.transact(() => {
-          elements.forEach((el) => {
-            const remoteRaw = elementsMap.get(el.id);
-            const remote = remoteRaw && typeof remoteRaw.toJSON === "function" ? remoteRaw.toJSON() : remoteRaw;
-            const shouldPush = !remote ||
-              el.version > remote.version ||
-              (el.version >= remote.version && hasVisualChangePush(el, remote));
-            if (shouldPush) {
-              elementsMap.set(el.id, JSON.parse(JSON.stringify(el)));
-            }
-          });
-          if (files) {
-            Object.entries(files).forEach(([id, file]) => {
-              if (!filesMap.has(id)) {
-                filesMap.set(id, file);
-              }
-            });
-          }
-        }, "local-draw");
-      }
+      // Sync local drawing changes & selection awareness to Yjs
+      collaboration?.syncLocalScene(elements, appState, files);
 
       // Avoid re-checking Git status on selection, cursor moves, or panning
       const sig = `${elements.length}:${elements.reduce((acc, el: any) => acc + (el.version ?? 0), 0)}`;
@@ -453,10 +445,7 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
 
   const handlePointerUpdate = useCallback(
     (payload: any) => {
-      if (collaboration?.provider?.awareness) {
-        collaboration.provider.awareness.setLocalStateField("pointer", payload.pointer);
-        collaboration.provider.awareness.setLocalStateField("button", payload.button);
-      }
+      collaboration?.updateLocalPointer(payload);
     },
     [collaboration]
   );
@@ -507,7 +496,9 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
       customData: { isCollapsed: false },
     };
 
-    const currentElements = activeApi.getSceneElements();
+    const currentElements =
+      activeApi.getSceneElementsIncludingDeleted?.() ??
+      activeApi.getSceneElements();
     activeApi.updateScene({ elements: [...currentElements, newElement as any] });
   }, []);
 
@@ -627,9 +618,18 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
     if (!toolbarSnapshot) return;
     const activeApi = excalidrawAPIRef.current;
     if (!activeApi) return;
-    const next = activeApi.getSceneElements().map((el: any) =>
+    const current =
+      activeApi.getSceneElementsIncludingDeleted?.() ??
+      activeApi.getSceneElements();
+    const next = current.map((el: any) =>
       el.id === toolbarSnapshot.elementId
-        ? { ...el, isDeleted: true, version: (el.version ?? 0) + 1, updated: Date.now() }
+        ? {
+            ...el,
+            isDeleted: true,
+            version: (el.version ?? 0) + 1,
+            versionNonce: Math.floor(Math.random() * 1e9),
+            updated: Date.now(),
+          }
         : el
     );
     activeApi.updateScene({ elements: next as any });

@@ -12,7 +12,7 @@ import { useCreateNoteMutation } from "@/infrastructure/api/notesApi";
 import { useTouchDevice } from "@/hooks/useTouchDevice";
 import { useCanvasEditor } from "../../hooks/useCanvasEditor";
 import { useCanvasUiStore } from "../../store/canvasUiStore";
-import { useCanvasYjsCollaboration, hasVisualChange as hasVisualChangePush } from "../../hooks/useCanvasYjsCollaboration";
+import { useCanvasYjsCollaboration } from "../../hooks/useCanvasYjsCollaboration";
 import { EmbeddedDocFrame } from "./components/EmbeddedDocFrame";
 import { EmbeddedNoteFrame } from "./components/EmbeddedNoteFrame";
 import { DocsSidebarPanel, DOC_DRAG_TYPE } from "./components/DocsSidebarPanel";
@@ -51,11 +51,17 @@ export default function CanvasEditorPage() {
   const [excalidrawAPI, setExcalidrawAPIState] = useState<ExcalidrawImperativeAPI | null>(null);
   const setExcalidrawAPIStore = useCanvasUiStore((s) => s.setExcalidrawAPI);
 
+  useEffect(() => {
+    excalidrawAPIRef.current = null;
+    setExcalidrawAPIState(null);
+    setExcalidrawAPIStore(null);
+  }, [canvasId, setExcalidrawAPIStore]);
+
   const { collaboration, isResolved } = useCanvasYjsCollaboration(
     canvasId,
     authUser,
     excalidrawAPI,
-    initialScene?.elements ?? []
+    initialScene
   );
 
   const [createNote] = useCreateNoteMutation();
@@ -110,18 +116,26 @@ export default function CanvasEditorPage() {
     (elementId: string, patch: (el: any) => Partial<any>) => {
       const api = excalidrawAPIRef.current;
       if (!api) return;
-      const next = api.getSceneElements().map((el: any) => {
+      const current =
+        api.getSceneElementsIncludingDeleted?.() ??
+        api.getSceneElements();
+      let modified = false;
+      const next = current.map((el: any) => {
         if (el.id !== elementId) return el;
         const update = patch(el);
+        if (!update || Object.keys(update).length === 0) return el;
+        modified = true;
         return {
           ...el,
           ...update,
           version: (el.version ?? 0) + 1,
-          versionNonce: Math.floor(Math.random() * 1e6),
+          versionNonce: Math.floor(Math.random() * 1e9),
           updated: Date.now(),
         };
       });
-      api.updateScene({ elements: next as any });
+      if (modified) {
+        api.updateScene({ elements: next as any });
+      }
     },
     []
   );
@@ -130,32 +144,8 @@ export default function CanvasEditorPage() {
     (elements: readonly any[], appState: any, files: any) => {
       handleSceneChange(elements, appState, files);
 
-      // Sync local drawing changes to Yjs map
-      if (collaboration && collaboration.isConnected) {
-        const elementsMap = collaboration.ydoc.getMap<any>("elements");
-        const filesMap = collaboration.ydoc.getMap<any>("files");
-        collaboration.ydoc.transact(() => {
-          elements.forEach((el) => {
-            const remoteRaw = elementsMap.get(el.id);
-            const remote = remoteRaw && typeof remoteRaw.toJSON === "function" ? remoteRaw.toJSON() : remoteRaw;
-            // Push if version is higher (normal), OR if there's a real visual change even
-            // at equal version — remote may have been inflated by another user's selection bump.
-            const shouldPush = !remote ||
-              el.version > remote.version ||
-              (el.version >= remote.version && hasVisualChangePush(el, remote));
-            if (shouldPush) {
-              elementsMap.set(el.id, JSON.parse(JSON.stringify(el)));
-            }
-          });
-          if (files) {
-            Object.entries(files).forEach(([id, file]) => {
-              if (!filesMap.has(id)) {
-                filesMap.set(id, file);
-              }
-            });
-          }
-        }, "local-draw");
-      }
+      // Sync local drawing changes & selection awareness to Yjs
+      collaboration?.syncLocalScene(elements, appState, files);
 
       const knownDims = knownDimsRef.current;
       const liveIds = new Set<string>();
@@ -277,7 +267,9 @@ export default function CanvasEditorPage() {
       customData: { isCollapsed: false },
     };
 
-    const currentElements = api.getSceneElements();
+    const currentElements =
+      api.getSceneElementsIncludingDeleted?.() ??
+      api.getSceneElements();
     api.updateScene({ elements: [...currentElements, newElement as any] });
   }, []);
 
@@ -397,9 +389,18 @@ export default function CanvasEditorPage() {
     if (!toolbarSnapshot) return;
     const api = excalidrawAPIRef.current;
     if (!api) return;
-    const next = api.getSceneElements().map((el: any) =>
+    const current =
+      api.getSceneElementsIncludingDeleted?.() ??
+      api.getSceneElements();
+    const next = current.map((el: any) =>
       el.id === toolbarSnapshot.elementId
-        ? { ...el, isDeleted: true, version: (el.version ?? 0) + 1, updated: Date.now() }
+        ? {
+            ...el,
+            isDeleted: true,
+            version: (el.version ?? 0) + 1,
+            versionNonce: Math.floor(Math.random() * 1e9),
+            updated: Date.now(),
+          }
         : el
     );
     api.updateScene({ elements: next as any });
@@ -464,10 +465,7 @@ export default function CanvasEditorPage() {
 
   const handlePointerUpdate = useCallback(
     (payload: any) => {
-      if (collaboration?.provider?.awareness) {
-        collaboration.provider.awareness.setLocalStateField("pointer", payload.pointer);
-        collaboration.provider.awareness.setLocalStateField("button", payload.button);
-      }
+      collaboration?.updateLocalPointer(payload);
     },
     [collaboration]
   );

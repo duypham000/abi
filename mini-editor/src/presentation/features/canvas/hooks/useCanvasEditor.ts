@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { useGetCanvasByIdQuery, useCreateCanvasMutation, useUpdateCanvasMutation } from "@/infrastructure/api/canvasApi";
 import { setPageTitle } from "@/presentation/store/appSlice";
@@ -56,15 +56,28 @@ export function useCanvasEditor(id: number, autoSave = true) {
   const sceneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const initialScene = useMemo<CanvasScene | null>(() => {
-    if (!canvas) {
-      return null;
+  // Stabilize initialScene per canvasId so auto-save RTK refetches do not recreate
+  // initialScene or reset Yjs collaboration / Excalidraw state.
+  const initializedForIdRef = useRef<number | null>(null);
+  const initialSceneRef = useRef<CanvasScene | null>(null);
+
+  if (!isValidId) {
+    initializedForIdRef.current = null;
+    initialSceneRef.current = null;
+  } else if (initializedForIdRef.current !== id) {
+    if (canvas && Number(canvas.id) === id) {
+      const parsed = parseScene(canvas.scene);
+      initializedForIdRef.current = id;
+      initialSceneRef.current = parsed;
+      latestSceneRef.current = parsed;
+      lastSavedRef.current = canvas.scene ?? "";
+    } else {
+      initializedForIdRef.current = null;
+      initialSceneRef.current = null;
     }
-    const parsed = parseScene(canvas.scene);
-    latestSceneRef.current = parsed;
-    lastSavedRef.current = canvas.scene ?? "";
-    return parsed;
-  }, [canvas?.id, canvas?.scene]);
+  }
+
+  const initialScene = initialSceneRef.current;
 
   useEffect(() => {
     if (!canvas) return;
