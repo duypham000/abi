@@ -16,6 +16,7 @@ import (
 	"tomo-backend/internal/modules/auth"
 	"tomo-backend/internal/modules/docs"
 	"tomo-backend/internal/modules/github"
+	"tomo-backend/internal/modules/mcp"
 
 	"github.com/gin-gonic/gin"
 )
@@ -45,6 +46,9 @@ func main() {
 	// Wire DocsService into GithubModule (post-construction to avoid circular deps)
 	githubModule.WireDocsService(docsModule.DocsService)
 
+	// Initialize MCP Server module
+	mcpModule := mcp.InitModule(db, docsModule.DocsService, docsModule.CanvasService, docsModule.YjsService)
+
 	// 6. Setup Gin HTTP Router
 	if cfg.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -55,7 +59,8 @@ func main() {
 	router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-Yjs-Token")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-Yjs-Token, Mcp-Session-Id, MCP-Protocol-Version")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "Mcp-Session-Id")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 
 		if c.Request.Method == "OPTIONS" {
@@ -95,7 +100,11 @@ func main() {
 		authModule.RegisterRoutes(rg, jwtManager)
 		docsModule.RegisterRoutes(rg, jwtManager)
 		githubModule.RegisterRoutes(rg, jwtManager)
+		mcpModule.RegisterRoutes(rg, jwtManager)
 	}
+
+	// Root /mcp endpoint (Streamable HTTP)
+	mcpModule.RegisterRoutes(router.Group(""), jwtManager)
 
 	// API v1 Routing Groups (standard, /go/api/v1, and /go/v1)
 	v1 := router.Group("/api/v1")

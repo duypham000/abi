@@ -295,3 +295,60 @@ func (h *YjsHandler) GetInternalStateVector(c *gin.Context) {
 
 	c.Data(http.StatusOK, "application/octet-stream", blob)
 }
+
+func (h *YjsHandler) GetInternalCanvasSnapshot(c *gin.Context) {
+	canvasID := c.Param("docId")
+	blob, err := h.yjsService.GetCanvasSnapshotBinary(c.Request.Context(), canvasID)
+	if err != nil {
+		if errors.Is(err, service.ErrCanvasNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	if len(blob) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+	c.Data(http.StatusOK, "application/octet-stream", blob)
+}
+
+func (h *YjsHandler) PutInternalCanvasSnapshot(c *gin.Context) {
+	canvasID := c.Param("docId")
+	stateVectorB64 := c.GetHeader("X-Yjs-State-Vector")
+
+	blob, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	if err := h.yjsService.SaveCanvasSnapshotBinary(c.Request.Context(), canvasID, blob, stateVectorB64); err != nil {
+		if errors.Is(err, service.ErrCanvasNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *YjsHandler) GetInternalCanvasStateVector(c *gin.Context) {
+	canvasID := c.Param("docId")
+	blob, err := h.yjsService.GetCanvasStateVectorBinary(c.Request.Context(), canvasID)
+	if err != nil {
+		if errors.Is(err, service.ErrCanvasNotFound) {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	if len(blob) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+	c.Data(http.StatusOK, "application/octet-stream", blob)
+}

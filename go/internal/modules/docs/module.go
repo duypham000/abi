@@ -13,37 +13,47 @@ import (
 
 type Module struct {
 	DocRepo       repository.DocRepository
+	CanvasRepo    repository.CanvasRepository
 	RevRepo       repository.RevisionRepository
 	YjsRepo       repository.YjsRepository
 	DocsService   service.DocsService
+	CanvasService service.CanvasService
 	YjsService    service.YjsService
 	DocsHandler   *delivery.DocsHandler
+	CanvasHandler *delivery.CanvasHandler
 	YjsHandler    *delivery.YjsHandler
 	SeriesHandler *delivery.SeriesHandler
 }
 
 func InitModule(db *gorm.DB, yjsSecret string, wsURL ...string) *Module {
 	// Auto migrate entities
-	_ = db.AutoMigrate(&domain.Doc{}, &domain.DocRevision{}, &domain.YjsUpdate{}, &domain.Series{})
+	_ = db.AutoMigrate(&domain.Doc{}, &domain.Canvas{}, &domain.DocRevision{}, &domain.YjsUpdate{}, &domain.Series{})
 
 	docRepo := repository.NewDocRepository(db)
+	canvasRepo := repository.NewCanvasRepository(db)
 	revRepo := repository.NewRevisionRepository(db)
 	yjsRepo := repository.NewYjsRepository(db)
 
 	docsService := service.NewDocsService(docRepo, revRepo)
+	canvasService := service.NewCanvasService(canvasRepo)
 	yjsService := service.NewYjsService(docRepo, yjsRepo, revRepo, yjsSecret, wsURL...)
+	yjsService.SetCanvasRepo(canvasRepo)
 
 	docsHandler := delivery.NewDocsHandler(docsService)
+	canvasHandler := delivery.NewCanvasHandler(canvasService)
 	yjsHandler := delivery.NewYjsHandler(yjsService)
 	seriesHandler := delivery.NewSeriesHandler(db)
 
 	return &Module{
 		DocRepo:       docRepo,
+		CanvasRepo:    canvasRepo,
 		RevRepo:       revRepo,
 		YjsRepo:       yjsRepo,
 		DocsService:   docsService,
+		CanvasService: canvasService,
 		YjsService:    yjsService,
 		DocsHandler:   docsHandler,
+		CanvasHandler: canvasHandler,
 		YjsHandler:    yjsHandler,
 		SeriesHandler: seriesHandler,
 	}
@@ -93,6 +103,19 @@ func (m *Module) RegisterRoutes(router *gin.RouterGroup, jwtManager *security.JW
 		}
 	}
 
+	// Canvas endpoints
+	canvasGroup := router.Group("/canvas")
+	canvasGroup.Use(security.AuthMiddleware(jwtManager))
+	{
+		canvasGroup.POST("", m.CanvasHandler.CreateCanvas)
+		canvasGroup.GET("", m.CanvasHandler.ListCanvases)
+		canvasGroup.GET("/list", m.CanvasHandler.ListCanvases)
+		canvasGroup.GET("/search", m.CanvasHandler.ListCanvases)
+		canvasGroup.GET("/:id", m.CanvasHandler.GetCanvasByID)
+		canvasGroup.PUT("/:id", m.CanvasHandler.UpdateCanvas)
+		canvasGroup.DELETE("/:id", m.CanvasHandler.DeleteCanvas)
+	}
+
 	// Yjs Real-time Collaboration & Storage endpoints
 	yjsGroup := router.Group("/yjs")
 	{
@@ -108,9 +131,9 @@ func (m *Module) RegisterRoutes(router *gin.RouterGroup, jwtManager *security.JW
 			internalGroup.PUT("/docs/:docId/snapshot", m.YjsHandler.PutInternalSnapshot)
 			internalGroup.GET("/docs/:docId/state-vector", m.YjsHandler.GetInternalStateVector)
 			// Canvas binary snapshot endpoints
-			internalGroup.GET("/canvases/:docId/snapshot", m.YjsHandler.GetInternalSnapshot)
-			internalGroup.PUT("/canvases/:docId/snapshot", m.YjsHandler.PutInternalSnapshot)
-			internalGroup.GET("/canvases/:docId/state-vector", m.YjsHandler.GetInternalStateVector)
+			internalGroup.GET("/canvases/:docId/snapshot", m.YjsHandler.GetInternalCanvasSnapshot)
+			internalGroup.PUT("/canvases/:docId/snapshot", m.YjsHandler.PutInternalCanvasSnapshot)
+			internalGroup.GET("/canvases/:docId/state-vector", m.YjsHandler.GetInternalCanvasStateVector)
 			// JSON endpoints (revisions, meta)
 			internalGroup.POST("/docs/:docId/snapshot", m.YjsHandler.SaveSnapshot)
 			internalGroup.GET("/docs/:docId/revisions/head", m.YjsHandler.GetRevisionHead)

@@ -38,9 +38,13 @@ type YjsService interface {
 	ReconstructDocument(ctx context.Context, docID string, version int) (*dto.ReconstructResponse, error)
 	
 	// tomo-node integration methods (binary protocol)
+	SetCanvasRepo(canvasRepo repository.CanvasRepository)
 	GetSnapshotBinary(ctx context.Context, docID string) ([]byte, error)
 	SaveSnapshotBinary(ctx context.Context, docID string, updateBlob []byte, stateVectorB64 string) error
 	GetStateVectorBinary(ctx context.Context, docID string) ([]byte, error)
+	GetCanvasSnapshotBinary(ctx context.Context, canvasID string) ([]byte, error)
+	SaveCanvasSnapshotBinary(ctx context.Context, canvasID string, updateBlob []byte, stateVectorB64 string) error
+	GetCanvasStateVectorBinary(ctx context.Context, canvasID string) ([]byte, error)
 	GetRevisionHead(ctx context.Context, docID string) (*dto.YjsRevisionHeadResponse, error)
 	AppendInternalRevision(ctx context.Context, docID string, stateVectorB64 string, isKeyframe bool, baseVersion *int, blob []byte) error
 	GetRevisionChain(ctx context.Context, docID string, revisionID int) (*dto.YjsRevisionChainResponse, error)
@@ -48,11 +52,12 @@ type YjsService interface {
 }
 
 type yjsServiceImpl struct {
-	docRepo   repository.DocRepository
-	yjsRepo   repository.YjsRepository
-	revRepo   repository.RevisionRepository
-	yjsSecret []byte
-	wsURL     string
+	docRepo    repository.DocRepository
+	canvasRepo repository.CanvasRepository
+	yjsRepo    repository.YjsRepository
+	revRepo    repository.RevisionRepository
+	yjsSecret  []byte
+	wsURL      string
 }
 
 func resolveWsURL(wsURL ...string) string {
@@ -355,4 +360,52 @@ func (s *yjsServiceImpl) GetStateVectorBinary(ctx context.Context, docID string)
 		return nil, ErrDocNotFound
 	}
 	return doc.YjsStateVector, nil
+}
+
+func (s *yjsServiceImpl) SetCanvasRepo(canvasRepo repository.CanvasRepository) {
+	s.canvasRepo = canvasRepo
+}
+
+func (s *yjsServiceImpl) GetCanvasSnapshotBinary(ctx context.Context, canvasID string) ([]byte, error) {
+	if s.canvasRepo == nil {
+		return nil, ErrCanvasNotFound
+	}
+	canvas, err := s.canvasRepo.FindByID(ctx, canvasID)
+	if err != nil {
+		return nil, err
+	}
+	if canvas == nil {
+		return nil, ErrCanvasNotFound
+	}
+	return canvas.YjsStateVector, nil
+}
+
+func (s *yjsServiceImpl) SaveCanvasSnapshotBinary(ctx context.Context, canvasID string, updateBlob []byte, _ string) error {
+	if s.canvasRepo == nil {
+		return ErrCanvasNotFound
+	}
+	canvas, err := s.canvasRepo.FindByID(ctx, canvasID)
+	if err != nil {
+		return err
+	}
+	if canvas == nil {
+		return ErrCanvasNotFound
+	}
+	canvas.YjsStateVector = updateBlob
+	canvas.UpdatedAt = time.Now()
+	return s.canvasRepo.UpdateCanvas(ctx, canvas)
+}
+
+func (s *yjsServiceImpl) GetCanvasStateVectorBinary(ctx context.Context, canvasID string) ([]byte, error) {
+	if s.canvasRepo == nil {
+		return nil, ErrCanvasNotFound
+	}
+	canvas, err := s.canvasRepo.FindByID(ctx, canvasID)
+	if err != nil {
+		return nil, err
+	}
+	if canvas == nil {
+		return nil, ErrCanvasNotFound
+	}
+	return canvas.YjsStateVector, nil
 }

@@ -13,6 +13,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { config } from '../config.js';
 import translateRoutes from '../translate/routes/translate.route.js';
+import mcpRoutes from '../mcp/routes.js';
 
 const fastify = Fastify({
   logger: true,
@@ -21,7 +22,10 @@ const fastify = Fastify({
   trustProxy: true,
 });
 
-await fastify.register(cors, { origin: config.corsOrigin });
+await fastify.register(cors, {
+  origin: config.corsOrigin,
+  exposedHeaders: ['Mcp-Session-Id'],
+});
 
 // Liveness check (support both root /health and prefixed /node/health)
 fastify.get('/health', async () => ({ status: 'ok' }));
@@ -32,6 +36,13 @@ await fastify.register(translateRoutes, { prefix: '/api/v1' });
 await fastify.register(translateRoutes, { prefix: '/node/api/v1' });
 await fastify.register(translateRoutes, { prefix: '/node/v1' });
 await fastify.register(translateRoutes, { prefix: '/node' });
+
+// Streamable HTTP MCP routes
+await fastify.register(mcpRoutes);
+await fastify.register(mcpRoutes, { prefix: '/api/v1' });
+await fastify.register(mcpRoutes, { prefix: '/node/api/v1' });
+await fastify.register(mcpRoutes, { prefix: '/node/v1' });
+await fastify.register(mcpRoutes, { prefix: '/node' });
 
 try {
   await fastify.listen({ port: config.port, host: '0.0.0.0' });
