@@ -11,6 +11,7 @@ import type { GoldenLayout } from "golden-layout";
 import type { OpenPanelOptions } from "./GoldenLayoutContext";
 import type { ComponentMap } from "./useGoldenLayoutSetup";
 import { PANEL_TITLES, PANEL_TYPES, type PanelState, type PanelType } from "./panelRegistry";
+import { useAgentStore } from "@/presentation/features/agent/store/agentStore";
 
 // ── Lazy-loaded panel pages ───────────────────────────────────────────────
 const DashboardPage    = lazy(() => import("@/presentation/features/dashboard/pages/DashboardPage"));
@@ -21,6 +22,7 @@ const CanvasEditorPage  = lazy(() => import("@/presentation/features/canvas/page
 const SettingsPage     = lazy(() => import("@/presentation/features/settings/pages/SettingsPage/SettingsPage"));
 const SearchOverlayPage = lazy(() => import("@/presentation/features/search/pages/SearchOverlayPage"));
 const TranslatePage     = lazy(() => import("@/presentation/features/translate/pages/TranslatePage"));
+const AgentPanelPage    = lazy(() => import("@/presentation/features/agent/pages/AgentPanelPage"));
 const SeriesDetailPanel = lazy(() =>
   import("@/presentation/features/series/pages/SeriesDetailPanel").then((m) => ({ default: m.SeriesDetailPanel }))
 );
@@ -43,6 +45,15 @@ export const componentMap: ComponentMap = {
   [PANEL_TYPES.SETTINGS]:      (state) => <PanelSuspense><SettingsPage panelMode initialSection={state.section as string | undefined} /></PanelSuspense>,
   [PANEL_TYPES.SEARCH]:        ()      => <PanelSuspense><SearchOverlayPage panelMode /></PanelSuspense>,
   [PANEL_TYPES.TRANSLATE]:     ()      => <PanelSuspense><TranslatePage panelMode /></PanelSuspense>,
+  [PANEL_TYPES.AGENT]:         ()      => (
+    <PanelSuspense>
+      <AgentPanelPage
+        panelMode
+        presentationMode="tab"
+        onDockRight={() => useAgentStore.getState().setDockOpen(true)}
+      />
+    </PanelSuspense>
+  ),
   [PANEL_TYPES.SERIES_DETAIL]: (state) => <PanelSuspense><SeriesDetailPanel panelMode seriesIdProp={state.id as number | undefined} /></PanelSuspense>,
 };
 

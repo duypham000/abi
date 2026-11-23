@@ -110,3 +110,45 @@
   overflow: hidden;
   contain: strict;
 }
+
+/* ── Right AI Agent Dock ────────────────────────────────────────────────── */
+.workspace-agent-dock {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  flex-shrink: 0;
+  height: 100%;
+  min-width: 280px;
+  max-width: min(780px, 65vw);
+  border-left: 1px solid var(--ab-border, #e4e4e7);
+  background: var(--gl-content-bg, #ffffff);
+  overflow: hidden;
+  z-index: 20;
+
+  &__resizer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    z-index: 30;
+    transition: background-color 0.15s ease;
+
+    &:hover,
+    &:active {
+      background-color: var(--gl-accent, #6c6cff);
+    }
+  }
+
+  &__body {
+    flex: 1 1 0%;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+}

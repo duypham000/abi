@@ -1,0 +1,262 @@
+@import "streamdown/styles.css";
+@import "@xyflow/react/dist/style.css";
+
+/* ==========================================================================
+ * Tomo AI Agent Panel — Studio Container Queries, Split Transitions & Light Lock
+ * ========================================================================== */
+
+.ai-agent-root {
+  container-type: inline-size;
+  container-name: agent-panel;
+  color-scheme: light dark;
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Hide scrollbars cleanly on horizontal tab strips */
+.ai-agent-root .scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.ai-agent-root .scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Prevent StickToBottom / flex / grid children from blowing out narrow container width */
+.ai-agent-root [role="log"],
+.ai-agent-root [role="log"]>div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.ai-agent-root pre,
+.ai-agent-root [data-language] {
+  max-width: 100%;
+}
+
+/* Mobile light-lock enforcement (matches src/index.css html.force-light gate) */
+html.force-light .ai-agent-root,
+html.force-light .ai-agent-root * {
+  color-scheme: light;
+}
+
+html.force-light .ai-agent-root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.491 0.241 264.376);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.585 0.204 264.052);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-border: oklch(0.92 0.004 286.32);
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Scenario Launcher Grid — defaults to 1-col for narrow dock (280-519px) */
+.agent-scenario-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Container-aware visibility helpers:
+ * - .agent-xs-hide : hidden below 360px container width
+ * - .agent-sm-only : shown >= 420px container width
+ * - .agent-wide-only : shown >= 580px container width
+ * - .agent-compact-only : shown < 580px container width
+ */
+.agent-xs-hide {
+  display: none;
+}
+
+.agent-sm-only {
+  display: none;
+}
+
+.agent-wide-only {
+  display: none;
+}
+
+.agent-compact-only {
+  display: inline-flex;
+}
+
+.agent-artifact-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  width: 100%;
+  min-width: 0;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease;
+}
+
+.agent-sidebar-shell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  width: min(300px, 92%);
+  min-width: 0;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease;
+}
+
+.agent-inspector-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.agent-persona-gallery {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+@supports (container-type: inline-size) {
+  @container agent-panel (min-width: 350px) {
+    .agent-xs-hide {
+      display: inline-flex;
+    }
+
+    .agent-persona-gallery {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @container agent-panel (min-width: 430px) {
+    .agent-sm-only {
+      display: inline-flex;
+    }
+  }
+
+  @container agent-panel (min-width: 520px) {
+    .agent-scenario-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.625rem;
+    }
+
+    .agent-inspector-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+
+    .agent-persona-gallery {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @container agent-panel (min-width: 580px) {
+    .agent-wide-only {
+      display: inline-flex;
+    }
+
+    .agent-compact-only {
+      display: none;
+    }
+  }
+
+  @container agent-panel (min-width: 820px) {
+    .agent-scenario-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+
+    .agent-artifact-shell {
+      position: relative;
+      inset: auto;
+      z-index: 10;
+      width: clamp(340px, 42%, 560px);
+      flex-shrink: 0;
+      border-left: 1px solid var(--border);
+    }
+
+    .agent-sidebar-shell {
+      position: relative;
+      top: auto;
+      bottom: auto;
+      left: auto;
+      z-index: 20;
+      width: 280px;
+      flex-shrink: 0;
+    }
+
+    .agent-sidebar-backdrop {
+      display: none;
+    }
+  }
+}
+
+@supports not (container-type: inline-size) {
+  @media (min-width: 768px) {
+    .agent-scenario-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .agent-wide-only {
+      display: inline-flex;
+    }
+
+    .agent-compact-only {
+      display: none;
+    }
+  }
+
+  @media (min-width: 1100px) {
+    .agent-scenario-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+}
+
+/* React Flow & Streamdown integration scoped inside .ai-agent-root */
+.ai-agent-root .react-flow {
+  background-color: var(--sidebar);
+  color: var(--foreground);
+}
+
+.ai-agent-root .react-flow__node {
+  border-radius: var(--radius);
+}
+
+.ai-agent-root .react-flow__controls button {
+  background-color: var(--card);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+.ai-agent-root .react-flow__attribution {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .agent-artifact-shell,
+  .agent-sidebar-shell {
+    transition: none;
+  }
+}

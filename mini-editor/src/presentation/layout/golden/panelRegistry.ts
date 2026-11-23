@@ -8,6 +8,7 @@ export const PANEL_TYPES = {
   SETTINGS: "settings",
   SEARCH: "search",
   TRANSLATE: "translate",
+  AGENT: "agent",
 } as const;
 
 export type PanelType = (typeof PANEL_TYPES)[keyof typeof PANEL_TYPES];
@@ -26,4 +27,5 @@ export const PANEL_TITLES: Record<PanelType, string> = {
   settings: "Settings",
   search: "Search",
   translate: "Translate",
+  agent: "Agent",
 };

@@ -8,3 +8,4 @@ overrides:
   prosemirror-state: 1.4.4
   prosemirror-view: 1.41.9
   prosemirror-transform: 1.12.0
+  shiki: 4.6.0

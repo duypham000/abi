@@ -335,6 +335,7 @@
 .lm_content.gl-panel--api          { border-left: 2px solid #ec4899; }
 .lm_content.gl-panel--settings     { border-left: 2px solid #6b7280; }
 .lm_content.gl-panel--search       { border-left: 2px solid #06b6d4; }
+.lm_content.gl-panel--agent        { border-left: 2px solid #8b5cf6; }
 
 /* ── Drag proxy ──────────────────────────────────────────────────────────── */
 /* Force above all portaled panel content — base CSS uses z-index:30 which

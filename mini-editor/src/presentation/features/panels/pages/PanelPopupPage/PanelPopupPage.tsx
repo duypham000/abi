@@ -14,6 +14,7 @@ const CanvasEditorPage = lazy(() => import("@/presentation/features/canvas/pages
 const SettingsPage     = lazy(() => import("@/presentation/features/settings/pages/SettingsPage/SettingsPage"));
 const SearchOverlayPage = lazy(() => import("@/presentation/features/search/pages/SearchOverlayPage"));
 const TranslatePage     = lazy(() => import("@/presentation/features/translate/pages/TranslatePage"));
+const AgentPanelPage    = lazy(() => import("@/presentation/features/agent/pages/AgentPanelPage"));
 
 function PanelSuspense({ children }: { children: React.ReactNode }) {
   return (
@@ -76,6 +77,8 @@ export default function PanelPopupPage() {
         return <PanelSuspense><SearchOverlayPage panelMode /></PanelSuspense>;
       case PANEL_TYPES.TRANSLATE:
         return <PanelSuspense><TranslatePage panelMode /></PanelSuspense>;
+      case PANEL_TYPES.AGENT:
+        return <PanelSuspense><AgentPanelPage panelMode presentationMode="popup" /></PanelSuspense>;
       default:
         return <div className="panel-popup-unsupported">Panel type "{type}" cannot be opened in a new window.</div>;
     }

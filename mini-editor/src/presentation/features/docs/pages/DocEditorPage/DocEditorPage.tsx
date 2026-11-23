@@ -23,6 +23,7 @@ import { Loading } from "@/presentation/components/ui/Loading/Loading";
 import { useYjsCollaboration } from "../../hooks/useYjsCollaboration";
 import { useGitDocSync } from "../../hooks/useGitDocSync";
 import type { BlockNoteChangeMeta } from "@/presentation/components/BlockNote/useBlockNoteEditor";
+import { useAgentStore } from "@/presentation/features/agent/store/agentStore";
 import { DocRevisionPanel } from "./components/DocRevisionPanel/DocRevisionPanel";
 import { FindReplaceBar } from "./components/FindReplaceBar/FindReplaceBar";
 import { useFindAndReplace } from "./hooks/useFindAndReplace";
@@ -841,6 +842,25 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
                 }
                 onBlocksChange={handleBlocksChange}
                 onEditorReady={handleEditorReady}
+                onAskAI={({ blockId, language, code }) => {
+                  useAgentStore.getState().requestAskAI({
+                    id: `askai-${blockId}`,
+                    prompt: `Review and explain or improve this ${language || "code"} block from "${doc?.title || `Doc #${docId}`}":\n\n\`\`\`${language || "text"}\n${code}\n\`\`\``,
+                    scenarioHint: "fullstack",
+                    sourceView: "doc",
+                    autoSubmit: false,
+                    contextItems: [
+                      {
+                        id: `doc-block-${docId}-${blockId}`,
+                        kind: "doc",
+                        title: `${doc?.title || `Doc #${docId}`} (${language || "code"})`,
+                        excerpt: code.slice(0, 280),
+                        language,
+                        sourceId: docId,
+                      },
+                    ],
+                  });
+                }}
                 collaboration={collaboration}
               />
             </div>

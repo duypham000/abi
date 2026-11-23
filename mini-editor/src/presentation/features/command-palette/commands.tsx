@@ -16,9 +16,12 @@ import {
   UserIcon,
   KeyboardIcon,
   InfoIcon,
+  SparklesIcon,
+  MessageSquarePlusIcon,
 } from "lucide-react";
 import type { AppDispatch } from "@/presentation/store";
 import { toggleSidebar, togglePanel } from "@/presentation/store/appSlice";
+import { useAgentStore } from "@/presentation/features/agent/store/agentStore";
 import {
   PANEL_TYPES,
   PANEL_TITLES,
@@ -49,6 +52,7 @@ const FEATURE_PANELS: { type: PanelType; icon: ReactNode }[] = [
   { type: PANEL_TYPES.DASHBOARD,   icon: <LayoutDashboardIcon size={ICON} /> },
   { type: PANEL_TYPES.DOCS_LIST,   icon: <FileTextIcon size={ICON} /> },
   { type: PANEL_TYPES.CANVAS_LIST, icon: <FrameIcon size={ICON} /> },
+  { type: PANEL_TYPES.AGENT,       icon: <SparklesIcon size={ICON} /> },
   { type: PANEL_TYPES.TRANSLATE,   icon: <Languages size={ICON} /> },
   { type: PANEL_TYPES.SEARCH,      icon: <SearchIcon size={ICON} /> },
   { type: PANEL_TYPES.SETTINGS,    icon: <SettingsIcon size={ICON} /> },
@@ -139,5 +143,26 @@ export const COMMANDS: Command[] = [
     keywords: "show hide bottom terminal",
     icon: <PanelBottomIcon size={ICON} />,
     run: (ctx) => ctx.dispatch(togglePanel()),
+  },
+  {
+    id: "agent:toggle-dock",
+    title: "Toggle AI Agent Dock",
+    category: "Agent",
+    keywords: "ai assistant chat copilot dock",
+    icon: <SparklesIcon size={ICON} />,
+    run: () => useAgentStore.getState().toggleDock(),
+  },
+  {
+    id: "agent:new-session",
+    title: "New AI Agent Chat",
+    category: "Agent",
+    keywords: "ai new session chat prompt",
+    icon: <MessageSquarePlusIcon size={ICON} />,
+    run: () => {
+      const store = useAgentStore.getState();
+      store.createSession();
+      store.setDockOpen(true);
+      store.setActiveViewTab("chat");
+    },
   },
 ];

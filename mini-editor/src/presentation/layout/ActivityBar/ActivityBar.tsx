@@ -13,6 +13,7 @@ import {
   SettingsIcon,
   GripVerticalIcon,
   GitBranchIcon,
+  SparklesIcon,
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useGoldenLayout } from "../golden/GoldenLayoutContext";
@@ -22,6 +23,7 @@ import type { RootState, AppDispatch } from "@/presentation/store";
 import { useRef, useEffect } from "react";
 import type { DragSource } from "golden-layout";
 import { useAuth } from "@/presentation/features/auth/hooks/useAuth";
+import { useAgentStore } from "@/presentation/features/agent/store/agentStore";
 import "./ActivityBar.scss";
 
 // ── Drag source hook (kept for Settings which still opens a GL panel) ──────
@@ -112,11 +114,40 @@ function SettingsItem({ isActive, onOpen }: { isActive: boolean; onOpen: () => v
   );
 }
 
+// ── Agent dock item (toggles right Agent Dock + keeps drag handle for GL tab) ──
+function AgentDockItem({ isActive, onToggle }: { isActive: boolean; onToggle: () => void }) {
+  const dragRef = useDragHandle(PANEL_TYPES.AGENT);
+
+  return (
+    <div className={`activity-item${isActive ? " is-active" : ""}`}>
+      <button
+        className="activity-item__btn"
+        title="AI Agent (Ctrl+Shift+A)"
+        onClick={onToggle}
+        aria-label="AI Agent"
+        aria-pressed={isActive}
+      >
+        <span className="activity-item__icon"><SparklesIcon size={20} /></span>
+      </button>
+      <span
+        ref={dragRef}
+        className="activity-item__drag"
+        title="Drag to open Agent in a GoldenLayout tab"
+        draggable={false}
+      >
+        <GripVerticalIcon size={10} />
+      </span>
+    </div>
+  );
+}
+
 // ── ActivityBar ───────────────────────────────────────────────────────────
 export function ActivityBar() {
   const { openPanel } = useGoldenLayout();
   const { user, logout, isLoggingOut } = useAuth();
   const activeSidebar = useSelector((s: RootState) => s.app.activeSidebar);
+  const isAgentDockOpen = useAgentStore((s) => s.isDockOpen);
+  const toggleAgentDock = useAgentStore((s) => s.toggleDock);
 
   return (
     <aside className="activity-bar">
@@ -133,6 +164,10 @@ export function ActivityBar() {
       </div>
 
       <div className="activity-bar__bottom">
+        <AgentDockItem
+          isActive={isAgentDockOpen}
+          onToggle={toggleAgentDock}
+        />
         <SettingsItem
           isActive={false}
           onOpen={() => openPanel(PANEL_TYPES.SETTINGS, {}, { title: PANEL_TITLES[PANEL_TYPES.SETTINGS], singleton: true })}

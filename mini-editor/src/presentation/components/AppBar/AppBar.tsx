@@ -1,11 +1,12 @@
 import { useDispatch, useSelector } from "react-redux";
 import { invoke } from "@tauri-apps/api/core";
-import { Search } from "lucide-react";
+import { Search, Sparkles } from "lucide-react";
 import { AppDispatch, RootState } from "@/presentation/store";
 import { toggleSidebar, selectIsOnline } from "@/presentation/store/appSlice";
 import { useWindowControls } from "@/presentation/hooks/useWindowControls";
 import { isMobile } from "@/infrastructure/platform";
 import { openCommandPalette } from "@/presentation/features/command-palette";
+import { useAgentStore } from "@/presentation/features/agent/store/agentStore";
 import {
   CloseIcon,
   MaximizeIcon,
@@ -25,6 +26,8 @@ export function AppBar({ variant = "dashboard" }: AppBarProps) {
   const isSidebarOpen = activeSidebar !== null;
   const isOnline = useSelector(selectIsOnline);
   const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
+  const isAgentDockOpen = useAgentStore((s) => s.isDockOpen);
+  const toggleAgentDock = useAgentStore((s) => s.toggleDock);
 
   const isTauri =
     typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -99,8 +102,22 @@ export function AppBar({ variant = "dashboard" }: AppBarProps) {
         )}
       </div>
 
-      {/* Right: Friendly, accessible window control buttons */}
+      {/* Right: Agent toggle + Window control buttons */}
       <div className="appbar-right" data-tauri-drag-region>
+        {variant === "dashboard" && (
+          <button
+            type="button"
+            className={`appbar-agent-btn${isAgentDockOpen ? " is-active" : ""}`}
+            onClick={toggleAgentDock}
+            title={`Toggle AI Agent (${isMac ? "⌘⇧A" : "Ctrl+Shift+A"})`}
+            aria-label="Toggle AI Agent"
+            aria-pressed={isAgentDockOpen}
+            data-tauri-drag-region={false}
+          >
+            <Sparkles size={13} />
+            <span>Agent</span>
+          </button>
+        )}
         {!isMobile() && (
           <div className="window-controls">
             <button

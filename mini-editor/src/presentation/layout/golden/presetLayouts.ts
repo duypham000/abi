@@ -148,3 +148,26 @@ export const nestedStacksLayout: LayoutConfig = {
     ],
   },
 };
+
+export const agentWorkspaceLayout: LayoutConfig = {
+  root: {
+    type: "row",
+    content: [
+      {
+        type: "stack",
+        width: 60,
+        content: [
+          { type: "component", componentType: PANEL_TYPES.DOCS_LIST, title: "Docs" },
+          { type: "component", componentType: PANEL_TYPES.DASHBOARD, title: "Dashboard" },
+        ],
+      },
+      {
+        type: "stack",
+        width: 40,
+        content: [
+          { type: "component", componentType: PANEL_TYPES.AGENT, title: "Agent" },
+        ],
+      },
+    ],
+  },
+};

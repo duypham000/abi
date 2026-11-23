@@ -29,6 +29,7 @@ import {
   rowDemoLayout,
   columnDemoLayout,
   stackDemoLayout,
+  agentWorkspaceLayout,
 } from "../golden/presetLayouts";
 import "./LayoutToolbar.scss";
 
@@ -37,6 +38,7 @@ const ADD_PANEL_ITEMS: { type: PanelType; emoji: string }[] = [
   { type: PANEL_TYPES.DASHBOARD,   emoji: "⬡" },
   { type: PANEL_TYPES.DOCS_LIST,   emoji: "📄" },
   { type: PANEL_TYPES.CANVAS_LIST, emoji: "🎨" },
+  { type: PANEL_TYPES.AGENT,       emoji: "✨" },
   { type: PANEL_TYPES.TRANSLATE,   emoji: "🌐" },
   { type: PANEL_TYPES.SEARCH,      emoji: "🔍" },
   { type: PANEL_TYPES.SETTINGS,    emoji: "⚙️" },
@@ -147,6 +149,7 @@ function PresetMenu() {
     { label: "Stack",         emoji: "☰",  config: stackDemoLayout },
     { label: "Golden Spiral", emoji: "🌀", config: goldenSpiralLayout },
     { label: "Nested Stacks", emoji: "⊞",  config: nestedStacksLayout },
+    { label: "Docs + Agent",  emoji: "✨", config: agentWorkspaceLayout },
   ];
 
   return (
