@@ -100,3 +100,4 @@ curl -X POST http://localhost:8080/api/v1/yjs/storage/doc/<DOC_ID>/snapshot \
   -H "Authorization: Bearer <ACCESS_TOKEN>" \
   -d '{"state_vector_base64":"AQIDBAU="}'
 ```
+
