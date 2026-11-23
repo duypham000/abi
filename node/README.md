@@ -51,4 +51,3 @@ to `main` and rolls both the `yhub` Deployment (server + worker containers) and
 the `tomo-node-api` Deployment in the `tomo-app` namespace on k3s. Manifests live
 in `infra/k8s/04-apps/` (`yhub.yaml`, `tomo-node-api.yaml`) and
 `infra/k8s/03-gateway/ingress-tomo-node.yaml`.
-
