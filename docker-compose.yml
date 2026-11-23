@@ -14,8 +14,13 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - YJS_SECRET=${YJS_SECRET}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
+      - GEMOPS_BASE_URL=${GEMOPS_BASE_URL:-http://127.0.0.1:9090}
+      - GEMOPS_SOCKET_PATH=${GEMOPS_SOCKET_PATH:-}
+      - GEMOPS_DEFAULT_HARNESS=${GEMOPS_DEFAULT_HARNESS:-}
+      - GEMOPS_TURN_TIMEOUT_SEC=${GEMOPS_TURN_TIMEOUT_SEC:-300}
     volumes:
       - tomo_workspace_data:/app/data
+      - /run/agent:/run/agent
     deploy:
       resources:
         limits:
