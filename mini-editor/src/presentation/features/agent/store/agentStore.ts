@@ -15,11 +15,7 @@ import {
   type WorkflowGraphDataPart,
   type WorkspaceContextItem,
 } from "@/core/interfaces/agent";
-import {
-  agentStorage,
-  createDefaultCheckpointsForTour,
-  createInitialSessions,
-} from "@/infrastructure/agent";
+import { agentStorage } from "@/infrastructure/agent";
 
 export type AgentViewTab = "chat" | "artifacts" | "inspector";
 
@@ -373,38 +369,33 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
           persistedConfig,
           persistedSessions,
           persistedActiveId,
-          persistedCheckpoints,
         ] = await Promise.all([
           agentStorage.loadConfig(),
           agentStorage.loadSessions(),
           agentStorage.loadActiveSessionId(),
-          agentStorage.loadCheckpoints(),
         ]);
 
-        const freshSeeds = createInitialSessions();
-        const seedTour = freshSeeds.find((s) => s.id === "session-tomo-tour");
-
+        const cleanedPersisted = persistedSessions.filter(
+          (session) => session.id !== "session-tomo-tour"
+        );
         const mergedSessions =
-          persistedSessions.length > 0
-            ? persistedSessions.map((session) =>
-                normalizeSession(
-                  session,
-                  session.id === "session-tomo-tour" ? seedTour : undefined
-                )
-              )
-            : freshSeeds;
+          cleanedPersisted.length > 0
+            ? cleanedPersisted.map((session) => normalizeSession(session))
+            : createMinimalBootstrapSessions();
 
         const currentState = get();
 
         const nextConfig: AgentRuntimeConfig = persistedConfig
           ? {
-              ...DEFAULT_RUNTIME_CONFIG,
-              ...persistedConfig,
-              toolPermissions: {
-                ...DEFAULT_RUNTIME_CONFIG.toolPermissions,
-                ...(persistedConfig.toolPermissions ?? {}),
-              },
-            }
+            ...DEFAULT_RUNTIME_CONFIG,
+            ...persistedConfig,
+            transportMode: "http",
+            autoOpenArtifact: false,
+            toolPermissions: {
+              ...DEFAULT_RUNTIME_CONFIG.toolPermissions,
+              ...(persistedConfig.toolPermissions ?? {}),
+            },
+          }
           : currentState.config;
 
         const resolvedActiveSession =
@@ -419,30 +410,13 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
 
         const syncedConfig: AgentRuntimeConfig = resolvedActiveSession
           ? {
-              ...nextConfig,
-              mode: resolvedActiveSession.mode,
-              modelId: resolvedActiveSession.modelId,
-            }
+            ...nextConfig,
+            mode: resolvedActiveSession.mode,
+            modelId: resolvedActiveSession.modelId,
+          }
           : nextConfig;
 
-        let nextCheckpoints: CheckpointSnapshot[];
-        if (persistedCheckpoints.length > 0) {
-          const seen = new Set<string>();
-          nextCheckpoints = [];
-          for (const cp of persistedCheckpoints) {
-            if (!seen.has(cp.id)) {
-              seen.add(cp.id);
-              nextCheckpoints.push(cp);
-            }
-          }
-        } else {
-          const hasTourSession = mergedSessions.some(
-            (s) => s.id === "session-tomo-tour"
-          );
-          nextCheckpoints = hasTourSession
-            ? createDefaultCheckpointsForTour()
-            : [];
-        }
+        const nextCheckpoints: CheckpointSnapshot[] = [];
 
         const derivedSuggestions = extractSuggestionsFromSessions(mergedSessions);
         const mergedSuggestions = {
@@ -521,10 +495,10 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
 
     const nextConfig: AgentRuntimeConfig = configChanged
       ? {
-          ...state.config,
-          mode: target.mode,
-          modelId: target.modelId,
-        }
+        ...state.config,
+        mode: target.mode,
+        modelId: target.modelId,
+      }
       : state.config;
 
     set({
@@ -562,17 +536,17 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
       remaining.length > 0
         ? remaining
         : [
-            buildBlankSession({
-              mode: state.config.mode,
-              modelId: state.config.modelId,
-            }),
-          ];
+          buildBlankSession({
+            mode: state.config.mode,
+            modelId: state.config.modelId,
+          }),
+        ];
 
     const deletingActive = state.activeSessionId === sessionId;
     const nextActiveSession = deletingActive
       ? nextSessions[0]
       : nextSessions.find((s) => s.id === state.activeSessionId) ??
-        nextSessions[0];
+      nextSessions[0];
 
     const nextCheckpoints = state.checkpoints.filter(
       (cp) => cp.sessionId !== sessionId
@@ -585,10 +559,10 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
 
     const nextConfig: AgentRuntimeConfig = deletingActive
       ? {
-          ...state.config,
-          mode: nextActiveSession.mode,
-          modelId: nextActiveSession.modelId,
-        }
+        ...state.config,
+        mode: nextActiveSession.mode,
+        modelId: nextActiveSession.modelId,
+      }
       : state.config;
 
     set({
@@ -596,8 +570,8 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
       activeSessionId: nextActiveSession.id,
       activeArtifactId: deletingActive
         ? nextActiveSession.activeArtifactId ??
-          nextActiveSession.artifacts[0]?.id ??
-          null
+        nextActiveSession.artifacts[0]?.id ??
+        null
         : state.activeArtifactId,
       checkpoints: nextCheckpoints,
       lastRestoreUndo:
@@ -754,12 +728,12 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
           messages: session.messages.map((msg) =>
             msg.id === messageId
               ? {
-                  ...msg,
-                  metadata: {
-                    ...(msg.metadata ?? {}),
-                    feedback,
-                  },
-                }
+                ...msg,
+                metadata: {
+                  ...(msg.metadata ?? {}),
+                  feedback,
+                },
+              }
               : msg
           ),
         };
@@ -807,10 +781,10 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
       sessions:
         activeSession && resolvedId
           ? state.sessions.map((session) =>
-              session.id === activeSession.id
-                ? { ...session, activeArtifactId: resolvedId }
-                : session
-            )
+            session.id === activeSession.id
+              ? { ...session, activeArtifactId: resolvedId }
+              : session
+          )
           : state.sessions,
     });
   },
@@ -829,8 +803,8 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
         const nextArtifacts =
           idx >= 0
             ? session.artifacts.map((a, i) =>
-                i === idx ? { ...a, ...artifact } : a
-              )
+              i === idx ? { ...a, ...artifact } : a
+            )
             : [...session.artifacts, artifact];
         return {
           ...session,
@@ -892,10 +866,10 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
           todos: session.todos.map((todo) =>
             todo.id === todoId
               ? {
-                  ...todo,
-                  status:
-                    todo.status === "completed" ? "pending" : "completed",
-                }
+                ...todo,
+                status:
+                  todo.status === "completed" ? "pending" : "completed",
+              }
               : todo
           ),
         };
@@ -1016,8 +990,8 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
     const nextCheckpoints =
       existsIdx >= 0
         ? state.checkpoints.map((cp, i) =>
-            i === existsIdx ? clonedSnapshot : cp
-          )
+          i === existsIdx ? clonedSnapshot : cp
+        )
         : [...state.checkpoints, clonedSnapshot];
 
     set({ checkpoints: nextCheckpoints });
@@ -1069,7 +1043,7 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
 
     const preservedArtifactId =
       targetSession.activeArtifactId &&
-      restoredArtifacts.some((a) => a.id === targetSession.activeArtifactId)
+        restoredArtifacts.some((a) => a.id === targetSession.activeArtifactId)
         ? targetSession.activeArtifactId
         : restoredArtifacts[0]?.id ?? null;
 
@@ -1077,12 +1051,12 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
     const nextSessions = state.sessions.map((session) =>
       session.id === targetSession.id
         ? {
-            ...session,
-            messages: restoredMessages,
-            artifacts: restoredArtifacts,
-            activeArtifactId: preservedArtifactId,
-            updatedAt: nowIso,
-          }
+          ...session,
+          messages: restoredMessages,
+          artifacts: restoredArtifacts,
+          activeArtifactId: preservedArtifactId,
+          updatedAt: nowIso,
+        }
         : session
     );
 
@@ -1121,12 +1095,12 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
     const nextSessions = state.sessions.map((session) =>
       session.id === undo.sessionId
         ? {
-            ...session,
-            messages: restoredMessages,
-            artifacts: restoredArtifacts,
-            activeArtifactId: undo.activeArtifactId,
-            updatedAt: nowIso,
-          }
+          ...session,
+          messages: restoredMessages,
+          artifacts: restoredArtifacts,
+          activeArtifactId: undo.activeArtifactId,
+          updatedAt: nowIso,
+        }
         : session
     );
 
@@ -1222,9 +1196,9 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
       ...partial,
       toolPermissions: partial.toolPermissions
         ? {
-            ...state.config.toolPermissions,
-            ...partial.toolPermissions,
-          }
+          ...state.config.toolPermissions,
+          ...partial.toolPermissions,
+        }
         : state.config.toolPermissions,
     };
 
@@ -1235,15 +1209,15 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
     const nowIso = new Date().toISOString();
     const nextSessions = modeOrModelChanged
       ? state.sessions.map((session) =>
-          session.id === state.activeSessionId
-            ? {
-                ...session,
-                mode: nextConfig.mode,
-                modelId: nextConfig.modelId,
-                updatedAt: nowIso,
-              }
-            : session
-        )
+        session.id === state.activeSessionId
+          ? {
+            ...session,
+            mode: nextConfig.mode,
+            modelId: nextConfig.modelId,
+            updatedAt: nowIso,
+          }
+          : session
+      )
       : state.sessions;
 
     set({
@@ -1292,11 +1266,11 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
     const nextSessions = state.sessions.map((session) =>
       session.id === state.activeSessionId
         ? {
-            ...session,
-            mode: freshConfig.mode,
-            modelId: freshConfig.modelId,
-            updatedAt: nowIso,
-          }
+          ...session,
+          mode: freshConfig.mode,
+          modelId: freshConfig.modelId,
+          updatedAt: nowIso,
+        }
         : session
     );
 
@@ -1356,11 +1330,9 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
   resetAllToDemo: async () => {
     cancelPendingSessionsSave();
 
-    const freshSessions = createInitialSessions();
-    const freshCheckpoints = createDefaultCheckpointsForTour();
+    const freshSessions = createMinimalBootstrapSessions();
     const freshConfig = createFreshDefaultConfig();
     const freshProfile = createFreshDefaultProfile();
-    const freshSuggestions = extractSuggestionsFromSessions(freshSessions);
     const activeId = freshSessions[0]?.id ?? "session-new-chat";
 
     set({
@@ -1370,13 +1342,13 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
       activeSessionId: activeId,
       config: freshConfig,
       profile: freshProfile,
-      activeArtifactId: freshSessions[0]?.activeArtifactId ?? null,
+      activeArtifactId: null,
       isArtifactDrawerOpen: false,
-      checkpoints: freshCheckpoints,
+      checkpoints: [],
       lastRestoreUndo: null,
       branchesByAnchor: {},
       activeBranchIndex: {},
-      suggestionsBySession: freshSuggestions,
+      suggestionsBySession: {},
       pendingAskAI: null,
     });
 
@@ -1385,7 +1357,6 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
       agentStorage.saveSessions(freshSessions),
       agentStorage.saveActiveSessionId(activeId),
       agentStorage.saveConfig(freshConfig),
-      agentStorage.saveCheckpoints(freshCheckpoints),
     ]);
   },
 }));

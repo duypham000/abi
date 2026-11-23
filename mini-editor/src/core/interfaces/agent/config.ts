@@ -76,6 +76,8 @@ export interface AgentRuntimeConfig {
   transportMode: TransportMode;
   apiEndpoint: string;
   apiKey?: string;
+  harnessId: string;
+  systemPromptAppend: string;
   modelId: string;
   mode: AgentMode;
   approvalPolicy: ApprovalPolicy;
@@ -339,10 +341,12 @@ function createDefaultToolPermissions(): Record<string, boolean> {
 }
 
 export const DEFAULT_RUNTIME_CONFIG: AgentRuntimeConfig = {
-  transportMode: "mock",
+  transportMode: "http",
   apiEndpoint: "/api/v1/agent/chat",
   apiKey: "",
-  modelId: "claude-sonnet-4-5",
+  harnessId: "",
+  systemPromptAppend: "",
+  modelId: "gemini-4-neon-medium",
   mode: "agent",
   approvalPolicy: "ask",
   reasoningEffort: "medium",
@@ -352,7 +356,7 @@ export const DEFAULT_RUNTIME_CONFIG: AgentRuntimeConfig = {
   voiceId: "nova",
   speechLang: "en-US",
   autoSpeakResponses: false,
-  autoOpenArtifact: true,
+  autoOpenArtifact: false,
   showTimestamps: false,
   streamSmoothly: true,
   toolPermissions: createDefaultToolPermissions(),

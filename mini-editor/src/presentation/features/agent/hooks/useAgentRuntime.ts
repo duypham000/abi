@@ -1,32 +1,36 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import {
   isTextUIPart,
-  isToolUIPart,
-  lastAssistantMessageIsCompleteWithApprovalResponses,
-  type DataUIPart,
   type FileUIPart,
   type LanguageModelUsage,
-  type UIDataTypes,
 } from "ai";
 import {
   DEFAULT_MODELS,
   type AgentPersonaState,
   type AgentScenarioId,
   type AgentSession,
-  type AgentUIDataTypes,
   type AgentUIMessage,
-  type ArtifactDataPart,
   type CheckpointSnapshot,
   type QueueTodoItem,
   type QueuedPromptItem,
-  type WorkflowGraphDataPart,
   type WorkspaceContextItem,
 } from "@/core/interfaces/agent";
 import {
+  cancelAgentTurn,
   createAgentTransport,
+  fetchAgentHarnesses,
+  fetchAgentInfo,
+  fetchAgentStatus,
+  resetAgentSession,
+  resolveAgentPermission,
   speakText,
   stopSpeaking,
+  updateAgentSessionConfig,
+  type AgentBackendInfo,
+  type AgentBackendSessionConfig,
+  type AgentBackendStatus,
+  type AgentHarnessSummary,
 } from "@/infrastructure/agent";
 import { useAgentStore } from "../store/agentStore";
 
@@ -56,21 +60,6 @@ interface PendingBranchRecord {
   sessionId: string;
   startIndex: number;
 }
-
-const SCENARIO_DEFAULT_PROMPTS: Record<AgentScenarioId, string> = {
-  fullstack:
-    "/code Implement an offline SQLite sync status banner hook and Go API telemetry endpoint with unit tests.",
-  research:
-    "/research Compare local-first CRDT sync strategies across Yjs, SQLite outbox, and Go snapshot storage with inline citations.",
-  approval:
-    "/approval Stage the sync hardening migration and push the verified patch after confirming target environment and approval.",
-  debug:
-    "/debug Reproduce the failing syncEngine unit test, diagnose the null snapshot stack trace, and apply a verified fix.",
-  "generative-media":
-    "/preview Generate a live JSX & HTML telemetry dashboard, architecture diagram, and voice narration summary.",
-  workflow:
-    "/workflow Orchestrate a multi-agent Architect -> Implementer -> QA pipeline with live React Flow node telemetry.",
-};
 
 let queueItemCounter = 0;
 
@@ -164,21 +153,21 @@ function computeContextUsage(
 
   const aggregatedUsage: LanguageModelUsage | undefined = hasUsage
     ? {
-        inputTokens,
-        inputTokenDetails: {
-          noCacheTokens,
-          cacheReadTokens,
-          cacheWriteTokens,
-        },
-        outputTokens,
-        outputTokenDetails: {
-          textTokens,
-          reasoningTokens,
-        },
-        totalTokens,
-        cachedInputTokens: cacheReadTokens,
+      inputTokens,
+      inputTokenDetails: {
+        noCacheTokens,
+        cacheReadTokens,
+        cacheWriteTokens,
+      },
+      outputTokens,
+      outputTokenDetails: {
+        textTokens,
         reasoningTokens,
-      }
+      },
+      totalTokens,
+      cachedInputTokens: cacheReadTokens,
+      reasoningTokens,
+    }
     : undefined;
 
   return {
@@ -206,7 +195,6 @@ export function useAgentRuntime() {
   const sessions = useAgentStore((s) => s.sessions);
   const activeSessionId = useAgentStore((s) => s.activeSessionId);
   const config = useAgentStore((s) => s.config);
-  const checkpoints = useAgentStore((s) => s.checkpoints);
   const branchesByAnchor = useAgentStore((s) => s.branchesByAnchor);
   const activeBranchIndex = useAgentStore((s) => s.activeBranchIndex);
   const suggestionsBySession = useAgentStore((s) => s.suggestionsBySession);
@@ -244,81 +232,61 @@ export function useAgentRuntime() {
   const lastSyncedToStoreRef = useRef<AgentUIMessage[] | null>(null);
   const setMessagesRef = useRef<
     | ((
-        messages:
-          | AgentUIMessage[]
-          | ((messages: AgentUIMessage[]) => AgentUIMessage[])
-      ) => void)
+      messages:
+        | AgentUIMessage[]
+        | ((messages: AgentUIMessage[]) => AgentUIMessage[])
+    ) => void)
     | null
   >(null);
 
   const messagesRef = useRef<AgentUIMessage[]>(activeSession.messages);
 
-  const handleData = useCallback(
-    (rawDataPart: DataUIPart<UIDataTypes>) => {
-      if (
-        !rawDataPart ||
-        typeof rawDataPart.data !== "object" ||
-        rawDataPart.data === null
-      ) {
-        return;
+  const [backendStatus, setBackendStatus] = useState<AgentBackendStatus | null>(null);
+  const [backendInfo, setBackendInfo] = useState<AgentBackendInfo | null>(null);
+  const [harnesses, setHarnesses] = useState<AgentHarnessSummary[]>([]);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [isRefreshingMeta, setIsRefreshingMeta] = useState(false);
+
+  const refreshBackendMeta = useCallback(async () => {
+    const currentCfg = useAgentStore.getState().config;
+    const opts = {
+      apiEndpoint: currentCfg.apiEndpoint,
+      apiKey: currentCfg.apiKey,
+    };
+    setIsRefreshingMeta(true);
+    try {
+      const [statusRes, infoRes, harnessesRes] = await Promise.allSettled([
+        fetchAgentStatus(opts),
+        fetchAgentInfo(opts),
+        fetchAgentHarnesses(opts),
+      ]);
+
+      let firstErr: string | null = null;
+      if (statusRes.status === "fulfilled") {
+        setBackendStatus(statusRes.value);
+      } else {
+        firstErr = statusRes.reason instanceof Error ? statusRes.reason.message : "Status unavailable";
       }
-
-      const dataPart = rawDataPart as DataUIPart<AgentUIDataTypes>;
-      const targetSessionId =
-        activeStreamSessionRef.current ?? activeSessionIdRef.current;
-      const store = useAgentStore.getState();
-
-      switch (dataPart.type) {
-        case "data-artifact": {
-          store.upsertArtifact(targetSessionId, dataPart.data);
-          if (store.config.autoOpenArtifact) {
-            store.openArtifact(dataPart.data.id);
-          }
-          break;
-        }
-        case "data-workflow-graph": {
-          store.setWorkflowGraph(targetSessionId, dataPart.data);
-          break;
-        }
-        case "data-queue-update": {
-          store.setTodos(targetSessionId, dataPart.data.todos);
-          break;
-        }
-        case "data-checkpoint": {
-          const currentSession = store.sessions.find(
-            (s) => s.id === targetSessionId
-          );
-          const snapshotMessages =
-            targetSessionId === activeSessionIdRef.current
-              ? messagesRef.current
-              : currentSession?.messages ?? [];
-          const lastMsg = snapshotMessages[snapshotMessages.length - 1];
-          const checkpointId = dataPart.data.checkpointId;
-
-          pendingCheckpointIdsRef.current.push(checkpointId);
-
-          store.addCheckpoint({
-            id: checkpointId,
-            sessionId: targetSessionId,
-            messageId: lastMsg?.id ?? `msg-${checkpointId}`,
-            label: dataPart.data.label,
-            createdAt: dataPart.data.timestampIso,
-            affectedFiles: dataPart.data.affectedFiles,
-            messagesSnapshot: snapshotMessages,
-            artifactsSnapshot: currentSession?.artifacts ?? [],
-          });
-          break;
-        }
-        case "data-suggestions": {
-          store.setSessionSuggestions(targetSessionId, dataPart.data.items);
-          break;
-        }
-        default:
-          break;
+      if (infoRes.status === "fulfilled") {
+        setBackendInfo(infoRes.value);
+      } else if (!firstErr) {
+        firstErr = infoRes.reason instanceof Error ? infoRes.reason.message : "Info unavailable";
       }
-    },
-    []
-  );
+      if (harnessesRes.status === "fulfilled") {
+        setHarnesses(harnessesRes.value.items ?? []);
+      } else if (!firstErr) {
+        firstErr = harnessesRes.reason instanceof Error ? harnessesRes.reason.message : "Harnesses unavailable";
+      }
+      setBackendError(firstErr);
+    } finally {
+      setIsRefreshingMeta(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    void refreshBackendMeta();
+  }, [hydrated, config.apiEndpoint, refreshBackendMeta]);
 
   const {
     messages,
@@ -335,46 +303,8 @@ export function useAgentRuntime() {
     id: activeSessionId,
     messages: activeSession.messages,
     transport,
-    sendAutomaticallyWhen: ({ messages: currentMessages }) => {
-      if (
-        lastAssistantMessageIsCompleteWithApprovalResponses({
-          messages: currentMessages,
-        })
-      ) {
-        return true;
-      }
-
-      const lastMessage = currentMessages[currentMessages.length - 1];
-      if (!lastMessage || lastMessage.role !== "assistant") {
-        return false;
-      }
-
-      const lastStepStartIndex = lastMessage.parts.reduce(
-        (lastIndex, part, index) =>
-          part.type === "step-start" ? index : lastIndex,
-        -1
-      );
-      const lastStepParts = lastMessage.parts.slice(lastStepStartIndex + 1);
-      const lastStepTools = lastStepParts.filter(isToolUIPart);
-
-      const hasAnsweredAskUser = lastStepTools.some(
-        (part) =>
-          part.type === "tool-ask_user" && part.state === "output-available"
-      );
-      if (!hasAnsweredAskUser) {
-        return false;
-      }
-
-      const hasUnresolvedTools = lastStepTools.some(
-        (part) =>
-          part.state === "input-streaming" ||
-          part.state === "input-available" ||
-          part.state === "approval-requested"
-      );
-
-      return !hasUnresolvedTools;
-    },
-    onData: handleData,
+    // gemops keeps the active SSE turn stream open while waiting for POST /permissions/:id
+    sendAutomaticallyWhen: () => false,
     onFinish: ({ message, messages: finalMessages, isAbort, isDisconnect, isError }) => {
       const originSessionId =
         activeStreamSessionRef.current ?? activeSessionIdRef.current;
@@ -442,6 +372,7 @@ export function useAgentRuntime() {
         lastSyncedToStoreRef.current = syncedMessages;
       }
       store.syncSessionMessages(originSessionId, syncedMessages);
+      void refreshBackendMeta();
 
       if (
         !isAbort &&
@@ -557,15 +488,15 @@ export function useAgentRuntime() {
       nextItem.files && nextItem.files.length > 0 && !nextItem.text.trim()
         ? sendMessage({ files: nextItem.files, metadata }, requestOptions)
         : sendMessage(
-            {
-              text: nextItem.text,
-              ...(nextItem.files && nextItem.files.length > 0
-                ? { files: nextItem.files }
-                : {}),
-              metadata,
-            },
-            requestOptions
-          );
+          {
+            text: nextItem.text,
+            ...(nextItem.files && nextItem.files.length > 0
+              ? { files: nextItem.files }
+              : {}),
+            metadata,
+          },
+          requestOptions
+        );
 
     void sendPromise.finally(() => {
       isDrainingQueueRef.current = false;
@@ -652,13 +583,10 @@ export function useAgentRuntime() {
   }, [hydrated, isDockOpen, pendingAskAI, status, sendPrompt]);
 
   const triggerScenario = useCallback(
-    async (scenarioId: AgentScenarioId, customPrompt?: string) => {
-      const promptText =
-        customPrompt?.trim() || SCENARIO_DEFAULT_PROMPTS[scenarioId];
-      await sendPrompt({
-        text: promptText,
-        scenarioHint: scenarioId,
-      });
+    async (_scenarioId: AgentScenarioId, customPrompt?: string) => {
+      if (customPrompt?.trim()) {
+        await sendPrompt({ text: customPrompt.trim() });
+      }
     },
     [sendPrompt]
   );
@@ -666,6 +594,11 @@ export function useAgentRuntime() {
   const approveTool = useCallback(
     async (approvalId: string, reason?: string) => {
       activeStreamSessionRef.current = activeSessionIdRef.current;
+      const currentCfg = useAgentStore.getState().config;
+      await resolveAgentPermission(approvalId, "allow", {
+        apiEndpoint: currentCfg.apiEndpoint,
+        apiKey: currentCfg.apiKey,
+      });
       await addToolApprovalResponse({
         id: approvalId,
         approved: true,
@@ -678,6 +611,11 @@ export function useAgentRuntime() {
   const denyTool = useCallback(
     async (approvalId: string, reason?: string) => {
       activeStreamSessionRef.current = activeSessionIdRef.current;
+      const currentCfg = useAgentStore.getState().config;
+      await resolveAgentPermission(approvalId, "deny", {
+        apiEndpoint: currentCfg.apiEndpoint,
+        apiKey: currentCfg.apiKey,
+      });
       await addToolApprovalResponse({
         id: approvalId,
         approved: false,
@@ -731,15 +669,15 @@ export function useAgentRuntime() {
 
         const tail = currentMessages.slice(startIndex).map((msg, offset) =>
           offset === (isUserHeaded && prevUser ? 1 : 0) &&
-          msg.role === "assistant"
+            msg.role === "assistant"
             ? {
-                ...msg,
-                metadata: {
-                  ...(msg.metadata ?? {}),
-                  branchGroupId: anchorKey,
-                  parentMessageId: anchorMessageId,
-                },
-              }
+              ...msg,
+              metadata: {
+                ...(msg.metadata ?? {}),
+                branchGroupId: anchorKey,
+                parentMessageId: anchorMessageId,
+              },
+            }
             : msg
         );
 
@@ -1009,8 +947,37 @@ export function useAgentRuntime() {
       stopSpeaking();
       useAgentStore.getState().setAudioSpeaking(false);
     }
+    const currentCfg = useAgentStore.getState().config;
+    void cancelAgentTurn({
+      apiEndpoint: currentCfg.apiEndpoint,
+      apiKey: currentCfg.apiKey,
+    }).catch(() => undefined);
     await stop();
   }, [isAudioSpeaking, stop]);
+
+  const resetBackendSession = useCallback(
+    async (compact: boolean) => {
+      const currentCfg = useAgentStore.getState().config;
+      await resetAgentSession(compact, currentCfg.harnessId, {
+        apiEndpoint: currentCfg.apiEndpoint,
+        apiKey: currentCfg.apiKey,
+      });
+      await refreshBackendMeta();
+    },
+    [refreshBackendMeta]
+  );
+
+  const applySessionConfig = useCallback(
+    async (patch: AgentBackendSessionConfig) => {
+      const currentCfg = useAgentStore.getState().config;
+      await updateAgentSessionConfig(patch, {
+        apiEndpoint: currentCfg.apiEndpoint,
+        apiKey: currentCfg.apiKey,
+      });
+      await refreshBackendMeta();
+    },
+    [refreshBackendMeta]
+  );
 
   const getBranchInfoForMessage = useCallback(
     (messageId: string): MessageBranchInfo | null => {
@@ -1060,17 +1027,10 @@ export function useAgentRuntime() {
     [messages, effectiveModelId]
   );
 
-  const sessionArtifacts: ArtifactDataPart[] = activeSession.artifacts;
-  const sessionCheckpoints: CheckpointSnapshot[] = useMemo(
-    () => checkpoints.filter((cp) => cp.sessionId === activeSession.id),
-    [checkpoints, activeSession.id]
-  );
   const sessionTodos: QueueTodoItem[] = activeSession.todos;
   const sessionQueue: QueuedPromptItem[] = activeSession.queuedPrompts;
   const sessionSuggestions: string[] =
     suggestionsBySession[activeSession.id] ?? [];
-  const workflowGraph: WorkflowGraphDataPart | null =
-    activeSession.workflowGraph ?? null;
 
   return {
     messages,
@@ -1096,11 +1056,19 @@ export function useAgentRuntime() {
     personaState,
     contextUsage,
     activeSession,
-    sessionArtifacts,
-    sessionCheckpoints,
+    sessionArtifacts: [] as never[],
+    sessionCheckpoints: [] as CheckpointSnapshot[],
     sessionTodos,
     sessionQueue,
     sessionSuggestions,
-    workflowGraph,
+    workflowGraph: null,
+    backendStatus,
+    backendInfo,
+    harnesses,
+    backendError,
+    isRefreshingMeta,
+    refreshBackendMeta,
+    resetBackendSession,
+    applySessionConfig,
   };
 }

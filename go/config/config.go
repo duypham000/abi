@@ -10,19 +10,23 @@ import (
 )
 
 type Config struct {
-	Environment        string
-	ServerPort         string
-	DBDriver           string // "sqlite" or "postgres"
-	DBDsn              string
-	JWTSecret          string
-	JWTAccessTTL       time.Duration
-	JWTRefreshTTL      time.Duration
-	YjsSecret          string
-	CORSAllowedOrigins []string
-	GitHubAPIBaseURL   string
-	CacheTTLHours      int
-	WorkspaceRoot      string
-	NodeWsURL          string
+	Environment          string
+	ServerPort           string
+	DBDriver             string // "sqlite" or "postgres"
+	DBDsn                string
+	JWTSecret            string
+	JWTAccessTTL         time.Duration
+	JWTRefreshTTL        time.Duration
+	YjsSecret            string
+	CORSAllowedOrigins   []string
+	GitHubAPIBaseURL     string
+	CacheTTLHours        int
+	WorkspaceRoot        string
+	NodeWsURL            string
+	GemOpsBaseURL        string
+	GemOpsSocketPath     string
+	GemOpsDefaultHarness string
+	GemOpsTurnTimeout    time.Duration
 }
 
 func LoadConfig() *Config {
@@ -53,19 +57,23 @@ func LoadConfig() *Config {
 	}
 
 	return &Config{
-		Environment:        appEnv,
-		ServerPort:         getEnv("SERVER_PORT", "8080"),
-		DBDriver:           getEnv("DB_DRIVER", "sqlite"),
-		DBDsn:              getEnv("DB_DSN", "tomo_dev.db"),
-		JWTSecret:          getEnv("JWT_SECRET", "dev-secret-key-tomo-2026"),
-		JWTAccessTTL:       time.Duration(getEnvAsInt("JWT_ACCESS_TTL_MINUTES", 60)) * time.Minute,
-		JWTRefreshTTL:      time.Duration(getEnvAsInt("JWT_REFRESH_TTL_DAYS", 7)) * 24 * time.Hour,
-		YjsSecret:          getEnv("YJS_SECRET", "dev-yjs-token-secret-tomo"),
-		CORSAllowedOrigins: corsOrigins,
-		GitHubAPIBaseURL:   getEnv("GITHUB_API_BASE_URL", "https://api.github.com"),
-		CacheTTLHours:      getEnvAsInt("CACHE_TTL_HOURS", 24),
-		WorkspaceRoot:      getEnv("WORKSPACE_ROOT", "./data/workspaces"),
-		NodeWsURL:          nodeWsUrl,
+		Environment:          appEnv,
+		ServerPort:           getEnv("SERVER_PORT", "8080"),
+		DBDriver:             getEnv("DB_DRIVER", "sqlite"),
+		DBDsn:                getEnv("DB_DSN", "tomo_dev.db"),
+		JWTSecret:            getEnv("JWT_SECRET", "dev-secret-key-tomo-2026"),
+		JWTAccessTTL:         time.Duration(getEnvAsInt("JWT_ACCESS_TTL_MINUTES", 60)) * time.Minute,
+		JWTRefreshTTL:        time.Duration(getEnvAsInt("JWT_REFRESH_TTL_DAYS", 7)) * 24 * time.Hour,
+		YjsSecret:            getEnv("YJS_SECRET", "dev-yjs-token-secret-tomo"),
+		CORSAllowedOrigins:   corsOrigins,
+		GitHubAPIBaseURL:     getEnv("GITHUB_API_BASE_URL", "https://api.github.com"),
+		CacheTTLHours:        getEnvAsInt("CACHE_TTL_HOURS", 24),
+		WorkspaceRoot:        getEnv("WORKSPACE_ROOT", "./data/workspaces"),
+		NodeWsURL:            nodeWsUrl,
+		GemOpsBaseURL:        getEnv("GEMOPS_BASE_URL", "http://127.0.0.1:9090"),
+		GemOpsSocketPath:     getEnv("GEMOPS_SOCKET_PATH", ""),
+		GemOpsDefaultHarness: getEnv("GEMOPS_DEFAULT_HARNESS", ""),
+		GemOpsTurnTimeout:    time.Duration(getEnvAsInt("GEMOPS_TURN_TIMEOUT_SEC", 300)) * time.Second,
 	}
 }
 

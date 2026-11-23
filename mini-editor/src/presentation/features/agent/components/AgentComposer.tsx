@@ -1,16 +1,4 @@
 import {
-  Attachment,
-  AttachmentHoverCard,
-  AttachmentHoverCardContent,
-  AttachmentHoverCardTrigger,
-  AttachmentInfo,
-  AttachmentPreview,
-  AttachmentRemove,
-  Attachments,
-  getAttachmentLabel,
-  getMediaCategory,
-} from "@/components/ai-elements/attachments";
-import {
   MicSelector,
   MicSelectorContent,
   MicSelectorEmpty,
@@ -30,16 +18,11 @@ import {
   ModelSelectorItem,
   ModelSelectorList,
   ModelSelectorLogo,
-  ModelSelectorLogoGroup,
   ModelSelectorName,
-  ModelSelectorSeparator,
-  ModelSelectorShortcut,
   ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector";
 import {
   PromptInput,
-  PromptInputActionAddAttachments,
-  PromptInputActionAddScreenshot,
   PromptInputActionMenu,
   PromptInputActionMenuContent,
   PromptInputActionMenuItem,
@@ -52,7 +35,6 @@ import {
   PromptInputCommandInput,
   PromptInputCommandItem,
   PromptInputCommandList,
-  PromptInputCommandSeparator,
   PromptInputFooter,
   PromptInputHeader,
   PromptInputHoverCard,
@@ -72,7 +54,6 @@ import {
   PromptInputTabsList,
   PromptInputTextarea,
   PromptInputTools,
-  usePromptInputAttachments,
   usePromptInputController,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
@@ -81,11 +62,8 @@ import {
   QueueItem,
   QueueItemAction,
   QueueItemActions,
-  QueueItemAttachment,
   QueueItemContent,
   QueueItemDescription,
-  QueueItemFile,
-  QueueItemImage,
   QueueItemIndicator,
   QueueList,
   QueueSection,
@@ -97,11 +75,8 @@ import { SpeechInput } from "@/components/ai-elements/speech-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  DEFAULT_MODELS,
   type AgentMode,
-  type AgentScenarioId,
   type AskAIRequest,
-  type ModelOption,
   type QueueTodoItem,
   type QueuedPromptItem,
   type ReasoningEffort,
@@ -112,6 +87,7 @@ import {
   isSpeechRecognitionSupported,
   listWorkspaceContextItems,
   startSpeechDictation,
+  type AgentBackendInfo,
 } from "@/infrastructure/agent";
 import { cn } from "@/lib/utils";
 import type { ChatStatus } from "ai";
@@ -124,11 +100,11 @@ import {
   FileCode2Icon,
   FileTextIcon,
   GitBranchIcon,
-  GlobeIcon,
   LayersIcon,
   ListTodoIcon,
   MessageSquarePlusIcon,
   MicIcon,
+  Minimize2Icon,
   PlayIcon,
   ShapesIcon,
   SlashIcon,
@@ -137,7 +113,6 @@ import {
   XIcon,
 } from "lucide-react";
 import {
-  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -152,7 +127,6 @@ export interface AgentComposerProps {
   mode: AgentMode;
   modelId: string;
   reasoningEffort: ReasoningEffort;
-  webSearchEnabled: boolean;
   speechLang: string;
   micDeviceId: string | undefined;
   isVoiceListening: boolean;
@@ -160,12 +134,12 @@ export interface AgentComposerProps {
   sessionTodos: QueueTodoItem[];
   sessionQueue: QueuedPromptItem[];
   pendingAskAI: AskAIRequest | null;
+  backendInfo: AgentBackendInfo | null;
   onSendPrompt: (params: SendPromptParams) => Promise<void>;
   onStop: () => void | Promise<void>;
   onSetMode: (mode: AgentMode) => void;
   onSetModel: (modelId: string) => void;
   onCycleReasoningEffort: (next: ReasoningEffort) => void;
-  onToggleWebSearch: (enabled: boolean) => void;
   onSetMicDeviceId: (deviceId: string | undefined) => void;
   onSetVoiceListening: (listening: boolean) => void;
   onPinContextItem: (item: WorkspaceContextItem) => void;
@@ -174,6 +148,7 @@ export interface AgentComposerProps {
   onSendQueuedNow: (itemId: string) => void | Promise<void>;
   onRemoveQueued: (itemId: string) => void;
   onClearSession: () => void;
+  onCompactSession: () => void;
   onConsumeAskAI: () => AskAIRequest | null;
 }
 
@@ -181,67 +156,45 @@ interface SlashCommandItem {
   command: string;
   label: string;
   description: string;
-  scenarioId?: AgentScenarioId;
-  action?: "clear";
+  action: "clear" | "compact";
 }
 
 const SLASH_COMMANDS: SlashCommandItem[] = [
   {
-    command: "/code",
-    label: "Full-Stack Code",
-    description: "Plan, write code & tests, and emit versioned artifacts",
-    scenarioId: "fullstack",
-  },
-  {
-    command: "/research",
-    label: "Research & Citations",
-    description: "Synthesize workspace specs with inline hover citations",
-    scenarioId: "research",
-  },
-  {
-    command: "/approval",
-    label: "HIL Approval & Question",
-    description: "Interactive ask_user choice + tool confirmation gate",
-    scenarioId: "approval",
-  },
-  {
-    command: "/debug",
-    label: "Debug & Diagnostics",
-    description: "Capture stack trace, sandbox repro, and diff patch",
-    scenarioId: "debug",
-  },
-  {
-    command: "/preview",
-    label: "Generative UI & Voice",
-    description: "Live Web/JSX preview, SVG diagram, and WAV narration",
-    scenarioId: "generative-media",
-  },
-  {
-    command: "/workflow",
-    label: "Multi-Agent Workflow",
-    description: "Orchestrate subagents with React Flow telemetry graph",
-    scenarioId: "workflow",
+    command: "/compact",
+    label: "Compact & Free RAM",
+    description: "Summarize GemOps session (<=300 words) and restart process",
+    action: "compact",
   },
   {
     command: "/clear",
     label: "Clear Conversation",
-    description: "Reset messages and artifacts in the active session",
+    description: "Reset messages in the active local session",
     action: "clear",
   },
 ];
 
-const AGENT_MODES: { value: AgentMode; label: string; hint: string }[] = [
-  { value: "agent", label: "Agent", hint: "Full tools & autonomous execution" },
-  { value: "plan", label: "Plan", hint: "Structured design before edits" },
-  { value: "ask", label: "Ask", hint: "Read-only Q&A and explanations" },
-  { value: "debug", label: "Debug", hint: "Diagnostics, traces, and tests" },
+const FALLBACK_MODES = ["default", "accept-edits", "auto", "plan"];
+const MODE_LABELS: Record<string, string> = {
+  default: "Default",
+  "accept-edits": "Accept Edits",
+  auto: "Auto",
+  plan: "Plan",
+};
+
+const FALLBACK_MODELS = [
+  { id: "gemini-4-neon-medium", label: "Gemini 4 Neon (Medium)" },
+  { id: "gemini-4-neon-high", label: "Gemini 4 Neon (High)" },
+  { id: "gemini-3.8-flash-medium", label: "Gemini 3.8 Flash (Medium)" },
 ];
 
 const REASONING_ORDER: ReasoningEffort[] = ["off", "low", "medium", "high"];
 
-function formatContextWindow(tokens: number): string {
-  if (tokens >= 1000000) return `${Math.round(tokens / 1000000)}M`;
-  return `${Math.round(tokens / 1000)}K`;
+function inferProvider(modelId: string): string {
+  const lower = modelId.toLowerCase();
+  if (lower.startsWith("claude")) return "anthropic";
+  if (lower.startsWith("gpt") || lower.startsWith("o3")) return "openai";
+  return "google";
 }
 
 function getContextIcon(kind: WorkspaceContextItem["kind"]) {
@@ -257,27 +210,11 @@ function getContextIcon(kind: WorkspaceContextItem["kind"]) {
   }
 }
 
-function groupModelsByChef(
-  models: ModelOption[]
-): { chef: string; items: ModelOption[] }[] {
-  const map = new Map<string, ModelOption[]>();
-  for (const model of models) {
-    const existing = map.get(model.chef);
-    if (existing) {
-      existing.push(model);
-    } else {
-      map.set(model.chef, [model]);
-    }
-  }
-  return Array.from(map.entries()).map(([chef, items]) => ({ chef, items }));
-}
-
 function ComposerInner({
   status,
   mode,
   modelId,
   reasoningEffort,
-  webSearchEnabled,
   speechLang,
   micDeviceId,
   isVoiceListening,
@@ -285,12 +222,12 @@ function ComposerInner({
   sessionTodos,
   sessionQueue,
   pendingAskAI,
+  backendInfo,
   onSendPrompt,
   onStop,
   onSetMode,
   onSetModel,
   onCycleReasoningEffort,
-  onToggleWebSearch,
   onSetMicDeviceId,
   onSetVoiceListening,
   onPinContextItem,
@@ -299,10 +236,10 @@ function ComposerInner({
   onSendQueuedNow,
   onRemoveQueued,
   onClearSession,
+  onCompactSession,
   onConsumeAskAI,
 }: AgentComposerProps) {
   const controller = usePromptInputController();
-  const attachments = usePromptInputAttachments();
 
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [commandMode, setCommandMode] = useState<"at" | "slash" | null>(null);
@@ -342,7 +279,6 @@ function ComposerInner({
     };
   }, []);
 
-  // Consume non-autoSubmit AskAI requests into composer input & pinned context
   useEffect(() => {
     if (!pendingAskAI || pendingAskAI.autoSubmit) return;
     const req = onConsumeAskAI();
@@ -361,7 +297,6 @@ function ComposerInner({
 
   const inputValue = controller.textInput.value;
 
-  // Detect @ mention or leading / slash triggers smoothly
   const handleInputChange = useCallback(
     (nextVal: string) => {
       const trimmedStart = nextVal.trimStart();
@@ -415,19 +350,18 @@ function ComposerInner({
     [controller, onPinContextItem]
   );
 
-  const handleSelectSlashCommand = useCallback(
-    (item: SlashCommandItem) => {
+  const executeSlashAction = useCallback(
+    (action: SlashCommandItem["action"]) => {
+      controller.textInput.clear();
       setCommandMode(null);
       setCommandFilter("");
-      if (item.action === "clear") {
-        controller.textInput.clear();
+      if (action === "clear") {
         onClearSession();
-        return;
+      } else if (action === "compact") {
+        onCompactSession();
       }
-      controller.textInput.setInput(`${item.command} `);
-      textareaRef.current?.focus();
     },
-    [controller, onClearSession]
+    [controller, onClearSession, onCompactSession]
   );
 
   const handleTextareaKeyDown = useCallback(
@@ -440,35 +374,35 @@ function ComposerInner({
         setCommandMode(null);
         return;
       }
-      if (
-        e.key === "Enter" &&
-        !e.shiftKey &&
-        controller.textInput.value.trim().toLowerCase() === "/clear"
-      ) {
-        e.preventDefault();
-        controller.textInput.clear();
-        setCommandMode(null);
-        onClearSession();
+      if (e.key === "Enter" && !e.shiftKey) {
+        const val = controller.textInput.value.trim().toLowerCase();
+        if (val === "/clear") {
+          e.preventDefault();
+          executeSlashAction("clear");
+        } else if (val === "/compact") {
+          e.preventDefault();
+          executeSlashAction("compact");
+        }
       }
     },
-    [commandMode, controller, onClearSession]
+    [commandMode, controller, executeSlashAction]
   );
 
   const handleSubmit = useCallback(
     async (msg: PromptInputMessage) => {
-      const trimmed = msg.text.trim();
-      if (trimmed.toLowerCase() === "/clear") {
-        setCommandMode(null);
-        onClearSession();
+      const trimmed = msg.text.trim().toLowerCase();
+      if (trimmed === "/clear") {
+        executeSlashAction("clear");
+        return;
+      }
+      if (trimmed === "/compact") {
+        executeSlashAction("compact");
         return;
       }
       setCommandMode(null);
-      await onSendPrompt({
-        text: msg.text,
-        files: msg.files,
-      });
+      await onSendPrompt({ text: msg.text });
     },
-    [onClearSession, onSendPrompt]
+    [executeSlashAction, onSendPrompt]
   );
 
   const handleFallbackDictationToggle = useCallback(() => {
@@ -504,22 +438,35 @@ function ComposerInner({
     });
   }, [controller, isVoiceListening, onSetVoiceListening, speechLang]);
 
+  const availableModels = useMemo(() => {
+    const raw = backendInfo?.models?.length ? backendInfo.models : FALLBACK_MODELS;
+    return raw.map((m) => ({
+      id: m.id,
+      name: m.label || m.id,
+      provider: inferProvider(m.id),
+    }));
+  }, [backendInfo?.models]);
+
   const activeModel = useMemo(
-    () => DEFAULT_MODELS.find((m) => m.id === modelId) ?? DEFAULT_MODELS[0],
-    [modelId]
+    () =>
+      availableModels.find((m) => m.id === modelId) ?? {
+        id: modelId,
+        name: modelId,
+        provider: inferProvider(modelId),
+      },
+    [availableModels, modelId]
   );
-  const groupedModels = useMemo(() => groupModelsByChef(DEFAULT_MODELS), []);
-  const uniqueProviders = useMemo(() => {
-    const seen = new Set<string>();
-    const list: string[] = [];
-    for (const m of DEFAULT_MODELS) {
-      if (!seen.has(m.provider)) {
-        seen.add(m.provider);
-        list.push(m.provider);
-      }
-    }
-    return list;
-  }, []);
+
+  const availableModes = useMemo(
+    () => (backendInfo?.modes?.length ? backendInfo.modes : FALLBACK_MODES),
+    [backendInfo?.modes]
+  );
+
+  const normalizedModeValue = useMemo(() => {
+    const raw = String(mode);
+    if (availableModes.includes(raw)) return raw;
+    return availableModes[0] ?? "default";
+  }, [mode, availableModes]);
 
   const nextReasoningEffort = useMemo(() => {
     const idx = REASONING_ORDER.indexOf(reasoningEffort);
@@ -527,16 +474,13 @@ function ComposerInner({
   }, [reasoningEffort]);
 
   const isGenerating = status === "submitted" || status === "streaming";
-  const hasPayload =
-    inputValue.trim().length > 0 || attachments.files.length > 0;
-  const showHeader =
-    attachments.files.length > 0 || pinnedContext.length > 0;
+  const hasPayload = inputValue.trim().length > 0;
+  const showHeader = pinnedContext.length > 0;
   const showQueue = sessionTodos.length > 0 || sessionQueue.length > 0;
 
   return (
     <div className="shrink-0 border-t border-border bg-background/95 px-2.5 pt-2 pb-2.5 sm:px-4">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-2">
-        {/* Queue: Active Agent Todos + Queued User Messages */}
         {showQueue && (
           <Queue className="border-border/80 bg-muted/20">
             {sessionTodos.length > 0 && (
@@ -605,7 +549,7 @@ function ComposerInner({
                           <div className="flex min-w-0 flex-1 items-center gap-2">
                             <QueueItemIndicator />
                             <QueueItemContent className="text-xs">
-                              {item.text || "(Attachment prompt)"}
+                              {item.text || "(Prompt)"}
                             </QueueItemContent>
                           </div>
                           <QueueItemActions>
@@ -627,25 +571,6 @@ function ComposerInner({
                             </QueueItemAction>
                           </QueueItemActions>
                         </div>
-
-                        {item.files && item.files.length > 0 && (
-                          <QueueItemAttachment className="ml-4">
-                            {item.files.map((file, idx) =>
-                              file.mediaType?.startsWith("image/") &&
-                              file.url ? (
-                                <QueueItemImage
-                                  alt={file.filename ?? "Queued image"}
-                                  key={`${item.id}-f-${idx}`}
-                                  src={file.url}
-                                />
-                              ) : (
-                                <QueueItemFile key={`${item.id}-f-${idx}`}>
-                                  {file.filename ?? "Attachment"}
-                                </QueueItemFile>
-                              )
-                            )}
-                          </QueueItemAttachment>
-                        )}
                       </QueueItem>
                     ))}
                   </QueueList>
@@ -655,7 +580,6 @@ function ComposerInner({
           </Queue>
         )}
 
-        {/* Floating @workspace or /slash Command Popover */}
         {commandMode !== null && (
           <div
             className="relative z-20 rounded-xl border border-border bg-popover text-popover-foreground shadow-lg"
@@ -677,7 +601,7 @@ function ComposerInner({
                 ) : (
                   <>
                     <SlashIcon className="size-3.5 text-primary" />
-                    Slash Commands &amp; Scenarios
+                    Session Commands
                   </>
                 )}
               </span>
@@ -698,8 +622,8 @@ function ComposerInner({
                 onValueChange={setCommandFilter}
                 placeholder={
                   commandMode === "at"
-                    ? "Filter Tomo Docs, Canvases, Files, Git Diff..."
-                    : "Filter slash commands..."
+                    ? "Filter Tomo Docs, Canvases, Files..."
+                    : "Filter commands..."
                 }
                 value={commandFilter}
               />
@@ -743,51 +667,27 @@ function ComposerInner({
                     })}
                   </PromptInputCommandGroup>
                 ) : (
-                  <>
-                    <PromptInputCommandGroup heading="Scenarios">
-                      {SLASH_COMMANDS.filter((c) => c.scenarioId).map(
-                        (cmd) => (
-                          <PromptInputCommandItem
-                            key={cmd.command}
-                            onSelect={() => handleSelectSlashCommand(cmd)}
-                            value={`${cmd.command} ${cmd.label} ${cmd.description}`}
-                          >
-                            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold text-primary">
-                              {cmd.command}
-                            </code>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-xs font-medium">
-                                {cmd.label}
-                              </div>
-                              <div className="truncate text-[10px] text-muted-foreground">
-                                {cmd.description}
-                              </div>
-                            </div>
-                          </PromptInputCommandItem>
-                        )
-                      )}
-                    </PromptInputCommandGroup>
-                    <PromptInputCommandSeparator />
-                    <PromptInputCommandGroup heading="Session">
-                      {SLASH_COMMANDS.filter((c) => c.action === "clear").map(
-                        (cmd) => (
-                          <PromptInputCommandItem
-                            key={cmd.command}
-                            onSelect={() => handleSelectSlashCommand(cmd)}
-                            value={`${cmd.command} ${cmd.label}`}
-                          >
-                            <EraserIcon className="size-3.5 text-muted-foreground" />
-                            <code className="font-mono text-[11px] font-semibold">
-                              {cmd.command}
-                            </code>
-                            <span className="text-xs text-muted-foreground">
-                              {cmd.description}
-                            </span>
-                          </PromptInputCommandItem>
-                        )
-                      )}
-                    </PromptInputCommandGroup>
-                  </>
+                  <PromptInputCommandGroup heading="Session">
+                    {SLASH_COMMANDS.map((cmd) => (
+                      <PromptInputCommandItem
+                        key={cmd.command}
+                        onSelect={() => executeSlashAction(cmd.action)}
+                        value={`${cmd.command} ${cmd.label}`}
+                      >
+                        {cmd.action === "compact" ? (
+                          <Minimize2Icon className="size-3.5 text-primary" />
+                        ) : (
+                          <EraserIcon className="size-3.5 text-muted-foreground" />
+                        )}
+                        <code className="font-mono text-[11px] font-semibold">
+                          {cmd.command}
+                        </code>
+                        <span className="text-xs text-muted-foreground">
+                          {cmd.description}
+                        </span>
+                      </PromptInputCommandItem>
+                    ))}
+                  </PromptInputCommandGroup>
                 )}
               </PromptInputCommandList>
             </PromptInputCommand>
@@ -801,8 +701,7 @@ function ComposerInner({
           </div>
         )}
 
-        {/* Main PromptInput Composer */}
-        <PromptInput multiple onSubmit={handleSubmit}>
+        <PromptInput onSubmit={handleSubmit}>
           {showHeader && (
             <PromptInputHeader className="gap-1.5 border-b border-border/60 px-2.5 pt-2 pb-1.5">
               {pinnedContext.map((item) => {
@@ -827,59 +726,19 @@ function ComposerInner({
                   </div>
                 );
               })}
-
-              {attachments.files.length > 0 && (
-                <Attachments variant="inline">
-                  {attachments.files.map((file) => {
-                    const category = getMediaCategory(file);
-                    const label = getAttachmentLabel(file);
-                    return (
-                      <AttachmentHoverCard key={file.id}>
-                        <AttachmentHoverCardTrigger asChild>
-                          <Attachment
-                            data={file}
-                            onRemove={() => attachments.remove(file.id)}
-                          >
-                            <AttachmentPreview />
-                            <AttachmentInfo />
-                            <AttachmentRemove />
-                          </Attachment>
-                        </AttachmentHoverCardTrigger>
-                        <AttachmentHoverCardContent className="w-60 space-y-2 p-2">
-                          {category === "image" && file.url && (
-                            <img
-                              alt={label}
-                              className="max-h-36 w-full rounded object-cover"
-                              src={file.url}
-                            />
-                          )}
-                          <div className="space-y-0.5 text-xs">
-                            <div className="truncate font-medium">{label}</div>
-                            {file.mediaType && (
-                              <div className="font-mono text-[10px] text-muted-foreground">
-                                {file.mediaType}
-                              </div>
-                            )}
-                          </div>
-                        </AttachmentHoverCardContent>
-                      </AttachmentHoverCard>
-                    );
-                  })}
-                </Attachments>
-              )}
             </PromptInputHeader>
           )}
 
           <PromptInputBody>
             <PromptInputTextarea
-              aria-label="Message the Tomo workspace agent"
+              aria-label="Message GemOps Agent"
               className="min-h-11 px-2.5 py-2 text-xs leading-relaxed sm:text-sm"
               onChange={(e) => handleInputChange(e.currentTarget.value)}
               onKeyDown={handleTextareaKeyDown}
               placeholder={
                 isGenerating
                   ? "Type a message to queue, or press Stop..."
-                  : "Ask Tomo Agent... (@ context, / commands)"
+                  : "Ask GemOps Agent... (@ context, / commands)"
               }
               ref={textareaRef}
             />
@@ -887,15 +746,12 @@ function ComposerInner({
 
           <PromptInputFooter className="items-center justify-between gap-1 border-t border-border/40 px-1.5 py-1">
             <PromptInputTools className="min-w-0 flex-1 flex-nowrap items-center gap-0.5 overflow-x-auto scrollbar-hide">
-              {/* + Action Menu (includes quick toggles for compact mode) */}
               <PromptInputActionMenu>
                 <PromptInputActionMenuTrigger
                   className="size-7 shrink-0"
-                  tooltip="Attach files, context (@), commands (/), or quick toggles"
+                  tooltip="Context (@), commands (/), or reasoning"
                 />
                 <PromptInputActionMenuContent className="w-60 max-w-[90vw]">
-                  <PromptInputActionAddAttachments />
-                  <PromptInputActionAddScreenshot />
                   <PromptInputActionMenuItem
                     onSelect={() => openCommandMenu("at")}
                   >
@@ -911,19 +767,7 @@ function ComposerInner({
                     onSelect={() => openCommandMenu("slash")}
                   >
                     <SlashIcon className="mr-2 size-4 text-primary" />
-                    Slash Commands (/)
-                  </PromptInputActionMenuItem>
-                  <PromptInputActionMenuItem
-                    onSelect={() => onToggleWebSearch(!webSearchEnabled)}
-                  >
-                    <GlobeIcon className="mr-2 size-4 text-primary" />
-                    Web Search
-                    <Badge
-                      className="ml-auto px-1.5 py-0 text-[10px]"
-                      variant={webSearchEnabled ? "default" : "outline"}
-                    >
-                      {webSearchEnabled ? "On" : "Off"}
-                    </Badge>
+                    Session Commands (/)
                   </PromptInputActionMenuItem>
                   <PromptInputActionMenuItem
                     onSelect={() => onCycleReasoningEffort(nextReasoningEffort)}
@@ -937,14 +781,13 @@ function ComposerInner({
                 </PromptInputActionMenuContent>
               </PromptInputActionMenu>
 
-              {/* Model Selector Dialog */}
               <ModelSelector
                 onOpenChange={setModelDialogOpen}
                 open={modelDialogOpen}
               >
                 <ModelSelectorTrigger asChild>
                   <PromptInputButton
-                    className="h-7 max-w-[112px] min-w-0 shrink gap-1 px-1.5 text-xs"
+                    className="h-7 max-w-[140px] min-w-0 shrink gap-1 px-1.5 text-xs"
                     size="sm"
                     tooltip={`Model: ${activeModel.name}`}
                     variant="ghost"
@@ -956,90 +799,54 @@ function ComposerInner({
                     <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
                   </PromptInputButton>
                 </ModelSelectorTrigger>
-                <ModelSelectorContent title="Select Agent Model">
-                  <ModelSelectorInput placeholder="Search OpenAI, Anthropic, Google, DeepSeek..." />
+                <ModelSelectorContent title="Select GemOps Model">
+                  <ModelSelectorInput placeholder="Search available models..." />
                   <ModelSelectorList>
                     <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-                    {groupedModels.map((group, groupIdx) => (
-                      <Fragment key={group.chef}>
-                        {groupIdx > 0 && <ModelSelectorSeparator />}
-                        <ModelSelectorGroup heading={group.chef}>
-                          {group.items.map((model) => (
-                            <ModelSelectorItem
-                              key={model.id}
-                              onSelect={() => {
-                                onSetModel(model.id);
-                                setModelDialogOpen(false);
-                              }}
-                              value={`${model.name} ${model.chef} ${model.id}`}
-                            >
-                              <ModelSelectorLogo provider={model.provider} />
-                              <ModelSelectorName>{model.name}</ModelSelectorName>
-                              <ModelSelectorShortcut>
-                                {formatContextWindow(model.contextWindow)}
-                              </ModelSelectorShortcut>
-                              {model.id === modelId && (
-                                <CheckIcon className="ml-1 size-3.5 text-primary" />
-                              )}
-                            </ModelSelectorItem>
-                          ))}
-                        </ModelSelectorGroup>
-                      </Fragment>
-                    ))}
-                  </ModelSelectorList>
-                  <div className="flex items-center justify-between border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
-                    <span>Supported Providers</span>
-                    <ModelSelectorLogoGroup>
-                      {uniqueProviders.map((provider) => (
-                        <ModelSelectorLogo key={provider} provider={provider} />
+                    <ModelSelectorGroup heading="GemOps Models">
+                      {availableModels.map((model) => (
+                        <ModelSelectorItem
+                          key={model.id}
+                          onSelect={() => {
+                            onSetModel(model.id);
+                            setModelDialogOpen(false);
+                          }}
+                          value={`${model.name} ${model.id}`}
+                        >
+                          <ModelSelectorLogo provider={model.provider} />
+                          <ModelSelectorName>{model.name}</ModelSelectorName>
+                          {model.id === modelId && (
+                            <CheckIcon className="ml-auto size-3.5 text-primary" />
+                          )}
+                        </ModelSelectorItem>
                       ))}
-                    </ModelSelectorLogoGroup>
-                  </div>
+                    </ModelSelectorGroup>
+                  </ModelSelectorList>
                 </ModelSelectorContent>
               </ModelSelector>
 
-              {/* Agent Mode Selector */}
               <PromptInputSelect
                 onValueChange={(val) => onSetMode(val as AgentMode)}
-                value={mode}
+                value={normalizedModeValue}
               >
                 <PromptInputSelectTrigger
-                  aria-label="Agent mode"
+                  aria-label="Execution mode"
                   className="h-7 w-auto shrink-0 gap-1 px-1.5 text-[11px]"
                   size="sm"
                 >
                   <PromptInputSelectValue />
                 </PromptInputSelectTrigger>
                 <PromptInputSelectContent>
-                  {AGENT_MODES.map((m) => (
-                    <PromptInputSelectItem key={m.value} value={m.value}>
-                      <span className="font-medium">{m.label}</span>
+                  {availableModes.map((m) => (
+                    <PromptInputSelectItem key={m} value={m}>
+                      <span className="font-medium">
+                        {MODE_LABELS[m] ?? m}
+                      </span>
                     </PromptInputSelectItem>
                   ))}
                 </PromptInputSelectContent>
               </PromptInputSelect>
 
-              {/* Web Search Toggle (shown inline >= 350px; always in + menu) */}
-              <span className="agent-xs-hide">
-                <PromptInputButton
-                  aria-pressed={webSearchEnabled}
-                  className={cn(
-                    "h-7 shrink-0 gap-1 px-1.5 text-[11px]",
-                    webSearchEnabled && "bg-primary/12 text-primary"
-                  )}
-                  onClick={() => onToggleWebSearch(!webSearchEnabled)}
-                  size="sm"
-                  tooltip={
-                    webSearchEnabled ? "Web Search: Enabled" : "Web Search: Off"
-                  }
-                  variant={webSearchEnabled ? "secondary" : "ghost"}
-                >
-                  <GlobeIcon className="size-3.5 shrink-0" />
-                  <span className="agent-wide-only">Search</span>
-                </PromptInputButton>
-              </span>
-
-              {/* Reasoning Effort Cycle (shown inline >= 350px; always in + menu) */}
               <span className="agent-xs-hide">
                 <PromptInputButton
                   className={cn(
@@ -1056,7 +863,6 @@ function ComposerInner({
                 </PromptInputButton>
               </span>
 
-              {/* Workspace Context Summary HoverCard (shown inline >= 430px) */}
               <span className="agent-sm-only">
                 <PromptInputHoverCard>
                   <PromptInputHoverCardTrigger asChild>
@@ -1079,7 +885,7 @@ function ComposerInner({
                         <PromptInputTabBody>
                           {pinnedContext.length === 0 ? (
                             <PromptInputTabItem className="rounded text-muted-foreground">
-                              Type @ or click to pin Docs, Canvases, or Diffs.
+                              Type @ or click to pin Docs, Canvases, or Files.
                             </PromptInputTabItem>
                           ) : (
                             pinnedContext.map((item) => {
@@ -1109,7 +915,6 @@ function ComposerInner({
                 </PromptInputHoverCard>
               </span>
 
-              {/* Mic Selector (shown on wider containers >= 580px when mediaDevices available) */}
               {canEnumerateMics && (
                 <div className="agent-wide-only shrink-0 items-center">
                   <MicSelector
@@ -1155,7 +960,6 @@ function ComposerInner({
                 </div>
               )}
 
-              {/* Voice Dictation: Native SpeechInput or voiceService fallback */}
               {speechSupported ? (
                 <SpeechInput
                   aria-label="Voice dictation"

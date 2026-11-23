@@ -27,7 +27,6 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import type {
   AgentUIMessage,
   AgentUIMessagePart,
-  CheckpointSnapshot,
 } from "@/core/interfaces/agent";
 import {
   insertMarkdownSnippet,
@@ -66,10 +65,7 @@ import {
 import type { MessageBranchInfo } from "../hooks/useAgentRuntime";
 import { AgentErrorBoundary } from "./AgentErrorBoundary";
 import { AgentPartRenderer } from "./parts/AgentPartRenderer";
-import {
-  CheckpointCard,
-  MessageSourcesBlock,
-} from "./parts/RichMediaPartsRenderer";
+import { MessageSourcesBlock } from "./parts/RichMediaPartsRenderer";
 
 export interface AgentMessageItemProps {
   message: AgentUIMessage;
@@ -77,20 +73,11 @@ export interface AgentMessageItemProps {
   isStreaming: boolean;
   showTimestamp?: boolean;
   branchInfo: MessageBranchInfo | null;
-  checkpoints: CheckpointSnapshot[];
   onApproveTool: (approvalId: string, reason?: string) => void;
   onDenyTool: (approvalId: string, reason?: string) => void;
-  onSubmitQuestion: (
-    toolCallId: string,
-    selectedValues: string[],
-    text?: string
-  ) => void;
   onRegenerate: (messageId: string) => void;
   onEditUserMessage: (messageId: string, newText: string) => void;
   onSwitchBranch: (anchorKey: string, nextIndex: number) => void;
-  onRestoreCheckpoint: (checkpointId: string) => void;
-  onOpenArtifact: (artifactId: string) => void;
-  onOpenWorkflowTab: () => void;
   onFeedback: (messageId: string, feedback: "up" | "down" | null) => void;
   onSendFollowUp: (prompt: string) => void;
   onInsertToDoc?: (markdown: string) => void;
@@ -166,29 +153,18 @@ function renderWithBranchWrapper({
   );
 }
 
-/**
- * Renders a single user or assistant `AgentUIMessage` with attachments,
- * inline editing/forking, grouped sources, tool & rich media parts,
- * branching controls, checkpoints, TTS, and doc insertion actions.
- */
 export const AgentMessageItem = memo(function AgentMessageItem({
   message,
   isLastMessage,
   isStreaming,
   showTimestamp = false,
   branchInfo,
-  checkpoints,
   onApproveTool,
   onDenyTool,
-  onSubmitQuestion,
   onRegenerate,
   onEditUserMessage,
   onSwitchBranch,
-  onRestoreCheckpoint,
-  onOpenArtifact,
-  onOpenWorkflowTab,
   onFeedback,
-  onSendFollowUp,
   onInsertToDoc,
 }: AgentMessageItemProps) {
   const isUser = message.role === "user";
@@ -208,18 +184,6 @@ export const AgentMessageItem = memo(function AgentMessageItem({
     () => message.parts.filter(isSourcePart),
     [message.parts]
   );
-
-  const trailingCheckpoints = useMemo(() => {
-    const inlineIds = new Set<string>();
-    for (const part of message.parts) {
-      if (part.type === "data-checkpoint") {
-        inlineIds.add(part.data.checkpointId);
-      }
-    }
-    return checkpoints.filter(
-      (cp) => cp.messageId === message.id && !inlineIds.has(cp.id)
-    );
-  }, [checkpoints, message.id, message.parts]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(plainText);
@@ -266,7 +230,7 @@ export const AgentMessageItem = memo(function AgentMessageItem({
       }
       copyTimerRef.current = window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      // Ignore clipboard failures in restricted webviews
+      // Ignore clipboard failures
     }
   }, [plainText]);
 
@@ -427,11 +391,6 @@ export const AgentMessageItem = memo(function AgentMessageItem({
                       messageId={message.id}
                       onApproveTool={onApproveTool}
                       onDenyTool={onDenyTool}
-                      onOpenArtifact={onOpenArtifact}
-                      onOpenWorkflowTab={onOpenWorkflowTab}
-                      onRestoreCheckpoint={onRestoreCheckpoint}
-                      onSendFollowUp={onSendFollowUp}
-                      onSubmitQuestion={onSubmitQuestion}
                       part={part}
                       partIndex={idx}
                       suppressFiles
@@ -526,11 +485,6 @@ export const AgentMessageItem = memo(function AgentMessageItem({
                   messageId={message.id}
                   onApproveTool={onApproveTool}
                   onDenyTool={onDenyTool}
-                  onOpenArtifact={onOpenArtifact}
-                  onOpenWorkflowTab={onOpenWorkflowTab}
-                  onRestoreCheckpoint={onRestoreCheckpoint}
-                  onSendFollowUp={onSendFollowUp}
-                  onSubmitQuestion={onSubmitQuestion}
                   part={part}
                   partIndex={idx}
                   suppressSources
@@ -542,17 +496,6 @@ export const AgentMessageItem = memo(function AgentMessageItem({
       )}
 
       {sourceParts.length > 0 && <MessageSourcesBlock sources={sourceParts} />}
-
-      {trailingCheckpoints.map((cp) => (
-        <CheckpointCard
-          affectedFiles={cp.affectedFiles}
-          checkpointId={cp.id}
-          key={cp.id}
-          label={cp.label}
-          onRestoreCheckpoint={onRestoreCheckpoint}
-          timestampIso={cp.createdAt}
-        />
-      ))}
     </MessageContent>
   );
 

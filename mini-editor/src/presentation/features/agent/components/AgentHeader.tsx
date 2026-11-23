@@ -48,13 +48,13 @@ import {
   type AgentSession,
   type AgentUIMessage,
 } from "@/core/interfaces/agent";
+import type { AgentBackendStatus } from "@/infrastructure/agent";
 import { cn } from "@/lib/utils";
 import { isTextUIPart } from "ai";
 import {
   CheckIcon,
   ChevronDownIcon,
   CopyIcon,
-  LayersIcon,
   Maximize2Icon,
   MessageSquareIcon,
   PanelLeftIcon,
@@ -86,14 +86,15 @@ export interface AgentHeaderProps {
   contextUsage: AgentContextUsage;
   activeViewTab: AgentViewTab;
   isHistoryOpen: boolean;
-  artifactCount: number;
+  backendStatus: AgentBackendStatus | null;
+  backendError: string | null;
   presentationMode?: "dock" | "tab" | "popup";
   onToggleHistory: () => void;
   onSelectSession: (sessionId: string) => void;
   onCreateSession: () => void;
   onRenameSession: (sessionId: string, title: string) => void;
   onSelectViewTab: (tab: AgentViewTab) => void;
-  onOpenInspectorTransport: () => void;
+  onOpenInspectorRuntime: () => void;
   onCloseDock?: () => void;
   onSwitchToTab?: () => void;
   onDockRight?: () => void;
@@ -106,15 +107,6 @@ const TOKENLENS_MODEL_MAP: Record<string, string> = {
   "o3-mini": "o3-mini",
   "deepseek-r1": "deepseek/deepseek-r1",
   "qwen-2.5-coder": "qwen/qwen-2.5-coder-32b-instruct",
-};
-
-const OPEN_WEIGHT_FREE_MODELS = new Set(["deepseek-r1", "qwen-2.5-coder"]);
-
-const MOCK_SPEED_LABELS: Record<AgentRuntimeConfig["mockSpeed"], string> = {
-  instant: "Instant",
-  fast: "Fast",
-  realistic: "Realistic",
-  slow: "Slow",
 };
 
 function mapModelIdForTokenLens(modelId: string): string {
@@ -161,14 +153,15 @@ export function AgentHeader({
   contextUsage,
   activeViewTab,
   isHistoryOpen,
-  artifactCount,
+  backendStatus,
+  backendError,
   presentationMode = "dock",
   onToggleHistory,
   onSelectSession,
   onCreateSession,
   onRenameSession,
   onSelectViewTab,
-  onOpenInspectorTransport,
+  onOpenInspectorRuntime,
   onCloseDock,
   onSwitchToTab,
   onDockRight,
@@ -267,50 +260,53 @@ export function AgentHeader({
     [contextUsage.modelId]
   );
 
-  const transportLabel =
-    config.transportMode === "mock"
-      ? `Mock · ${MOCK_SPEED_LABELS[config.mockSpeed]}`
-      : "Live API";
+  const selectedHarness =
+    config.harnessId || backendStatus?.activeHarnessId || "common";
+  const statusLabel = backendStatus
+    ? `${backendStatus.state} · ${selectedHarness}`
+    : backendError
+      ? "GemOps Offline"
+      : "GemOps";
+
+  const statusDotClass = !backendStatus
+    ? "bg-red-500"
+    : backendStatus.state === "BUSY" ||
+        backendStatus.state === "WAITING_APPROVAL" ||
+        backendStatus.state === "COMPACTING"
+      ? "animate-pulse bg-amber-400"
+      : backendStatus.state === "IDLE"
+        ? "bg-emerald-400"
+        : "bg-sky-400";
 
   const tabs: {
     id: AgentViewTab;
     label: string;
     shortLabel: string;
     icon: typeof MessageSquareIcon;
-    badge?: number | string;
   }[] = [
-      {
-        id: "chat",
-        label: "Chat",
-        shortLabel: "Chat",
-        icon: MessageSquareIcon,
-      },
-      {
-        id: "artifacts",
-        label: "Artifacts",
-        shortLabel: "Artifacts",
-        icon: LayersIcon,
-        badge: artifactCount > 0 ? artifactCount : undefined,
-      },
-      {
-        id: "inspector",
-        label: "Inspector",
-        shortLabel: "Config",
-        icon: SlidersHorizontalIcon,
-      },
-    ];
+    {
+      id: "chat",
+      label: "Chat",
+      shortLabel: "Chat",
+      icon: MessageSquareIcon,
+    },
+    {
+      id: "inspector",
+      label: "Runtime & Config",
+      shortLabel: "Config",
+      icon: SlidersHorizontalIcon,
+    },
+  ];
 
   return (
     <header className="flex shrink-0 flex-col border-b border-border bg-background/95 backdrop-blur-xs">
-      {/* Primary Top Bar */}
       <div className="flex min-h-10 items-center justify-between gap-1.5 px-2 py-1">
-        {/* Left: Sidebar Toggle, Orb, Title / Rename, Mode Badge */}
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 aria-expanded={isHistoryOpen}
-                aria-label="Toggle session history and checkpoints"
+                aria-label="Toggle session history"
                 className={cn(
                   "size-7 shrink-0",
                   isHistoryOpen && "bg-accent text-accent-foreground"
@@ -323,9 +319,7 @@ export function AgentHeader({
                 <PanelLeftIcon className="size-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">
-              Sessions &amp; Checkpoints
-            </TooltipContent>
+            <TooltipContent side="bottom">Sessions</TooltipContent>
           </Tooltip>
 
           <AgentPersonaOrb
@@ -402,11 +396,6 @@ export function AgentHeader({
                         onSelect={() => onSelectSession(session.id)}
                       >
                         <span className="truncate">{session.title}</span>
-                        {session.isSeedTour && (
-                          <Badge className="px-1.5 py-0 text-[10px]" variant="secondary">
-                            Tour
-                          </Badge>
-                        )}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
@@ -416,29 +405,21 @@ export function AgentHeader({
 
             <button
               className="agent-wide-only shrink-0 cursor-pointer items-center"
-              onClick={onOpenInspectorTransport}
-              title="Configure transport & runtime mode"
+              onClick={onOpenInspectorRuntime}
+              title={backendError ?? "Inspect GemOps runtime & harness"}
               type="button"
             >
               <Badge
                 className="gap-1 px-1.5 py-0 text-[10px] font-medium"
-                variant={config.transportMode === "http" ? "default" : "secondary"}
+                variant={backendStatus ? "secondary" : "outline"}
               >
-                <span
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    config.transportMode === "http"
-                      ? "bg-emerald-400"
-                      : "bg-sky-500"
-                  )}
-                />
-                {transportLabel}
+                <span className={cn("size-1.5 rounded-full", statusDotClass)} />
+                {statusLabel}
               </Badge>
             </button>
           </div>
         </div>
 
-        {/* Right: New Chat, Context Usage, Open In, Dock/Tab controls */}
         <div className="flex shrink-0 items-center gap-0.5">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -482,13 +463,8 @@ export function AgentHeader({
                 <ContextContentFooter>
                   <span className="text-muted-foreground">Context ready</span>
                   <span className="font-mono text-muted-foreground">
-                    {activeModelMeta?.chef ?? "Runtime"}
+                    GemOps
                   </span>
-                </ContextContentFooter>
-              ) : OPEN_WEIGHT_FREE_MODELS.has(contextUsage.modelId) ? (
-                <ContextContentFooter>
-                  <span className="text-muted-foreground">Open-weight estimate</span>
-                  <span className="font-mono">$0.00</span>
                 </ContextContentFooter>
               ) : (
                 <ContextContentFooter />
@@ -597,7 +573,6 @@ export function AgentHeader({
         </div>
       </div>
 
-      {/* Studio View Tabs Row */}
       <div
         aria-label="Agent studio views"
         className="flex items-center justify-between gap-1.5 border-t border-border/60 bg-muted/25 px-2 py-1"
@@ -624,14 +599,6 @@ export function AgentHeader({
                 <Icon className="size-3.5 shrink-0" />
                 <span className="agent-wide-only">{tab.label}</span>
                 <span className="agent-compact-only">{tab.shortLabel}</span>
-                {tab.badge !== undefined && (
-                  <Badge
-                    className="h-4 min-w-4 justify-center px-1 py-0 text-[10px]"
-                    variant={isActive ? "default" : "secondary"}
-                  >
-                    {tab.badge}
-                  </Badge>
-                )}
               </button>
             );
           })}
@@ -639,12 +606,13 @@ export function AgentHeader({
 
         <button
           className="agent-compact-only agent-xs-hide shrink-0 items-center"
-          onClick={onOpenInspectorTransport}
-          title="Configure transport mode"
+          onClick={onOpenInspectorRuntime}
+          title={backendError ?? "GemOps Runtime"}
           type="button"
         >
-          <Badge className="px-1.5 py-0 text-[10px]" variant="outline">
-            {config.transportMode === "http" ? "Live" : "Mock"}
+          <Badge className="gap-1 px-1.5 py-0 text-[10px]" variant="outline">
+            <span className={cn("size-1.5 rounded-full", statusDotClass)} />
+            {backendStatus ? backendStatus.state : "Offline"}
           </Badge>
         </button>
       </div>

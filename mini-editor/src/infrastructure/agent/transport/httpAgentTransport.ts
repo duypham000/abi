@@ -80,6 +80,8 @@ export class HttpAgentTransport implements ChatTransport<AgentUIMessage> {
               modelId: currentConfig.modelId,
               mode: currentConfig.mode,
               reasoningEffort: currentConfig.reasoningEffort,
+              harnessId: currentConfig.harnessId,
+              systemPromptAppend: currentConfig.systemPromptAppend,
               approvalPolicy: currentConfig.approvalPolicy,
               toolPermissions: currentConfig.toolPermissions,
             },
