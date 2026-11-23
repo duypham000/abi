@@ -58,6 +58,7 @@ export const PANEL_ABBR: Partial<Record<PanelType, string>> = {
   [PANEL_TYPES.SEARCH]:       "SR",
   [PANEL_TYPES.TRANSLATE]:    "TR",
   [PANEL_TYPES.AGENT]:        "AI",
+  [PANEL_TYPES.WORKFLOW]:     "WF",
 };
 
 // ── Panel type → emoji icon (kept for tooltip text fallback) ─────────────
@@ -72,6 +73,7 @@ const PANEL_ICONS: Partial<Record<PanelType, string>> = {
   [PANEL_TYPES.SEARCH]:       "🔍",
   [PANEL_TYPES.TRANSLATE]:    "🌐",
   [PANEL_TYPES.AGENT]:        "✨",
+  [PANEL_TYPES.WORKFLOW]:     "🔀",
 };
 
 // ── Tab / header DOM extensions ────────────────────────────────────────────

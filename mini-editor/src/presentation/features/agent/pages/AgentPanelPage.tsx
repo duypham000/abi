@@ -1,6 +1,8 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
-import type { AgentScenarioId, WorkflowNodeItem } from "@/core/interfaces/agent";
+import type { AgentScenarioId } from "@/core/interfaces/agent";
 import { insertMarkdownSnippet } from "@/infrastructure/agent";
+import { useGoldenLayout } from "@/presentation/layout/golden/GoldenLayoutContext";
+import { PANEL_TYPES } from "@/presentation/layout/golden/panelRegistry";
 import { Suspense, lazy, useCallback, useState } from "react";
 import { AgentComposer } from "../components/AgentComposer";
 import { AgentConversationView } from "../components/AgentConversationView";
@@ -15,11 +17,6 @@ import "../styles/agent-panel.css";
 const AgentArtifactPane = lazy(() =>
   import("../components/AgentArtifactPane").then((m) => ({
     default: m.AgentArtifactPane,
-  }))
-);
-const AgentWorkflowView = lazy(() =>
-  import("../components/AgentWorkflowView").then((m) => ({
-    default: m.AgentWorkflowView,
   }))
 );
 const AgentInspectorDrawer = lazy(() =>
@@ -46,6 +43,7 @@ export function AgentPanelPage({
   const resolvedPresentationMode =
     presentationMode ?? (panelMode ? "dock" : "tab");
 
+  const { openPanel } = useGoldenLayout();
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("profile");
 
   const sessions = useAgentStore((s) => s.sessions);
@@ -114,7 +112,6 @@ export function AgentPanelPage({
     sessionTodos,
     sessionQueue,
     sessionSuggestions,
-    workflowGraph,
   } = useAgentRuntime();
 
   const isGenerating = status === "submitted" || status === "streaming";
@@ -156,16 +153,9 @@ export function AgentPanelPage({
     void regenerate();
   }, [clearError, regenerate]);
 
-  const handleRerunFromNode = useCallback(
-    (node: WorkflowNodeItem) => {
-      setActiveViewTab("chat");
-      void sendPrompt({
-        text: `/workflow Re-run workflow from "${node.label}" (${node.id}) with ${node.model}.`,
-        scenarioHint: "workflow",
-      });
-    },
-    [setActiveViewTab, sendPrompt]
-  );
+  const handleOpenWorkflowTab = useCallback(() => {
+    openPanel(PANEL_TYPES.WORKFLOW, {}, { title: "Workflow", singleton: true });
+  }, [openPanel]);
 
   const handleInsertToDoc = useCallback((markdown: string) => {
     void insertMarkdownSnippet(markdown);
@@ -198,7 +188,6 @@ export function AgentPanelPage({
           personaState={personaState}
           presentationMode={resolvedPresentationMode}
           sessions={sessions}
-          workflowNodeCount={workflowGraph?.nodes.length ?? 0}
         />
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -256,7 +245,7 @@ export function AgentPanelPage({
                       onJumpToTour={() => selectSession("session-tomo-tour")}
                       onLaunchScenario={handleLaunchScenario}
                       onOpenArtifact={(artifactId) => openArtifact(artifactId)}
-                      onOpenWorkflowTab={() => setActiveViewTab("workflow")}
+                      onOpenWorkflowTab={handleOpenWorkflowTab}
                       onRegenerate={regenerateFromMessage}
                       onRestoreCheckpoint={(checkpointId) => {
                         restoreCheckpoint(checkpointId);
@@ -344,25 +333,6 @@ export function AgentPanelPage({
                   </div>
                 )}
               </>
-            )}
-
-            {activeViewTab === "workflow" && (
-              <Suspense
-                fallback={
-                  <div className="flex flex-1 items-center justify-center p-4 text-xs text-muted-foreground">
-                    Loading workflow canvas…
-                  </div>
-                }
-              >
-                <AgentWorkflowView
-                  isStreaming={isGenerating}
-                  onRerunFromNode={handleRerunFromNode}
-                  onRunWorkflow={() => {
-                    void triggerScenario("workflow");
-                  }}
-                  workflowGraph={workflowGraph}
-                />
-              </Suspense>
             )}
 
             {activeViewTab === "artifacts" && (

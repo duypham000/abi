@@ -35,6 +35,7 @@ import { PANEL_TYPES, type PanelType } from "./golden/panelRegistry";
 import type { RootState } from "@/presentation/store";
 import { useAgentStore } from "@/presentation/features/agent/store/agentStore";
 import { useAgentKeyboardShortcuts } from "@/presentation/features/agent/hooks";
+import { scheduleBackgroundAgentPreload } from "@/presentation/features/agent/preloadAgentResources";
 import "golden-layout/dist/css/goldenlayout-base.css";
 import "./golden/golden-layout-theme.css";
 import "./WorkspaceShell.scss";
@@ -53,6 +54,8 @@ export function WorkspaceShell() {
   const setAgentDockWidth = useAgentStore((s) => s.setDockWidth);
 
   useAgentKeyboardShortcuts({ enabled: true });
+
+  useEffect(() => scheduleBackgroundAgentPreload(), []);
 
   const handleAgentDockResizeStart = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {

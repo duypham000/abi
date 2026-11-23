@@ -31,7 +31,6 @@ import {
   MicSelectorTrigger,
   MicSelectorValue,
 } from "@/components/ai-elements/mic-selector";
-import { Persona } from "@/components/ai-elements/persona";
 import {
   VoiceSelector,
   VoiceSelectorAccent,
@@ -96,8 +95,21 @@ import {
   Volume2Icon,
   WrenchIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { AgentErrorBoundary, AgentPersonaOrb } from "./AgentErrorBoundary";
+
+const LazyPersona = lazy(() =>
+  import("@/components/ai-elements/persona").then((m) => ({
+    default: m.Persona,
+  }))
+);
 
 export type InspectorTab = "profile" | "transport" | "voice";
 
@@ -118,13 +130,13 @@ const PERSONA_VARIANTS: {
   label: string;
   vibe: string;
 }[] = [
-  { id: "obsidian", label: "Obsidian", vibe: "Crisp adaptive core" },
-  { id: "command", label: "Command", vibe: "Focused terminal ring" },
-  { id: "glint", label: "Glint", vibe: "Refractive prism" },
-  { id: "halo", label: "Halo", vibe: "Minimal luminous arc" },
-  { id: "mana", label: "Mana", vibe: "Vibrant energy pulse" },
-  { id: "opal", label: "Opal", vibe: "Soft organic orb" },
-];
+    { id: "obsidian", label: "Obsidian", vibe: "Crisp adaptive core" },
+    { id: "command", label: "Command", vibe: "Focused terminal ring" },
+    { id: "glint", label: "Glint", vibe: "Refractive prism" },
+    { id: "halo", label: "Halo", vibe: "Minimal luminous arc" },
+    { id: "mana", label: "Mana", vibe: "Vibrant energy pulse" },
+    { id: "opal", label: "Opal", vibe: "Soft organic orb" },
+  ];
 
 const PERSONA_STATES: AgentPersonaState[] = [
   "idle",
@@ -685,12 +697,22 @@ export function AgentInspectorDrawer({
                       />
                     ) : (
                       <AgentErrorBoundary>
-                        <Persona
-                          className="size-24"
-                          onLoadError={() => setRiveFailed(true)}
-                          state={previewState}
-                          variant={config.personaVariant}
-                        />
+                        <Suspense
+                          fallback={
+                            <AgentPersonaOrb
+                              size="lg"
+                              state={previewState}
+                              variant={config.personaVariant}
+                            />
+                          }
+                        >
+                          <LazyPersona
+                            className="size-24"
+                            onLoadError={() => setRiveFailed(true)}
+                            state={previewState}
+                            variant={config.personaVariant}
+                          />
+                        </Suspense>
                       </AgentErrorBoundary>
                     )}
                   </div>
@@ -947,9 +969,9 @@ export function AgentInspectorDrawer({
                                       device.label
                                         ? device
                                         : ({
-                                            ...device,
-                                            label: `Microphone ${index + 1}`,
-                                          } as MediaDeviceInfo)
+                                          ...device,
+                                          label: `Microphone ${index + 1}`,
+                                        } as MediaDeviceInfo)
                                     }
                                   />
                                 </MicSelectorItem>

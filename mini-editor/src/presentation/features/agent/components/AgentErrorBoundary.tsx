@@ -1,9 +1,23 @@
 import { Button } from "@/components/ui/button";
-import { Persona, type PersonaState } from "@/components/ai-elements/persona";
+import type { PersonaState } from "@/components/ai-elements/persona";
 import type { AgentPersonaState, PersonaVariant } from "@/core/interfaces/agent";
 import { cn } from "@/lib/utils";
 import { AlertTriangleIcon, RotateCcwIcon } from "lucide-react";
-import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
+import {
+  Component,
+  Suspense,
+  lazy,
+  useEffect,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
+
+const LazyPersona = lazy(() =>
+  import("@/components/ai-elements/persona").then((m) => ({
+    default: m.Persona,
+  }))
+);
 
 export interface AgentErrorBoundaryProps {
   children: ReactNode;
@@ -264,12 +278,14 @@ export function AgentPersonaOrb({
           className
         )}
       >
-        <Persona
-          className={cn(sizeClass, "pointer-events-none")}
-          onLoadError={() => setFailed(true)}
-          state={state}
-          variant={variant}
-        />
+        <Suspense fallback={fallback}>
+          <LazyPersona
+            className={cn(sizeClass, "pointer-events-none")}
+            onLoadError={() => setFailed(true)}
+            state={state}
+            variant={variant}
+          />
+        </Suspense>
       </span>
     </AgentErrorBoundary>
   );

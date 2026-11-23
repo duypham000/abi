@@ -21,7 +21,7 @@ import {
   createInitialSessions,
 } from "@/infrastructure/agent";
 
-export type AgentViewTab = "chat" | "workflow" | "artifacts" | "inspector";
+export type AgentViewTab = "chat" | "artifacts" | "inspector";
 
 export interface RestoreUndoSnapshot {
   sessionId: string;

@@ -54,6 +54,7 @@ export default defineConfig(async ({ mode }) => {
     },
     optimizeDeps: {
       entries: ["index.html", "splash.html", "login.html"],
+      holdUntilCrawlEnd: true,
       include: [
         "ai",
         "@ai-sdk/react",
@@ -61,6 +62,12 @@ export default defineConfig(async ({ mode }) => {
         "@streamdown/code",
         "@streamdown/math",
         "@streamdown/cjk",
+        "@xyflow/react",
+        "motion/react",
+        "shiki",
+        "katex",
+        "nanoid",
+        "@rive-app/react-webgl2",
         "radix-ui",
         "@radix-ui/react-use-controllable-state",
         "cmdk",

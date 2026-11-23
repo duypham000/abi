@@ -23,6 +23,7 @@ const SettingsPage     = lazy(() => import("@/presentation/features/settings/pag
 const SearchOverlayPage = lazy(() => import("@/presentation/features/search/pages/SearchOverlayPage"));
 const TranslatePage     = lazy(() => import("@/presentation/features/translate/pages/TranslatePage"));
 const AgentPanelPage    = lazy(() => import("@/presentation/features/agent/pages/AgentPanelPage"));
+const WorkflowPanelPage = lazy(() => import("@/presentation/features/agent/pages/WorkflowPanelPage"));
 const SeriesDetailPanel = lazy(() =>
   import("@/presentation/features/series/pages/SeriesDetailPanel").then((m) => ({ default: m.SeriesDetailPanel }))
 );
@@ -52,6 +53,11 @@ export const componentMap: ComponentMap = {
         presentationMode="tab"
         onDockRight={() => useAgentStore.getState().setDockOpen(true)}
       />
+    </PanelSuspense>
+  ),
+  [PANEL_TYPES.WORKFLOW]:      ()      => (
+    <PanelSuspense>
+      <WorkflowPanelPage panelMode />
     </PanelSuspense>
   ),
   [PANEL_TYPES.SERIES_DETAIL]: (state) => <PanelSuspense><SeriesDetailPanel panelMode seriesIdProp={state.id as number | undefined} /></PanelSuspense>,

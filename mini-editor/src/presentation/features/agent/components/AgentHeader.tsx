@@ -63,7 +63,6 @@ import {
   PlusIcon,
   Share2Icon,
   SlidersHorizontalIcon,
-  WorkflowIcon,
   XIcon,
 } from "lucide-react";
 import {
@@ -88,7 +87,6 @@ export interface AgentHeaderProps {
   activeViewTab: AgentViewTab;
   isHistoryOpen: boolean;
   artifactCount: number;
-  workflowNodeCount: number;
   presentationMode?: "dock" | "tab" | "popup";
   onToggleHistory: () => void;
   onSelectSession: (sessionId: string) => void;
@@ -164,7 +162,6 @@ export function AgentHeader({
   activeViewTab,
   isHistoryOpen,
   artifactCount,
-  workflowNodeCount,
   presentationMode = "dock",
   onToggleHistory,
   onSelectSession,
@@ -287,13 +284,6 @@ export function AgentHeader({
         label: "Chat",
         shortLabel: "Chat",
         icon: MessageSquareIcon,
-      },
-      {
-        id: "workflow",
-        label: "Workflow",
-        shortLabel: "Flow",
-        icon: WorkflowIcon,
-        badge: workflowNodeCount > 0 ? workflowNodeCount : undefined,
       },
       {
         id: "artifacts",

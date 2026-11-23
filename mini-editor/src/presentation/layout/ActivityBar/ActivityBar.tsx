@@ -14,6 +14,7 @@ import {
   GripVerticalIcon,
   GitBranchIcon,
   SparklesIcon,
+  WorkflowIcon,
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useGoldenLayout } from "../golden/GoldenLayoutContext";
@@ -24,6 +25,10 @@ import { useRef, useEffect } from "react";
 import type { DragSource } from "golden-layout";
 import { useAuth } from "@/presentation/features/auth/hooks/useAuth";
 import { useAgentStore } from "@/presentation/features/agent/store/agentStore";
+import {
+  preloadAgentPanel,
+  preloadWorkflowPanel,
+} from "@/presentation/features/agent/preloadAgentResources";
 import "./ActivityBar.scss";
 
 // ── Drag source hook (kept for Settings which still opens a GL panel) ──────
@@ -114,6 +119,34 @@ function SettingsItem({ isActive, onOpen }: { isActive: boolean; onOpen: () => v
   );
 }
 
+// ── Workflow tab item (opens Workflow DAG in a GoldenLayout tab) ───────────
+function WorkflowTabItem({ onOpen }: { onOpen: () => void }) {
+  const dragRef = useDragHandle(PANEL_TYPES.WORKFLOW);
+
+  return (
+    <div className="activity-item">
+      <button
+        className="activity-item__btn"
+        title="Workflow (Open in Tab)"
+        onClick={onOpen}
+        onMouseEnter={() => void preloadWorkflowPanel()}
+        onFocus={() => void preloadWorkflowPanel()}
+        aria-label="Workflow"
+      >
+        <span className="activity-item__icon"><WorkflowIcon size={20} /></span>
+      </button>
+      <span
+        ref={dragRef}
+        className="activity-item__drag"
+        title="Drag to open Workflow in a GoldenLayout tab"
+        draggable={false}
+      >
+        <GripVerticalIcon size={10} />
+      </span>
+    </div>
+  );
+}
+
 // ── Agent dock item (toggles right Agent Dock + keeps drag handle for GL tab) ──
 function AgentDockItem({ isActive, onToggle }: { isActive: boolean; onToggle: () => void }) {
   const dragRef = useDragHandle(PANEL_TYPES.AGENT);
@@ -124,6 +157,8 @@ function AgentDockItem({ isActive, onToggle }: { isActive: boolean; onToggle: ()
         className="activity-item__btn"
         title="AI Agent (Ctrl+Shift+A)"
         onClick={onToggle}
+        onMouseEnter={() => void preloadAgentPanel()}
+        onFocus={() => void preloadAgentPanel()}
         aria-label="AI Agent"
         aria-pressed={isActive}
       >
@@ -164,6 +199,9 @@ export function ActivityBar() {
       </div>
 
       <div className="activity-bar__bottom">
+        <WorkflowTabItem
+          onOpen={() => openPanel(PANEL_TYPES.WORKFLOW, {}, { title: PANEL_TITLES[PANEL_TYPES.WORKFLOW], singleton: true })}
+        />
         <AgentDockItem
           isActive={isAgentDockOpen}
           onToggle={toggleAgentDock}

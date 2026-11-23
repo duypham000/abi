@@ -18,6 +18,7 @@ import {
   InfoIcon,
   SparklesIcon,
   MessageSquarePlusIcon,
+  WorkflowIcon,
 } from "lucide-react";
 import type { AppDispatch } from "@/presentation/store";
 import { toggleSidebar, togglePanel } from "@/presentation/store/appSlice";
@@ -53,6 +54,7 @@ const FEATURE_PANELS: { type: PanelType; icon: ReactNode }[] = [
   { type: PANEL_TYPES.DOCS_LIST,   icon: <FileTextIcon size={ICON} /> },
   { type: PANEL_TYPES.CANVAS_LIST, icon: <FrameIcon size={ICON} /> },
   { type: PANEL_TYPES.AGENT,       icon: <SparklesIcon size={ICON} /> },
+  { type: PANEL_TYPES.WORKFLOW,    icon: <WorkflowIcon size={ICON} /> },
   { type: PANEL_TYPES.TRANSLATE,   icon: <Languages size={ICON} /> },
   { type: PANEL_TYPES.SEARCH,      icon: <SearchIcon size={ICON} /> },
   { type: PANEL_TYPES.SETTINGS,    icon: <SettingsIcon size={ICON} /> },

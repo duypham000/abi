@@ -3,6 +3,10 @@ export {
   type AgentPanelPageProps,
 } from "./pages/AgentPanelPage";
 export {
+  WorkflowPanelPage,
+  type WorkflowPanelPageProps,
+} from "./pages/WorkflowPanelPage";
+export {
   AgentHeader,
   type AgentHeaderProps,
 } from "./components/AgentHeader";
@@ -38,6 +42,12 @@ export {
   type CreateSessionOptions,
   type RestoreUndoSnapshot,
 } from "./store/agentStore";
+export {
+  preloadAgentPanel,
+  preloadWorkflowPanel,
+  preloadAgentSecondaryTabs,
+  scheduleBackgroundAgentPreload,
+} from "./preloadAgentResources";
 export {
   useAgentRuntime,
   useAgentKeyboardShortcuts,

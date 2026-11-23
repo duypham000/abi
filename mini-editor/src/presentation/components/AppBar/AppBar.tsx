@@ -1,12 +1,18 @@
 import { useDispatch, useSelector } from "react-redux";
 import { invoke } from "@tauri-apps/api/core";
-import { Search, Sparkles } from "lucide-react";
+import { Search, Sparkles, Workflow } from "lucide-react";
 import { AppDispatch, RootState } from "@/presentation/store";
 import { toggleSidebar, selectIsOnline } from "@/presentation/store/appSlice";
 import { useWindowControls } from "@/presentation/hooks/useWindowControls";
 import { isMobile } from "@/infrastructure/platform";
 import { openCommandPalette } from "@/presentation/features/command-palette";
 import { useAgentStore } from "@/presentation/features/agent/store/agentStore";
+import {
+  preloadAgentPanel,
+  preloadWorkflowPanel,
+} from "@/presentation/features/agent/preloadAgentResources";
+import { useGoldenLayout } from "@/presentation/layout/golden/GoldenLayoutContext";
+import { PANEL_TYPES } from "@/presentation/layout/golden/panelRegistry";
 import {
   CloseIcon,
   MaximizeIcon,
@@ -28,6 +34,7 @@ export function AppBar({ variant = "dashboard" }: AppBarProps) {
   const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
   const isAgentDockOpen = useAgentStore((s) => s.isDockOpen);
   const toggleAgentDock = useAgentStore((s) => s.toggleDock);
+  const { openPanel } = useGoldenLayout();
 
   const isTauri =
     typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -102,21 +109,38 @@ export function AppBar({ variant = "dashboard" }: AppBarProps) {
         )}
       </div>
 
-      {/* Right: Agent toggle + Window control buttons */}
+      {/* Right: Workflow tab + Agent toggle + Window control buttons */}
       <div className="appbar-right" data-tauri-drag-region>
         {variant === "dashboard" && (
-          <button
-            type="button"
-            className={`appbar-agent-btn${isAgentDockOpen ? " is-active" : ""}`}
-            onClick={toggleAgentDock}
-            title={`Toggle AI Agent (${isMac ? "⌘⇧A" : "Ctrl+Shift+A"})`}
-            aria-label="Toggle AI Agent"
-            aria-pressed={isAgentDockOpen}
-            data-tauri-drag-region={false}
-          >
-            <Sparkles size={13} />
-            <span>Agent</span>
-          </button>
+          <>
+            <button
+              type="button"
+              className="appbar-agent-btn"
+              onClick={() => openPanel(PANEL_TYPES.WORKFLOW, {}, { title: "Workflow", singleton: true })}
+              onMouseEnter={() => void preloadWorkflowPanel()}
+              onFocus={() => void preloadWorkflowPanel()}
+              title="Open Agent Workflow Tab"
+              aria-label="Open Agent Workflow"
+              data-tauri-drag-region={false}
+            >
+              <Workflow size={13} />
+              <span>Workflow</span>
+            </button>
+            <button
+              type="button"
+              className={`appbar-agent-btn${isAgentDockOpen ? " is-active" : ""}`}
+              onClick={toggleAgentDock}
+              onMouseEnter={() => void preloadAgentPanel()}
+              onFocus={() => void preloadAgentPanel()}
+              title={`Toggle AI Agent (${isMac ? "⌘⇧A" : "Ctrl+Shift+A"})`}
+              aria-label="Toggle AI Agent"
+              aria-pressed={isAgentDockOpen}
+              data-tauri-drag-region={false}
+            >
+              <Sparkles size={13} />
+              <span>Agent</span>
+            </button>
+          </>
         )}
         {!isMobile() && (
           <div className="window-controls">

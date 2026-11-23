@@ -6,6 +6,7 @@ import {
   SearchIcon,
   Languages,
   SparklesIcon,
+  WorkflowIcon,
 } from "lucide-react";
 import { useGoldenLayout } from "../golden/GoldenLayoutContext";
 import { PANEL_TYPES, PANEL_TITLES, type PanelType } from "../golden/panelRegistry";
@@ -16,6 +17,7 @@ const FEATURES: { type: PanelType; icon: React.ReactNode; emoji: string }[] = [
   { type: PANEL_TYPES.DOCS_LIST,   icon: <FileTextIcon size={22} />,        emoji: "📄" },
   { type: PANEL_TYPES.CANVAS_LIST, icon: <FrameIcon size={22} />,           emoji: "🎨" },
   { type: PANEL_TYPES.AGENT,       icon: <SparklesIcon size={22} />,        emoji: "✨" },
+  { type: PANEL_TYPES.WORKFLOW,    icon: <WorkflowIcon size={22} />,        emoji: "🔀" },
   { type: PANEL_TYPES.TRANSLATE,   icon: <Languages size={22} />,           emoji: "🌐" },
   { type: PANEL_TYPES.SEARCH,      icon: <SearchIcon size={22} />,          emoji: "🔍" },
   { type: PANEL_TYPES.SETTINGS,    icon: <SettingsIcon size={22} />,        emoji: "⚙️" },

@@ -63,7 +63,7 @@ export interface AskAIRequest {
   contextItems?: WorkspaceContextItem[];
   files?: FileUIPart[];
   autoSubmit?: boolean;
-  sourceView?: "doc" | "canvas" | "workspace" | "shortcut";
+  sourceView?: "doc" | "canvas" | "workspace" | "shortcut" | "workflow";
 }
 
 export interface AgentSession {
