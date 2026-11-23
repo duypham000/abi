@@ -207,6 +207,24 @@ func TestMCP_DocsSeriesCanvasResourcesAndPrompts(t *testing.T) {
 		t.Fatalf("patch failed: %v", patched["content"])
 	}
 
+	docOutline := callTool(t, router, token, "docs_get", map[string]interface{}{
+		"id":           parentID,
+		"outline_only": true,
+	})
+	headings := docOutline["headings"].([]interface{})
+	if len(headings) != 1 || headings[0].(map[string]interface{})["text"] != "Section Two" {
+		t.Fatalf("unexpected docs_get outline_only: %+v", docOutline)
+	}
+
+	docChunk := callTool(t, router, token, "docs_get", map[string]interface{}{
+		"id":     parentID,
+		"offset": 0,
+		"limit":  7,
+	})
+	if docChunk["content"] != "Updated" || docChunk["truncated"] != true || docChunk["has_more"] != true || int(docChunk["next_offset"].(float64)) != 7 {
+		t.Fatalf("unexpected docs_get chunked result: %+v", docChunk)
+	}
+
 	moved := callTool(t, router, token, "docs_move", map[string]interface{}{
 		"id":        childID,
 		"parent_id": parentID,
@@ -293,6 +311,21 @@ func TestMCP_DocsSeriesCanvasResourcesAndPrompts(t *testing.T) {
 	})
 	if int(delEls["deleted_count"].(float64)) != 1 {
 		t.Fatalf("expected 1 soft-deleted element, got %+v", delEls)
+	}
+
+	canvasSummary := callTool(t, router, token, "canvas_get", map[string]interface{}{
+		"id":           canvasID,
+		"summary_only": true,
+		"types":        []string{"rectangle", "text"},
+		"offset":       0,
+		"limit":        2,
+	})
+	if int(canvasSummary["matched_count"].(float64)) != 3 || int(canvasSummary["returned_count"].(float64)) != 2 || canvasSummary["has_more"] != true {
+		t.Fatalf("unexpected canvas_get paginated summary: %+v", canvasSummary)
+	}
+	canvasObj := canvasSummary["canvas"].(map[string]interface{})
+	if sceneStr, _ := canvasObj["scene"].(string); sceneStr != "" {
+		t.Fatalf("expected raw scene to be omitted in summary_only mode, got %d bytes", len(sceneStr))
 	}
 
 	yjsTok := callTool(t, router, token, "yjs_mint_token", map[string]interface{}{

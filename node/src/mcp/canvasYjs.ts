@@ -294,6 +294,114 @@ export function readCanvasFromYDoc(ydoc: Y.Doc): {
   };
 }
 
+export interface CanvasElementSummary {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text?: string;
+  containerId?: string;
+}
+
+export interface CanvasPaginationResult {
+  total_active: number;
+  matched_count: number;
+  offset: number;
+  returned_count: number;
+  has_more: boolean;
+  next_offset: number | null;
+  type_counts: Record<string, number>;
+  bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
+  elements: Array<ExcalidrawElement | CanvasElementSummary>;
+}
+
+export function paginateAndSummarizeElements(
+  allElements: ExcalidrawElement[],
+  options: {
+    includeDeleted?: boolean;
+    types?: string[];
+    offset?: number;
+    limit?: number;
+    summaryOnly?: boolean;
+  } = {},
+): CanvasPaginationResult {
+  const activeElements = allElements.filter((el) => !el?.isDeleted);
+  const basePool = options.includeDeleted ? allElements : activeElements;
+
+  const typeSet =
+    options.types && options.types.length > 0 ? new Set(options.types) : null;
+  const matched = typeSet
+    ? basePool.filter((el) => typeSet.has(String(el?.type || '')))
+    : basePool;
+
+  const type_counts: Record<string, number> = {};
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const el of matched) {
+    const t = String(el?.type || 'unknown');
+    type_counts[t] = (type_counts[t] || 0) + 1;
+    const x = typeof el?.x === 'number' ? el.x : 0;
+    const y = typeof el?.y === 'number' ? el.y : 0;
+    const w = typeof el?.width === 'number' ? el.width : 0;
+    const h = typeof el?.height === 'number' ? el.height : 0;
+    const x1 = Math.min(x, x + w);
+    const x2 = Math.max(x, x + w);
+    const y1 = Math.min(y, y + h);
+    const y2 = Math.max(y, y + h);
+    if (x1 < minX) minX = x1;
+    if (y1 < minY) minY = y1;
+    if (x2 > maxX) maxX = x2;
+    if (y2 > maxY) maxY = y2;
+  }
+
+  const bounds =
+    matched.length > 0 && Number.isFinite(minX)
+      ? { minX, minY, maxX, maxY }
+      : null;
+
+  const offset = Math.max(0, options.offset ?? 0);
+  const limit = Math.min(Math.max(1, options.limit ?? 100), 500);
+  const sliced = matched.slice(offset, offset + limit);
+  const has_more = offset + sliced.length < matched.length;
+
+  const elements = options.summaryOnly
+    ? sliced.map((el) => {
+        const compact: CanvasElementSummary = {
+          id: String(el?.id || ''),
+          type: String(el?.type || 'unknown'),
+          x: typeof el?.x === 'number' ? el.x : 0,
+          y: typeof el?.y === 'number' ? el.y : 0,
+          width: typeof el?.width === 'number' ? el.width : 0,
+          height: typeof el?.height === 'number' ? el.height : 0,
+        };
+        if (typeof el?.text === 'string' && el.text.length > 0) {
+          compact.text = el.text;
+        }
+        if (typeof el?.containerId === 'string' && el.containerId.length > 0) {
+          compact.containerId = el.containerId;
+        }
+        return compact;
+      })
+    : sliced;
+
+  return {
+    total_active: activeElements.length,
+    matched_count: matched.length,
+    offset,
+    returned_count: elements.length,
+    has_more,
+    next_offset: has_more ? offset + elements.length : null,
+    type_counts,
+    bounds,
+    elements,
+  };
+}
+
 export function seedCanvasYDocFromSceneJson(ydoc: Y.Doc, sceneJson: string | null | undefined): void {
   if (!sceneJson) return;
   const elementsMap = ydoc.getMap<any>('elements');

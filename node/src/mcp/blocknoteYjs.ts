@@ -31,6 +31,47 @@ export interface ParsedDocument {
   blockCount: number;
 }
 
+export interface OutlineEntry {
+  index: number;
+  blockId: string;
+  level: number;
+  text: string;
+  sectionBlockCount: number;
+}
+
+/**
+ * Extract a top-level heading outline whose `index` aligns with `start_block`
+ * pagination in `docs_read_live`.
+ */
+export function extractDocumentOutline(blocks: BlockNode[]): OutlineEntry[] {
+  const rawHeadings: Array<{ index: number; blockId: string; level: number; text: string }> = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (b.type === 'heading') {
+      const level = Math.min(Math.max(Number(b.props.level || 1), 1), 6);
+      rawHeadings.push({
+        index: i,
+        blockId: b.id,
+        level,
+        text: b.text.trim(),
+      });
+    }
+  }
+  return rawHeadings.map((h, pos) => {
+    let nextBoundary = blocks.length;
+    for (let j = pos + 1; j < rawHeadings.length; j++) {
+      if (rawHeadings[j].level <= h.level) {
+        nextBoundary = rawHeadings[j].index;
+        break;
+      }
+    }
+    return {
+      ...h,
+      sectionBlockCount: nextBoundary - h.index,
+    };
+  });
+}
+
 function attrsToPlainRecord(xml: Y.XmlElement): Record<string, unknown> {
   const attrs = xml.getAttributes();
   const out: Record<string, unknown> = {};

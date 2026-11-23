@@ -2,6 +2,8 @@ import * as z from 'zod/v4';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { GoClient } from './goClient.js';
 import {
+  blocksToMarkdown,
+  extractDocumentOutline,
   InputBlock,
   markdownToBlocks,
   readBlocksFromYDoc,
@@ -11,6 +13,7 @@ import {
   buildDiagramElements,
   buildExcalidrawElement,
   mutateCanvasYDoc,
+  paginateAndSummarizeElements,
   readCanvasFromYDoc,
   seedCanvasYDocFromSceneJson,
 } from './canvasYjs.js';
@@ -224,7 +227,7 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
           await withLiveYDoc('doc', created.id, goClient, (ydoc) => {
             const out = writeBlocksToYDoc(ydoc, blocks, 'replace');
             return { result: out, mutated: out.changed };
-          }).catch(() => {});
+          }).catch(() => { });
         }
         return jsonToolResponse(created);
       } catch (e) {
@@ -417,33 +420,105 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
   // =========================================================================
 
   server.registerTool(
-    'docs_read_live',
+    'docs_outline',
     {
       description:
-        'Read the live collaborative BlockNote Yjs document (or persisted snapshot), returning Markdown (with optional block ID comments), structured block JSON, and plain text.',
+        'Return a lightweight heading outline and block metrics for a live document so large docs can be navigated in chunks with docs_read_live.',
       inputSchema: {
         id: z.string().min(1).describe('Document ID'),
-        include_block_ids: z
-          .boolean()
-          .optional()
-          .describe('Include <!-- block:<id> --> annotations in Markdown for targeted updates'),
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ id, include_block_ids }) => {
+    async ({ id }) => {
       try {
         const doc = await goClient.getDoc(id).catch(() => null);
         const live = await withLiveYDoc('doc', id, goClient, (ydoc) => {
-          const parsed = readBlocksFromYDoc(ydoc, Boolean(include_block_ids));
+          seedDocYDocIfEmpty(ydoc, doc?.content);
+          const parsed = readBlocksFromYDoc(ydoc, false);
           return { result: parsed, mutated: false };
         });
+        const headings = extractDocumentOutline(live.result.blocks);
         return jsonToolResponse({
           doc_id: id,
           title: doc?.title,
           transport: live.transport,
-          ...live.result,
+          total_blocks: live.result.blocks.length,
+          total_nested_blocks: live.result.blockCount,
+          total_chars: live.result.markdown.length,
+          headings,
+        });
+      } catch (e) {
+        return errorToolResponse(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'docs_read_live',
+    {
+      description:
+        'Read the live collaborative BlockNote Yjs document (or persisted snapshot) with block-range pagination (start_block, limit) and format selection.',
+      inputSchema: {
+        id: z.string().min(1).describe('Document ID'),
+        start_block: z
+          .number()
+          .int()
+          .min(0)
+          .default(0)
+          .describe('0-based starting top-level block index (default 0)'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .default(80)
+          .describe('Maximum top-level blocks to return (default 80, max 500)'),
+        format: z
+          .enum(['markdown', 'blocks', 'both'])
+          .default('markdown')
+          .describe('Output format: markdown (default), blocks, or both'),
+        include_block_ids: z
+          .boolean()
+          .default(true)
+          .describe('Include <!-- block:<id> --> annotations in Markdown for targeted updates (default true)'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ id, start_block, limit, format, include_block_ids }) => {
+      try {
+        const doc = await goClient.getDoc(id).catch(() => null);
+        const includeIds = include_block_ids ?? true;
+        const live = await withLiveYDoc('doc', id, goClient, (ydoc) => {
+          const parsed = readBlocksFromYDoc(ydoc, includeIds);
+          return { result: parsed, mutated: false };
+        });
+        const allBlocks = live.result.blocks;
+        const totalBlocks = allBlocks.length;
+        const start = Math.max(0, start_block ?? 0);
+        const pageLimit = Math.min(Math.max(1, limit ?? 80), 500);
+        const slicedBlocks = allBlocks.slice(start, start + pageLimit);
+        const hasMore = start + slicedBlocks.length < totalBlocks;
+
+        return jsonToolResponse({
+          doc_id: id,
+          title: doc?.title,
+          transport: live.transport,
+          total_blocks: totalBlocks,
+          start_block: start,
+          returned_blocks: slicedBlocks.length,
+          has_more: hasMore,
+          next_start_block: hasMore ? start + slicedBlocks.length : null,
+          ...(format === 'markdown' || format === 'both'
+            ? { markdown: blocksToMarkdown(slicedBlocks, includeIds) }
+            : {}),
+          ...(format === 'blocks' || format === 'both' ? { blocks: slicedBlocks } : {}),
           ...(live.result.blockCount === 0 && doc?.content
-            ? { stored_content_fallback: doc.content }
+            ? {
+              stored_content_fallback:
+                doc.content.length > 32768
+                  ? `${doc.content.slice(0, 32768)}\n...[truncated, use docs_get with offset/limit]`
+                  : doc.content,
+            }
             : {}),
         });
       } catch (e) {
@@ -467,9 +542,13 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
           .string()
           .optional()
           .describe('Target block ID when mode is insert_after'),
+        return_markdown: z
+          .boolean()
+          .optional()
+          .describe('Echo the full updated Markdown (default false; returns a short preview instead)'),
       },
     },
-    async ({ id, markdown, mode, after_block_id }) => {
+    async ({ id, markdown, mode, after_block_id, return_markdown }) => {
       try {
         const doc = await goClient.getDoc(id).catch(() => null);
         const newBlocks = markdownToBlocks(markdown);
@@ -486,13 +565,17 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
         });
         await goClient
           .updateDocMeta(id, live.result.parsed.plainText || live.result.parsed.markdown)
-          .catch(() => {});
+          .catch(() => { });
+        const fullMd = live.result.parsed.markdown || '';
+        const preview = fullMd.length > 400 ? `${fullMd.slice(0, 400)}...` : fullMd;
         return jsonToolResponse({
           doc_id: id,
           transport: live.transport,
+          mode,
           inserted_ids: live.result.insertedIds,
-          block_count: live.result.parsed.blockCount,
-          markdown: live.result.parsed.markdown,
+          inserted_count: live.result.insertedIds.length,
+          total_blocks: live.result.parsed.blocks.length,
+          ...(return_markdown ? { markdown: fullMd } : { preview }),
         });
       } catch (e) {
         return errorToolResponse(e);
@@ -530,7 +613,7 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
         });
         await goClient
           .updateDocMeta(id, live.result.parsed.plainText || live.result.parsed.markdown)
-          .catch(() => {});
+          .catch(() => { });
         return jsonToolResponse({
           doc_id: id,
           transport: live.transport,
@@ -571,7 +654,7 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
         });
         await goClient
           .updateDocMeta(id, live.result.parsed.plainText || live.result.parsed.markdown)
-          .catch(() => {});
+          .catch(() => { });
         return jsonToolResponse({
           doc_id: id,
           transport: live.transport,
@@ -605,7 +688,7 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
         });
         await goClient
           .updateDocMeta(id, live.result.parsed.plainText || live.result.parsed.markdown)
-          .catch(() => {});
+          .catch(() => { });
         return jsonToolResponse({
           doc_id: id,
           transport: live.transport,
@@ -673,7 +756,7 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
             await withLiveYDoc('canvas', targetCanvasId, goClient, (ydoc) => {
               mutateCanvasYDoc(ydoc, { kind: 'replace', elements });
               return { result: true, mutated: true };
-            }).catch(() => {});
+            }).catch(() => { });
           }
         }
 
@@ -739,11 +822,31 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
   server.registerTool(
     'canvas_get',
     {
-      description: 'Get canvas metadata and stored scene JSON from backend.',
-      inputSchema: { id: z.string().min(1) },
+      description:
+        'Get canvas metadata and paginated/summarized stored scene elements from backend.',
+      inputSchema: {
+        id: z.string().min(1),
+        offset: z.number().int().min(0).default(0).describe('0-based element offset (default 0)'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .default(100)
+          .describe('Max elements to return (default 100, max 500)'),
+        summary_only: z
+          .boolean()
+          .optional()
+          .describe('Return compact {id, type, x, y, width, height, text, containerId} summaries without points/style noise'),
+        types: z
+          .array(z.string())
+          .optional()
+          .describe('Filter elements by Excalidraw type (e.g. ["rectangle", "text"])'),
+        include_deleted: z.boolean().optional(),
+      },
       annotations: { readOnlyHint: true },
     },
-    async ({ id }) => {
+    async ({ id, offset, limit, summary_only, types, include_deleted }) => {
       try {
         const canvas = await goClient.getCanvas(id);
         let parsedScene: any = {};
@@ -752,7 +855,22 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
         } catch {
           parsedScene = {};
         }
-        return jsonToolResponse({ canvas, parsed_scene: parsedScene });
+        const { scene: _rawScene, ...canvasMeta } = canvas as any;
+        const allElements = Array.isArray(parsedScene?.elements) ? parsedScene.elements : [];
+        const paged = paginateAndSummarizeElements(allElements, {
+          includeDeleted: Boolean(include_deleted),
+          types,
+          offset,
+          limit,
+          summaryOnly: Boolean(summary_only),
+        });
+        return jsonToolResponse({
+          canvas: canvasMeta,
+          app_state: parsedScene?.appState ?? {},
+          file_keys: Object.keys(parsedScene?.files ?? {}),
+          total_element_count: allElements.length,
+          ...paged,
+        });
       } catch (e) {
         return errorToolResponse(e);
       }
@@ -794,7 +912,7 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
           await withLiveYDoc('canvas', created.id, goClient, (ydoc) => {
             mutateCanvasYDoc(ydoc, { kind: 'replace', elements: builtElements });
             return { result: true, mutated: true };
-          }).catch(() => {});
+          }).catch(() => { });
         }
         return jsonToolResponse(created);
       } catch (e) {
@@ -851,14 +969,30 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
     'canvas_read_live',
     {
       description:
-        'Read live Excalidraw elements and files from the canvas Yjs room (or persisted snapshot).',
+        'Read live Excalidraw elements and files from the canvas Yjs room (or persisted snapshot), with pagination, type filtering, and compact summary_only mode.',
       inputSchema: {
         id: z.string().min(1),
         include_deleted: z.boolean().optional(),
+        offset: z.number().int().min(0).default(0).describe('0-based element offset (default 0)'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .default(100)
+          .describe('Max elements to return (default 100, max 500)'),
+        summary_only: z
+          .boolean()
+          .optional()
+          .describe('Return compact {id, type, x, y, width, height, text, containerId} summaries instead of full Excalidraw JSON'),
+        types: z
+          .array(z.string())
+          .optional()
+          .describe('Filter elements by Excalidraw type (e.g. ["rectangle", "arrow", "text"])'),
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ id, include_deleted }) => {
+    async ({ id, include_deleted, offset, limit, summary_only, types }) => {
       try {
         const canvas = await goClient.getCanvas(id).catch(() => null);
         const live = await withLiveYDoc('canvas', id, goClient, (ydoc) => {
@@ -866,13 +1000,20 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
           const data = readCanvasFromYDoc(ydoc);
           return { result: data, mutated: false };
         });
+        const paged = paginateAndSummarizeElements(live.result.elements, {
+          includeDeleted: Boolean(include_deleted),
+          types,
+          offset,
+          limit,
+          summaryOnly: Boolean(summary_only),
+        });
         return jsonToolResponse({
           canvas_id: id,
           title: canvas?.title,
           transport: live.transport,
           active_count: live.result.activeElements.length,
           deleted_count: live.result.deletedCount,
-          elements: include_deleted ? live.result.elements : live.result.activeElements,
+          ...paged,
           file_keys: Object.keys(live.result.files),
         });
       } catch (e) {
@@ -1223,5 +1364,5 @@ async function syncCanvasSceneToGo(
     appState,
     files: full.files,
   });
-  await goClient.updateCanvas(canvasId, { scene: nextScene }).catch(() => {});
+  await goClient.updateCanvas(canvasId, { scene: nextScene }).catch(() => { });
 }

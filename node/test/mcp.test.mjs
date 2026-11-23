@@ -261,11 +261,12 @@ test('createTomoMcpServer end-to-end tool calls, resources, and prompts via InMe
   await Promise.all([mcpServer.connect(serverTransport), client.connect(clientTransport)]);
 
   const toolsList = await client.listTools();
-  assert.ok(toolsList.tools.length >= 28);
+  assert.ok(toolsList.tools.length >= 29);
+  assert.ok(toolsList.tools.some((t) => t.name === 'docs_outline'));
 
   const parseJsonText = (res) => JSON.parse(res.content[0].text);
 
-  // Create doc & write markdown live
+  // Create doc & write markdown live (large-file non-echoing response + outline + pagination)
   const createdDoc = parseJsonText(
     await client.callTool({
       name: 'docs_create',
@@ -279,22 +280,55 @@ test('createTomoMcpServer end-to-end tool calls, resources, and prompts via InMe
       name: 'docs_write_markdown',
       arguments: {
         id: createdDoc.id,
-        markdown: '## Next Steps\n\n- Review architecture',
+        markdown: '## Next Steps\n\n- Review architecture\n- Benchmark large docs\n\n# Appendix\n\nDone.',
         mode: 'append',
       },
     }),
   );
   assert.equal(written.transport, 'snapshot-fallback');
-  assert.match(written.markdown, /# Overview/);
-  assert.match(written.markdown, /## Next Steps/);
+  assert.equal(written.markdown, undefined);
+  assert.match(written.preview, /# Overview/);
+  assert.ok(written.total_blocks >= 6);
 
-  // Read live with block IDs and update a block
+  const outline = parseJsonText(
+    await client.callTool({
+      name: 'docs_outline',
+      arguments: { id: createdDoc.id },
+    }),
+  );
+  assert.equal(outline.total_blocks, 7);
+  assert.equal(outline.headings.length, 3);
+  assert.equal(outline.headings[0].text, 'Overview');
+  assert.equal(outline.headings[0].sectionBlockCount, 5);
+  assert.equal(outline.headings[1].text, 'Next Steps');
+  assert.equal(outline.headings[1].index, 2);
+  assert.equal(outline.headings[1].sectionBlockCount, 3);
+  assert.equal(outline.headings[2].text, 'Appendix');
+  assert.equal(outline.headings[2].index, 5);
+  assert.equal(outline.headings[2].sectionBlockCount, 2);
+
+  // Paginated docs_read_live (page 1 default markdown only, then page 2 with format: 'both')
+  const livePage1 = parseJsonText(
+    await client.callTool({
+      name: 'docs_read_live',
+      arguments: { id: createdDoc.id, start_block: 0, limit: 2 },
+    }),
+  );
+  assert.equal(livePage1.total_blocks, 7);
+  assert.equal(livePage1.returned_blocks, 2);
+  assert.equal(livePage1.has_more, true);
+  assert.equal(livePage1.next_start_block, 2);
+  assert.equal(livePage1.blocks, undefined);
+  assert.match(livePage1.markdown, /<!-- block:/);
+
   const liveRead = parseJsonText(
     await client.callTool({
       name: 'docs_read_live',
-      arguments: { id: createdDoc.id, include_block_ids: true },
+      arguments: { id: createdDoc.id, start_block: 0, limit: 7, format: 'both' },
     }),
   );
+  assert.equal(liveRead.has_more, false);
+  assert.equal(liveRead.next_start_block, null);
   assert.ok(liveRead.blocks.length >= 3);
   const paraId = liveRead.blocks[1].id;
 
@@ -323,7 +357,7 @@ test('createTomoMcpServer end-to-end tool calls, resources, and prompts via InMe
   assert.ok(embedded.canvas_id);
   assert.ok(embedded.embedded_block_id);
 
-  // Read live canvas
+  // Read live canvas (full & summary_only + pagination + type filter)
   const liveCanvas = parseJsonText(
     await client.callTool({
       name: 'canvas_read_live',
@@ -331,6 +365,28 @@ test('createTomoMcpServer end-to-end tool calls, resources, and prompts via InMe
     }),
   );
   assert.equal(liveCanvas.active_count, 6);
+  assert.equal(liveCanvas.total_active, 6);
+  assert.equal(liveCanvas.type_counts.rectangle, 2);
+  assert.ok(liveCanvas.bounds && liveCanvas.bounds.maxX > liveCanvas.bounds.minX);
+
+  const liveCanvasSummary = parseJsonText(
+    await client.callTool({
+      name: 'canvas_read_live',
+      arguments: {
+        id: embedded.canvas_id,
+        summary_only: true,
+        types: ['rectangle'],
+        offset: 0,
+        limit: 1,
+      },
+    }),
+  );
+  assert.equal(liveCanvasSummary.matched_count, 2);
+  assert.equal(liveCanvasSummary.returned_count, 1);
+  assert.equal(liveCanvasSummary.has_more, true);
+  assert.equal(liveCanvasSummary.next_offset, 1);
+  assert.equal(liveCanvasSummary.elements[0].type, 'rectangle');
+  assert.equal(liveCanvasSummary.elements[0].roughness, undefined);
 
   // Resource read & prompt get
   const docRes = await client.readResource({ uri: `tomo://docs/${createdDoc.id}` });

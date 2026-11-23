@@ -62,12 +62,15 @@ func (s *Server) registerDocsTools() {
 
 	s.registerTool(Tool{
 		Name:        "docs_get",
-		Description: "Fetch a full document by its ID or slug, including title, content, status, parent_id, and flags.",
+		Description: "Fetch a document by ID or slug with optional character-range pagination (offset, limit) or heading outline extraction (outline_only).",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
-				"id":   map[string]interface{}{"type": "string", "description": "Document UUID or ID"},
-				"slug": map[string]interface{}{"type": "string", "description": "Document unique slug (used if id is omitted)"},
+				"id":           map[string]interface{}{"type": "string", "description": "Document UUID or ID"},
+				"slug":         map[string]interface{}{"type": "string", "description": "Document unique slug (used if id is omitted)"},
+				"offset":       map[string]interface{}{"type": "integer", "description": "0-based character (rune) offset for chunked reads (default 0)"},
+				"limit":        map[string]interface{}{"type": "integer", "description": "Max characters to return (0 returns full if <= 32768 chars, else caps at 32768)"},
+				"outline_only": map[string]interface{}{"type": "boolean", "description": "Extract Markdown headings with line and char offsets instead of returning content"},
 			},
 		},
 		Annotations: &ToolAnnotations{Title: "Get Document", ReadOnlyHint: boolPtr(true)},
@@ -322,10 +325,56 @@ func (s *Server) handleDocsTree(ctx context.Context, userID string, _ json.RawMe
 	return jsonResult(map[string]interface{}{"tree": tree})
 }
 
+const defaultDocsGetMaxChars = 32768
+
+type markdownHeading struct {
+	Line       int    `json:"line"`
+	CharOffset int    `json:"char_offset"`
+	Level      int    `json:"level"`
+	Text       string `json:"text"`
+}
+
+func extractMarkdownHeadings(content string) ([]markdownHeading, int) {
+	normalized := strings.ReplaceAll(content, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+	headings := []markdownHeading{}
+	charOffset := 0
+	inFence := false
+
+	for idx, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+		} else if !inFence && strings.HasPrefix(line, "#") {
+			level := 0
+			for level < len(line) && line[level] == '#' {
+				level++
+			}
+			if level >= 1 && level <= 6 && len(line) > level && (line[level] == ' ' || line[level] == '\t') {
+				text := strings.TrimSpace(line[level+1:])
+				headings = append(headings, markdownHeading{
+					Line:       idx + 1,
+					CharOffset: charOffset,
+					Level:      level,
+					Text:       text,
+				})
+			}
+		}
+		charOffset += len([]rune(line))
+		if idx < len(lines)-1 {
+			charOffset++ // newline rune
+		}
+	}
+	return headings, len([]rune(normalized))
+}
+
 func (s *Server) handleDocsGet(ctx context.Context, _ string, raw json.RawMessage) (*CallToolResult, error) {
 	var args struct {
-		ID   string `json:"id"`
-		Slug string `json:"slug"`
+		ID          string `json:"id"`
+		Slug        string `json:"slug"`
+		Offset      int    `json:"offset"`
+		Limit       int    `json:"limit"`
+		OutlineOnly bool   `json:"outline_only"`
 	}
 	if err := decodeArgs(raw, &args); err != nil {
 		return textResult("invalid arguments: "+err.Error(), true), nil
@@ -344,7 +393,68 @@ func (s *Server) handleDocsGet(ctx context.Context, _ string, raw json.RawMessag
 	if err != nil {
 		return textResult(err.Error(), true), nil
 	}
-	return jsonResult(doc)
+
+	if args.OutlineOnly {
+		headings, totalChars := extractMarkdownHeadings(doc.Content)
+		return jsonResult(map[string]interface{}{
+			"id":          doc.ID,
+			"title":       doc.Title,
+			"slug":        doc.Slug,
+			"status":      doc.Status,
+			"parent_id":   doc.ParentID,
+			"is_pinned":   doc.IsPinned,
+			"is_starred":  doc.IsStarred,
+			"total_chars": totalChars,
+			"headings":    headings,
+		})
+	}
+
+	runes := []rune(doc.Content)
+	totalChars := len(runes)
+	offset := args.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > totalChars {
+		offset = totalChars
+	}
+
+	limit := args.Limit
+	if limit <= 0 {
+		limit = defaultDocsGetMaxChars
+	}
+	end := offset + limit
+	if end > totalChars {
+		end = totalChars
+	}
+
+	hasMore := end < totalChars
+	var nextOffset *int
+	if hasMore {
+		n := end
+		nextOffset = &n
+	}
+
+	docCopy := *doc
+	docCopy.Content = string(runes[offset:end])
+
+	return jsonResult(struct {
+		*dto.DocDto
+		TotalChars    int  `json:"total_chars"`
+		Offset        int  `json:"offset"`
+		ReturnedChars int  `json:"returned_chars"`
+		Truncated     bool `json:"truncated"`
+		HasMore       bool `json:"has_more"`
+		NextOffset    *int `json:"next_offset"`
+	}{
+		DocDto:        &docCopy,
+		TotalChars:    totalChars,
+		Offset:        offset,
+		ReturnedChars: end - offset,
+		Truncated:     hasMore || offset > 0,
+		HasMore:       hasMore,
+		NextOffset:    nextOffset,
+	})
 }
 
 func (s *Server) handleDocsCreate(ctx context.Context, userID string, raw json.RawMessage) (*CallToolResult, error) {

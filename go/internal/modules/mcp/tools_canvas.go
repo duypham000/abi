@@ -248,12 +248,17 @@ func (s *Server) registerCanvasTools() {
 
 	s.registerTool(Tool{
 		Name:        "canvas_get",
-		Description: "Get a canvas by ID or slug, including parsed scene elements, appState, files, and metadata.",
+		Description: "Get canvas metadata and paginated/summarized parsed scene elements from stored scene JSON.",
 		InputSchema: map[string]interface{}{
 			"type":     "object",
 			"required": []string{"id"},
 			"properties": map[string]interface{}{
-				"id": map[string]interface{}{"type": "string", "description": "Canvas ID, canvas-<id>, or slug"},
+				"id":              map[string]interface{}{"type": "string", "description": "Canvas ID, canvas-<id>, or slug"},
+				"offset":          map[string]interface{}{"type": "integer", "description": "0-based element offset (default 0)"},
+				"limit":           map[string]interface{}{"type": "integer", "description": "Max elements to return (default 100, max 500)"},
+				"summary_only":    map[string]interface{}{"type": "boolean", "description": "Return compact {id, type, x, y, width, height, text, containerId} summaries without bulky geometry/metadata"},
+				"types":           map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Filter elements by Excalidraw type"},
+				"include_deleted": map[string]interface{}{"type": "boolean", "description": "Include soft-deleted elements (default false)"},
 			},
 		},
 		Annotations: &ToolAnnotations{Title: "Get Canvas", ReadOnlyHint: boolPtr(true)},
@@ -387,9 +392,148 @@ func (s *Server) handleCanvasList(ctx context.Context, userID string, raw json.R
 	return jsonResult(res)
 }
 
+type canvasBounds struct {
+	MinX float64 `json:"minX"`
+	MinY float64 `json:"minY"`
+	MaxX float64 `json:"maxX"`
+	MaxY float64 `json:"maxY"`
+}
+
+func paginateCanvasElements(
+	allElements []map[string]interface{},
+	includeDeleted bool,
+	types []string,
+	offset int,
+	limit int,
+	summaryOnly bool,
+) (activeCount int, matchedCount int, paged []map[string]interface{}, hasMore bool, nextOffset *int, typeCounts map[string]int, bounds *canvasBounds) {
+	activePool := make([]map[string]interface{}, 0, len(allElements))
+	for _, el := range allElements {
+		if del, _ := el["isDeleted"].(bool); !del {
+			activePool = append(activePool, el)
+		}
+	}
+	activeCount = len(activePool)
+
+	basePool := activePool
+	if includeDeleted {
+		basePool = allElements
+	}
+
+	typeFilter := map[string]bool{}
+	for _, t := range types {
+		if trimmed := strings.TrimSpace(t); trimmed != "" {
+			typeFilter[trimmed] = true
+		}
+	}
+
+	matched := make([]map[string]interface{}, 0, len(basePool))
+	typeCounts = map[string]int{}
+	for _, el := range basePool {
+		elType, _ := el["type"].(string)
+		if elType == "" {
+			elType = "unknown"
+		}
+		if len(typeFilter) > 0 && !typeFilter[elType] {
+			continue
+		}
+		matched = append(matched, el)
+		typeCounts[elType]++
+	}
+	matchedCount = len(matched)
+
+	if matchedCount > 0 {
+		b := canvasBounds{MinX: 1e18, MinY: 1e18, MaxX: -1e18, MaxY: -1e18}
+		valid := false
+		for _, el := range matched {
+			x := toFloat(el["x"], 0)
+			y := toFloat(el["y"], 0)
+			w := toFloat(el["width"], 0)
+			h := toFloat(el["height"], 0)
+			x1, x2 := x, x+w
+			if x2 < x1 {
+				x1, x2 = x2, x1
+			}
+			y1, y2 := y, y+h
+			if y2 < y1 {
+				y1, y2 = y2, y1
+			}
+			if !valid || x1 < b.MinX {
+				b.MinX = x1
+			}
+			if !valid || y1 < b.MinY {
+				b.MinY = y1
+			}
+			if !valid || x2 > b.MaxX {
+				b.MaxX = x2
+			}
+			if !valid || y2 > b.MaxY {
+				b.MaxY = y2
+			}
+			valid = true
+		}
+		if valid {
+			bounds = &b
+		}
+	}
+
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > matchedCount {
+		offset = matchedCount
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	end := offset + limit
+	if end > matchedCount {
+		end = matchedCount
+	}
+	sliced := matched[offset:end]
+	hasMore = end < matchedCount
+	if hasMore {
+		n := end
+		nextOffset = &n
+	}
+
+	if !summaryOnly {
+		paged = sliced
+		return
+	}
+
+	paged = make([]map[string]interface{}, 0, len(sliced))
+	for _, el := range sliced {
+		item := map[string]interface{}{
+			"id":     el["id"],
+			"type":   el["type"],
+			"x":      toFloat(el["x"], 0),
+			"y":      toFloat(el["y"], 0),
+			"width":  toFloat(el["width"], 0),
+			"height": toFloat(el["height"], 0),
+		}
+		if txt, ok := el["text"].(string); ok && txt != "" {
+			item["text"] = txt
+		}
+		if cid, ok := el["containerId"].(string); ok && cid != "" {
+			item["containerId"] = cid
+		}
+		paged = append(paged, item)
+	}
+	return
+}
+
 func (s *Server) handleCanvasGet(ctx context.Context, _ string, raw json.RawMessage) (*CallToolResult, error) {
 	var args struct {
-		ID string `json:"id"`
+		ID             string   `json:"id"`
+		Offset         int      `json:"offset"`
+		Limit          int      `json:"limit"`
+		SummaryOnly    bool     `json:"summary_only"`
+		Types          []string `json:"types"`
+		IncludeDeleted bool     `json:"include_deleted"`
 	}
 	if err := decodeArgs(raw, &args); err != nil {
 		return textResult("invalid arguments: "+err.Error(), true), nil
@@ -402,17 +546,45 @@ func (s *Server) handleCanvasGet(ctx context.Context, _ string, raw json.RawMess
 		return textResult(err.Error(), true), nil
 	}
 	parsedScene := parseCanvasScene(c.Scene)
-	activeCount := 0
-	for _, el := range parsedScene.Elements {
-		if del, _ := el["isDeleted"].(bool); !del {
-			activeCount++
-		}
+
+	effectiveLimit := args.Limit
+	if effectiveLimit <= 0 {
+		effectiveLimit = 100
 	}
+	activeCount, matchedCount, pagedElements, hasMore, nextOffset, typeCounts, bounds := paginateCanvasElements(
+		parsedScene.Elements,
+		args.IncludeDeleted,
+		args.Types,
+		args.Offset,
+		effectiveLimit,
+		args.SummaryOnly,
+	)
+
+	fileKeys := make([]string, 0, len(parsedScene.Files))
+	for k := range parsedScene.Files {
+		fileKeys = append(fileKeys, k)
+	}
+
+	// Omit raw multi-megabyte scene string when returning summarized or paginated data.
+	canvasCopy := *c
+	if args.SummaryOnly || effectiveLimit > 0 {
+		canvasCopy.Scene = ""
+	}
+
 	return jsonResult(map[string]interface{}{
-		"canvas":               c,
-		"parsed_scene":         parsedScene,
+		"canvas":               canvasCopy,
 		"active_element_count": activeCount,
 		"total_element_count":  len(parsedScene.Elements),
+		"matched_count":        matchedCount,
+		"offset":               args.Offset,
+		"returned_count":       len(pagedElements),
+		"has_more":             hasMore,
+		"next_offset":          nextOffset,
+		"type_counts":          typeCounts,
+		"bounds":               bounds,
+		"elements":             pagedElements,
+		"file_keys":            fileKeys,
+		"app_state":            parsedScene.AppState,
 	})
 }
 

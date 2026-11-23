@@ -43,6 +43,7 @@ async function connectAndRunOverWs<T>(
   wsBaseUrl: string,
   yauthToken: string,
   timeoutMs: number,
+  maxPayloadBytes: number,
   fn: (ydoc: Y.Doc) => Promise<{ result: T; mutated: boolean }> | { result: T; mutated: boolean },
 ): Promise<{ result: T; mutated: boolean; ydoc: Y.Doc }> {
   const ydoc = new Y.Doc();
@@ -52,7 +53,7 @@ async function connectAndRunOverWs<T>(
   return new Promise((resolve, reject) => {
     let settled = false;
     let synced = false;
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(wsUrl, { maxPayload: maxPayloadBytes });
 
     const timer = setTimeout(() => {
       if (!settled) {
@@ -179,6 +180,7 @@ export async function withLiveYDoc<T>(
         wsUrl,
         yauthToken,
         cfg.wsSyncTimeoutMs,
+        cfg.wsMaxPayloadBytes,
         fn,
       );
       if (wsOut.mutated) {
@@ -189,7 +191,7 @@ export async function withLiveYDoc<T>(
             Y.encodeStateAsUpdateV2(wsOut.ydoc),
             Y.encodeStateVector(wsOut.ydoc),
           )
-          .catch(() => {});
+          .catch(() => { });
       }
       return {
         result: wsOut.result,

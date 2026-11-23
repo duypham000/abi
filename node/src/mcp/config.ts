@@ -8,6 +8,7 @@ export interface McpConfig {
   authToken: string;
   yjsSecret: string;
   wsSyncTimeoutMs: number;
+  wsMaxPayloadBytes: number;
 }
 
 function normalizeApiBase(raw: string): string {
@@ -53,6 +54,7 @@ export function getMcpConfig(): McpConfig {
     wsUrl: normalizeWsUrl(rawWsUrl),
     authToken: process.env.TOMO_AUTH_TOKEN || '',
     yjsSecret,
-    wsSyncTimeoutMs: Number(process.env.MCP_YJS_TIMEOUT_MS || 2500),
+    wsSyncTimeoutMs: Number(process.env.MCP_YJS_TIMEOUT_MS || 8000),
+    wsMaxPayloadBytes: Number(process.env.MCP_YJS_MAX_PAYLOAD_BYTES || 10 * 1024 * 1024),
   };
 }

@@ -17,6 +17,7 @@ import mcpRoutes from '../mcp/routes.js';
 
 const fastify = Fastify({
   logger: true,
+  bodyLimit: 10 * 1024 * 1024,
   // Behind Kong/nginx — read the real client IP from X-Forwarded-For so the
   // per-IP rate limiter keys on the caller, not the proxy.
   trustProxy: true,
