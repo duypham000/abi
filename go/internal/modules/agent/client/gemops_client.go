@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -27,53 +28,198 @@ func (e *UpstreamError) Error() string {
 	return fmt.Sprintf("gemops returned HTTP %d: %s", e.StatusCode, e.Message)
 }
 
-// GemOpsClient communicates with gemops-agent over HTTP (TCP or Unix Domain Socket).
-type GemOpsClient struct {
+// ConnectionError represents a transport/network failure reaching gemops-agent.
+type ConnectionError struct {
+	Transport dto.GemOpsTransportInfo
+	Err       error
+}
+
+func (e *ConnectionError) Error() string {
+	if e == nil || e.Err == nil {
+		return "gemops-agent unreachable"
+	}
+	return fmt.Sprintf("upstream gemops-agent unreachable (%s: %s): %v", e.Transport.Mode, e.Transport.Target, e.Err)
+}
+
+func (e *ConnectionError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+type resolvedEndpoint struct {
+	info         dto.GemOpsTransportInfo
 	baseURL      string
 	httpClient   *http.Client
 	streamClient *http.Client
+	socketNote   string
 }
 
-// NewGemOpsClient creates a GemOpsClient. When socketPath is non-empty, requests dial that Unix socket;
-// otherwise requests go to baseURL (defaulting to http://127.0.0.1:9090).
+// GemOpsClient communicates with gemops-agent over HTTP (TCP or Unix Domain Socket).
+type GemOpsClient struct {
+	socketPath       string
+	tcpURL           string
+	unixHTTPClient   *http.Client
+	unixStreamClient *http.Client
+	tcpHTTPClient    *http.Client
+	tcpStreamClient  *http.Client
+}
+
+// NewGemOpsClient creates a GemOpsClient following gemops-web transport rules:
+//   - socketPath == "-" disables Unix socket and forces TCP via baseURL.
+//   - baseURL == "-" disables TCP fallback and forces Unix socket.
+//   - When both socketPath and baseURL are configured, prefers Unix when socketPath exists
+//     (or returns a non-NotExist error such as permission denied), and falls back to TCP on NotExist.
+//   - When both are empty, defaults to http://127.0.0.1:9090.
 func NewGemOpsClient(baseURL, socketPath string) *GemOpsClient {
 	trimmedBase := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	trimmedSock := strings.TrimSpace(socketPath)
 
-	var transport *http.Transport
+	if trimmedBase == "-" {
+		trimmedBase = ""
+	}
+	if trimmedSock == "-" {
+		trimmedSock = ""
+	}
+
+	if trimmedBase != "" && !strings.HasPrefix(trimmedBase, "http://") && !strings.HasPrefix(trimmedBase, "https://") {
+		trimmedBase = "http://" + trimmedBase
+	}
+	if trimmedSock == "" && trimmedBase == "" {
+		trimmedBase = "http://127.0.0.1:9090"
+	}
+
+	c := &GemOpsClient{
+		socketPath: trimmedSock,
+		tcpURL:     trimmedBase,
+	}
+
 	if trimmedSock != "" {
 		dialer := &net.Dialer{Timeout: 5 * time.Second}
-		transport = &http.Transport{
+		unixTransport := &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 				return dialer.DialContext(ctx, "unix", trimmedSock)
 			},
+			MaxIdleConns:       16,
+			IdleConnTimeout:    60 * time.Second,
+			DisableCompression: true,
 		}
-		trimmedBase = "http://unix"
-	} else {
-		if trimmedBase == "" {
-			trimmedBase = "http://127.0.0.1:9090"
+		c.unixHTTPClient = &http.Client{
+			Transport: unixTransport,
+			Timeout:   90 * time.Second,
 		}
-		transport = &http.Transport{
+		c.unixStreamClient = &http.Client{
+			Transport: unixTransport,
+			Timeout:   0,
+		}
+	}
+
+	if trimmedBase != "" {
+		tcpTransport := &http.Transport{
 			DialContext: (&net.Dialer{
 				Timeout:   5 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}).DialContext,
 			MaxIdleConns:        16,
-			IdleConnTimeout:     90 * time.Second,
+			IdleConnTimeout:     60 * time.Second,
 			TLSHandshakeTimeout: 5 * time.Second,
+			DisableCompression:  true,
+		}
+		c.tcpHTTPClient = &http.Client{
+			Transport: tcpTransport,
+			Timeout:   90 * time.Second,
+		}
+		c.tcpStreamClient = &http.Client{
+			Transport: tcpTransport,
+			Timeout:   0,
 		}
 	}
 
-	return &GemOpsClient{
-		baseURL: trimmedBase,
-		httpClient: &http.Client{
-			Transport: transport,
-			Timeout:   30 * time.Second,
-		},
-		streamClient: &http.Client{
-			Transport: transport,
-		},
+	return c
+}
+
+func (c *GemOpsClient) resolveEndpoint() resolvedEndpoint {
+	if c.socketPath != "" {
+		unixEP := resolvedEndpoint{
+			info: dto.GemOpsTransportInfo{
+				Mode:       "unix",
+				Target:     c.socketPath,
+				SocketPath: c.socketPath,
+				TCPURL:     c.tcpURL,
+			},
+			baseURL:      "http://unix",
+			httpClient:   c.unixHTTPClient,
+			streamClient: c.unixStreamClient,
+		}
+		if c.tcpURL == "" {
+			return unixEP
+		}
+		if _, statErr := os.Stat(c.socketPath); statErr == nil || !errors.Is(statErr, os.ErrNotExist) {
+			return unixEP
+		}
+		return resolvedEndpoint{
+			info: dto.GemOpsTransportInfo{
+				Mode:       "tcp",
+				Target:     c.tcpURL,
+				SocketPath: c.socketPath,
+				TCPURL:     c.tcpURL,
+			},
+			baseURL:      c.tcpURL,
+			httpClient:   c.tcpHTTPClient,
+			streamClient: c.tcpStreamClient,
+			socketNote:   fmt.Sprintf("socket %s not found; tcp fallback failed", c.socketPath),
+		}
 	}
+
+	return resolvedEndpoint{
+		info: dto.GemOpsTransportInfo{
+			Mode:       "tcp",
+			Target:     c.tcpURL,
+			SocketPath: c.socketPath,
+			TCPURL:     c.tcpURL,
+		},
+		baseURL:      c.tcpURL,
+		httpClient:   c.tcpHTTPClient,
+		streamClient: c.tcpStreamClient,
+	}
+}
+
+func (c *GemOpsClient) wrapTransportError(ep resolvedEndpoint, err error) error {
+	if err == nil {
+		return nil
+	}
+	if ep.socketNote != "" {
+		err = fmt.Errorf("%s: %w", ep.socketNote, err)
+	}
+	return &ConnectionError{
+		Transport: ep.info,
+		Err:       err,
+	}
+}
+
+// Info returns metadata about the currently active upstream transport.
+func (c *GemOpsClient) Info() dto.GemOpsTransportInfo {
+	return c.resolveEndpoint().info
+}
+
+// CheckStatus probes GET /status with a short 2s timeout to determine if gemops-agent is reachable.
+func (c *GemOpsClient) CheckStatus(ctx context.Context) (bool, int, string) {
+	ep := c.resolveEndpoint()
+	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, ep.baseURL+"/status", nil)
+	if err != nil {
+		return false, 0, err.Error()
+	}
+	resp, err := ep.httpClient.Do(req)
+	if err != nil {
+		return false, 0, c.wrapTransportError(ep, err).Error()
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	return resp.StatusCode == http.StatusOK, resp.StatusCode, ""
 }
 
 func (c *GemOpsClient) GetStatus(ctx context.Context) (*dto.GemOpsStatusResponse, error) {
@@ -92,12 +238,38 @@ func (c *GemOpsClient) GetInfo(ctx context.Context) (*dto.GemOpsInfoResponse, er
 	return &out, nil
 }
 
+func (c *GemOpsClient) GetUsage(ctx context.Context) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodGet, "/agy/usage", nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *GemOpsClient) ListHarnesses(ctx context.Context) (*dto.GemOpsHarnessesResponse, error) {
 	var out dto.GemOpsHarnessesResponse
 	if err := c.doJSON(ctx, http.MethodGet, "/harnesses", nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+func (c *GemOpsClient) GetHarness(ctx context.Context, id string) (map[string]interface{}, error) {
+	path := "/harnesses/" + url.PathEscape(strings.TrimSpace(id))
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) GetResolvedHarness(ctx context.Context, id string) (map[string]interface{}, error) {
+	path := "/harnesses/" + url.PathEscape(strings.TrimSpace(id)) + "/resolved"
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *GemOpsClient) GetSessionConfig(ctx context.Context) (*dto.GemOpsSessionConfig, error) {
@@ -120,6 +292,12 @@ func (c *GemOpsClient) UpdateSessionConfig(ctx context.Context, cfg dto.GemOpsSe
 func (c *GemOpsClient) StartPrompt(ctx context.Context, req dto.GemOpsPromptRequest, actor string) (*dto.GemOpsPromptResponse, error) {
 	var out dto.GemOpsPromptResponse
 	headers := actorHeaders(actor)
+	if hid := strings.TrimSpace(req.HarnessID); hid != "" {
+		if headers == nil {
+			headers = map[string]string{}
+		}
+		headers["X-Harness-Id"] = hid
+	}
 	if err := c.doJSON(ctx, http.MethodPost, "/prompt", headers, req, &out); err != nil {
 		return nil, err
 	}
@@ -152,43 +330,66 @@ func (c *GemOpsClient) Reset(ctx context.Context, compact bool, harnessID string
 	if compact {
 		q.Set("compact", "1")
 	}
-	if strings.TrimSpace(harnessID) != "" {
-		q.Set("harnessId", strings.TrimSpace(harnessID))
+	trimmedHarness := strings.TrimSpace(harnessID)
+	if trimmedHarness != "" {
+		q.Set("harnessId", trimmedHarness)
 	}
 	path := "/reset"
 	if encoded := q.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
+	var headers map[string]string
+	if trimmedHarness != "" {
+		headers = map[string]string{"X-Harness-Id": trimmedHarness}
+	}
 	var out map[string]interface{}
-	if err := c.doJSON(ctx, http.MethodPost, path, nil, nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, path, headers, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// SubscribeEvents opens the SSE stream at GET /events.
-func (c *GemOpsClient) SubscribeEvents(ctx context.Context, lastEventID string) (*EventStream, error) {
-	targetURL := c.baseURL + "/events"
-	if strings.TrimSpace(lastEventID) != "" {
-		targetURL += "?lastEventId=" + url.QueryEscape(strings.TrimSpace(lastEventID))
+// StreamRawEvents opens the raw SSE response at GET /events for unbuffered proxying.
+// Callers are responsible for closing resp.Body when finished.
+func (c *GemOpsClient) StreamRawEvents(ctx context.Context, lastEventID, rawQuery string) (*http.Response, error) {
+	ep := c.resolveEndpoint()
+	targetURL := ep.baseURL + "/events"
+	cleanLastID := strings.TrimSpace(lastEventID)
+	if strings.TrimSpace(rawQuery) != "" {
+		targetURL += "?" + rawQuery
+	} else if cleanLastID != "" {
+		targetURL += "?lastEventId=" + url.QueryEscape(cleanLastID)
 	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "text/event-stream")
-	if strings.TrimSpace(lastEventID) != "" {
-		req.Header.Set("Last-Event-ID", strings.TrimSpace(lastEventID))
+	if cleanLastID != "" {
+		req.Header.Set("Last-Event-ID", cleanLastID)
 	}
 
-	resp, err := c.streamClient.Do(req)
+	resp, err := ep.streamClient.Do(req)
 	if err != nil {
-		return nil, err
+		if ctx.Err() != nil {
+			return nil, err
+		}
+		return nil, c.wrapTransportError(ep, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		msg := readErrorBody(resp.Body)
 		_ = resp.Body.Close()
 		return nil, &UpstreamError{StatusCode: resp.StatusCode, Message: msg}
+	}
+	return resp, nil
+}
+
+// SubscribeEvents opens the SSE stream at GET /events.
+func (c *GemOpsClient) SubscribeEvents(ctx context.Context, lastEventID string) (*EventStream, error) {
+	resp, err := c.StreamRawEvents(ctx, lastEventID, "")
+	if err != nil {
+		return nil, err
 	}
 
 	return &EventStream{
@@ -294,6 +495,7 @@ func parseEventFrame(id, eventName, rawPayload string) (*dto.GemOpsEvent, error)
 }
 
 func (c *GemOpsClient) doJSON(ctx context.Context, method, path string, headers map[string]string, body interface{}, out interface{}) error {
+	ep := c.resolveEndpoint()
 	var reqBody io.Reader
 	if body != nil {
 		encoded, err := json.Marshal(body)
@@ -303,7 +505,7 @@ func (c *GemOpsClient) doJSON(ctx context.Context, method, path string, headers 
 		reqBody = bytes.NewReader(encoded)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, ep.baseURL+path, reqBody)
 	if err != nil {
 		return err
 	}
@@ -317,9 +519,12 @@ func (c *GemOpsClient) doJSON(ctx context.Context, method, path string, headers 
 		}
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := ep.httpClient.Do(req)
 	if err != nil {
-		return err
+		if ctx.Err() != nil {
+			return err
+		}
+		return c.wrapTransportError(ep, err)
 	}
 	defer resp.Body.Close()
 

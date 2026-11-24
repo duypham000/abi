@@ -33,6 +33,7 @@ COPY --from=builder /app/.env.production /app/.env.production
 
 EXPOSE 8080
 
-ENV APP_ENV=production
+ENV APP_ENV=production \
+    GEMOPS_SOCKET_PATH=/run/agent/agent.sock
 
 ENTRYPOINT ["/app/tomo-server"]

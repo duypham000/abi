@@ -70,8 +70,8 @@ func LoadConfig() *Config {
 		CacheTTLHours:        getEnvAsInt("CACHE_TTL_HOURS", 24),
 		WorkspaceRoot:        getEnv("WORKSPACE_ROOT", "./data/workspaces"),
 		NodeWsURL:            nodeWsUrl,
-		GemOpsBaseURL:        getEnv("GEMOPS_BASE_URL", "http://127.0.0.1:9090"),
-		GemOpsSocketPath:     getEnv("GEMOPS_SOCKET_PATH", ""),
+		GemOpsBaseURL:        getEnv("GEMOPS_BASE_URL", getEnv("AGENT_TCP_URL", "http://127.0.0.1:9090")),
+		GemOpsSocketPath:     getEnv("GEMOPS_SOCKET_PATH", getEnv("AGENT_SOCKET_PATH", "/run/agent/agent.sock")),
 		GemOpsDefaultHarness: getEnv("GEMOPS_DEFAULT_HARNESS", ""),
 		GemOpsTurnTimeout:    time.Duration(getEnvAsInt("GEMOPS_TURN_TIMEOUT_SEC", 300)) * time.Second,
 	}

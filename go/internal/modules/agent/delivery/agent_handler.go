@@ -44,7 +44,18 @@ func (h *AgentHandler) resolveActor(c *gin.Context) string {
 			}
 		}
 	}
+	if xActor := strings.TrimSpace(c.GetHeader("X-Actor")); xActor != "" {
+		return xActor
+	}
+	if fwdUser := strings.TrimSpace(c.GetHeader("X-Forwarded-User")); fwdUser != "" {
+		return fwdUser
+	}
 	return "local-user"
+}
+
+// GetHealth handles GET /agent/healthz and reports upstream transport + reachability diagnostics.
+func (h *AgentHandler) GetHealth(c *gin.Context) {
+	response.OK(c, "Agent gateway health", h.svc.CheckHealth(c.Request.Context()))
 }
 
 // Chat handles POST /agent/chat and streams AI SDK v6 UIMessageChunk SSE events.
@@ -117,6 +128,56 @@ func (h *AgentHandler) GetStatus(c *gin.Context) {
 	response.OK(c, "Agent status fetched", status)
 }
 
+func (h *AgentHandler) Prompt(c *gin.Context) {
+	var req dto.GemOpsPromptRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid prompt request body", err)
+		return
+	}
+	if strings.TrimSpace(req.HarnessID) == "" {
+		req.HarnessID = strings.TrimSpace(c.GetHeader("X-Harness-Id"))
+	}
+	if strings.TrimSpace(req.HarnessID) == "" {
+		req.HarnessID = strings.TrimSpace(c.Query("harnessId"))
+	}
+	res, err := h.svc.StartPrompt(c.Request.Context(), req, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.Success(c, http.StatusAccepted, "Prompt accepted", res)
+}
+
+func (h *AgentHandler) Events(c *gin.Context) {
+	resp, err := h.svc.StreamRawEvents(c.Request.Context(), c.GetHeader("Last-Event-ID"), c.Request.URL.RawQuery)
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	c.Header("Content-Type", "text/event-stream; charset=utf-8")
+	c.Header("Cache-Control", "no-cache, no-transform")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(http.StatusOK)
+	c.Writer.Flush()
+
+	buf := make([]byte, 4096)
+	for {
+		n, readErr := resp.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := c.Writer.Write(buf[:n]); writeErr != nil {
+				return
+			}
+			c.Writer.Flush()
+		}
+		if readErr != nil {
+			return
+		}
+	}
+}
+
 func (h *AgentHandler) GetInfo(c *gin.Context) {
 	info, err := h.svc.GetInfo(c.Request.Context())
 	if err != nil {
@@ -126,6 +187,15 @@ func (h *AgentHandler) GetInfo(c *gin.Context) {
 	response.OK(c, "Agent runtime info fetched", info)
 }
 
+func (h *AgentHandler) GetUsage(c *gin.Context) {
+	usage, err := h.svc.GetUsage(c.Request.Context())
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent usage fetched", usage)
+}
+
 func (h *AgentHandler) ListHarnesses(c *gin.Context) {
 	harnesses, err := h.svc.ListHarnesses(c.Request.Context())
 	if err != nil {
@@ -133,6 +203,34 @@ func (h *AgentHandler) ListHarnesses(c *gin.Context) {
 		return
 	}
 	response.OK(c, "Agent harnesses fetched", harnesses)
+}
+
+func (h *AgentHandler) GetHarness(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing harness id", nil)
+		return
+	}
+	res, err := h.svc.GetHarness(c.Request.Context(), id)
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent harness fetched", res)
+}
+
+func (h *AgentHandler) GetResolvedHarness(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing harness id", nil)
+		return
+	}
+	res, err := h.svc.GetResolvedHarness(c.Request.Context(), id)
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent resolved harness fetched", res)
 }
 
 func (h *AgentHandler) GetSessionConfig(c *gin.Context) {
@@ -206,6 +304,16 @@ func (h *AgentHandler) Reset(c *gin.Context) {
 }
 
 func (h *AgentHandler) writeUpstreamError(c *gin.Context, err error) {
+	var connErr *client.ConnectionError
+	if errors.As(err, &connErr) {
+		response.Error(
+			c,
+			http.StatusBadGateway,
+			fmt.Sprintf("GemOps agent unreachable (%s: %s)", connErr.Transport.Mode, connErr.Transport.Target),
+			connErr.Error(),
+		)
+		return
+	}
 	var upstreamErr *client.UpstreamError
 	if errors.As(err, &upstreamErr) {
 		code := upstreamErr.StatusCode

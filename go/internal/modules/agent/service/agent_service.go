@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"tomo-backend/internal/modules/agent/client"
@@ -18,9 +20,14 @@ type ChunkEmitter func(chunk map[string]interface{}) error
 
 // AgentBackend defines the upstream GemOps client contract used by AgentService.
 type AgentBackend interface {
+	Info() dto.GemOpsTransportInfo
+	CheckStatus(ctx context.Context) (bool, int, string)
 	GetStatus(ctx context.Context) (*dto.GemOpsStatusResponse, error)
 	GetInfo(ctx context.Context) (*dto.GemOpsInfoResponse, error)
+	GetUsage(ctx context.Context) (map[string]interface{}, error)
 	ListHarnesses(ctx context.Context) (*dto.GemOpsHarnessesResponse, error)
+	GetHarness(ctx context.Context, id string) (map[string]interface{}, error)
+	GetResolvedHarness(ctx context.Context, id string) (map[string]interface{}, error)
 	GetSessionConfig(ctx context.Context) (*dto.GemOpsSessionConfig, error)
 	UpdateSessionConfig(ctx context.Context, cfg dto.GemOpsSessionConfig, actor string) (map[string]interface{}, error)
 	StartPrompt(ctx context.Context, req dto.GemOpsPromptRequest, actor string) (*dto.GemOpsPromptResponse, error)
@@ -28,6 +35,7 @@ type AgentBackend interface {
 	Cancel(ctx context.Context) (map[string]interface{}, error)
 	Reset(ctx context.Context, compact bool, harnessID string) (map[string]interface{}, error)
 	SubscribeEvents(ctx context.Context, lastEventID string) (*client.EventStream, error)
+	StreamRawEvents(ctx context.Context, lastEventID, rawQuery string) (*http.Response, error)
 }
 
 // AgentService bridges Tomo HTTP API requests to gemops-agent.
@@ -48,6 +56,23 @@ func NewAgentService(backend AgentBackend, defaultHarness string, turnTimeout ti
 	}
 }
 
+func (s *AgentService) TransportInfo() dto.GemOpsTransportInfo {
+	return s.backend.Info()
+}
+
+func (s *AgentService) CheckHealth(ctx context.Context) dto.GemOpsHealthResponse {
+	reachable, statusCode, probeErr := s.backend.CheckStatus(ctx)
+	return dto.GemOpsHealthResponse{
+		Status:         "ok",
+		Service:        "tomo-backend",
+		Timestamp:      time.Now().UTC().Format(time.RFC3339),
+		Transport:      s.backend.Info(),
+		AgentReachable: reachable,
+		AgentStatus:    statusCode,
+		AgentError:     probeErr,
+	}
+}
+
 func (s *AgentService) GetStatus(ctx context.Context) (*dto.GemOpsStatusResponse, error) {
 	return s.backend.GetStatus(ctx)
 }
@@ -56,8 +81,20 @@ func (s *AgentService) GetInfo(ctx context.Context) (*dto.GemOpsInfoResponse, er
 	return s.backend.GetInfo(ctx)
 }
 
+func (s *AgentService) GetUsage(ctx context.Context) (map[string]interface{}, error) {
+	return s.backend.GetUsage(ctx)
+}
+
 func (s *AgentService) ListHarnesses(ctx context.Context) (*dto.GemOpsHarnessesResponse, error) {
 	return s.backend.ListHarnesses(ctx)
+}
+
+func (s *AgentService) GetHarness(ctx context.Context, id string) (map[string]interface{}, error) {
+	return s.backend.GetHarness(ctx, id)
+}
+
+func (s *AgentService) GetResolvedHarness(ctx context.Context, id string) (map[string]interface{}, error) {
+	return s.backend.GetResolvedHarness(ctx, id)
 }
 
 func (s *AgentService) GetSessionConfig(ctx context.Context) (*dto.GemOpsSessionConfig, error) {
@@ -68,6 +105,17 @@ func (s *AgentService) UpdateSessionConfig(ctx context.Context, cfg dto.GemOpsSe
 	cfg.Mode = normalizeGemOpsMode(cfg.Mode)
 	cfg.Effort = normalizeGemOpsEffort(cfg.Effort)
 	return s.backend.UpdateSessionConfig(ctx, cfg, actor)
+}
+
+func (s *AgentService) StartPrompt(ctx context.Context, req dto.GemOpsPromptRequest, actor string) (*dto.GemOpsPromptResponse, error) {
+	if strings.TrimSpace(req.HarnessID) == "" {
+		req.HarnessID = s.defaultHarness
+	}
+	return s.backend.StartPrompt(ctx, req, actor)
+}
+
+func (s *AgentService) StreamRawEvents(ctx context.Context, lastEventID, rawQuery string) (*http.Response, error) {
+	return s.backend.StreamRawEvents(ctx, lastEventID, rawQuery)
 }
 
 func (s *AgentService) ResolvePermission(ctx context.Context, permID, decision, actor string) (map[string]interface{}, error) {
@@ -121,7 +169,7 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 		}
 	}
 
-	streamCtx, cancelStream := context.WithTimeout(ctx, s.turnTimeout+30*time.Second)
+	streamCtx, cancelStream := context.WithCancel(ctx)
 	defer cancelStream()
 
 	// Subscribe to SSE before POST /prompt so no early turn events are missed.
@@ -136,6 +184,42 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 		_ = stream.Close()
 	})
 	defer stopWatch()
+
+	inactivityLimit := s.turnTimeout + 30*time.Second
+	activityCh := make(chan struct{}, 1)
+	watchdogDone := make(chan struct{})
+	defer close(watchdogDone)
+	var pendingApprovals atomic.Int64
+	var timedOut atomic.Bool
+
+	go func() {
+		timer := time.NewTimer(inactivityLimit)
+		defer timer.Stop()
+		for {
+			select {
+			case <-watchdogDone:
+				return
+			case <-ctx.Done():
+				return
+			case <-activityCh:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(inactivityLimit)
+			case <-timer.C:
+				if pendingApprovals.Load() > 0 {
+					timer.Reset(inactivityLimit)
+					continue
+				}
+				timedOut.Store(true)
+				cancelStream()
+				return
+			}
+		}
+	}()
 
 	promptResp, err := s.backend.StartPrompt(streamCtx, dto.GemOpsPromptRequest{
 		Prompt:        promptText,
@@ -186,12 +270,32 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 				cancelTimeout()
 				return ctx.Err()
 			}
+			if timedOut.Load() && streamCtx.Err() != nil {
+				cancelCtx, cancelTimeout := context.WithTimeout(context.Background(), 5*time.Second)
+				_, _ = s.backend.Cancel(cancelCtx)
+				cancelTimeout()
+				_ = state.finishWithError("gemops turn timed out due to inactivity")
+				return nil
+			}
 			if errors.Is(err, io.EOF) {
 				_ = state.finishWithError("gemops event stream closed unexpectedly")
 				return nil
 			}
 			_ = state.finishWithError("gemops event stream error: " + err.Error())
 			return nil
+		}
+
+		select {
+		case activityCh <- struct{}{}:
+		default:
+		}
+		switch ev.Type {
+		case "permission_request":
+			pendingApprovals.Add(1)
+		case "permission_resolved":
+			if pendingApprovals.Load() > 0 {
+				pendingApprovals.Add(-1)
+			}
 		}
 
 		done, handleErr := state.handleEvent(ev)

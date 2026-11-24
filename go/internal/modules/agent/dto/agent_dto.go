@@ -171,3 +171,22 @@ type GemOpsEvent struct {
 	Timestamp string          `json:"ts"`
 	Data      json.RawMessage `json:"data"`
 }
+
+// GemOpsTransportInfo describes the resolved upstream transport link to gemops-agent.
+type GemOpsTransportInfo struct {
+	Mode       string `json:"mode"` // "unix" or "tcp"
+	Target     string `json:"target"`
+	SocketPath string `json:"socketPath,omitempty"`
+	TCPURL     string `json:"tcpUrl,omitempty"`
+}
+
+// GemOpsHealthResponse mirrors gemops-web GET /api/healthz diagnostics.
+type GemOpsHealthResponse struct {
+	Status         string              `json:"status"`
+	Service        string              `json:"service"`
+	Timestamp      string              `json:"timestamp"`
+	Transport      GemOpsTransportInfo `json:"transport"`
+	AgentReachable bool                `json:"agentReachable"`
+	AgentStatus    int                 `json:"agentStatus,omitempty"`
+	AgentError     string              `json:"agentError,omitempty"`
+}

@@ -50,12 +50,21 @@ func TestAgentHandler_RestEndpointsAndChatStream(t *testing.T) {
 				Efforts: []string{"low", "medium", "high"},
 				Modes:   []string{"default", "plan"},
 			})
+		case r.Method == http.MethodGet && r.URL.Path == "/agy/usage":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"binary":  "agy",
+				"version": "1.5.13",
+			})
 		case r.Method == http.MethodGet && r.URL.Path == "/harnesses":
 			_ = json.NewEncoder(w).Encode(dto.GemOpsHarnessesResponse{
 				DefaultHarnessID: "common",
 				ActiveHarnessID:  "abi",
 				Items:            []dto.GemOpsHarnessSummary{{ID: "common", Name: "Common", Enabled: true}},
 			})
+		case r.Method == http.MethodGet && r.URL.Path == "/harnesses/common":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "common", "name": "Common"})
+		case r.Method == http.MethodGet && r.URL.Path == "/harnesses/common/resolved":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "common", "resolved": true})
 		case r.Method == http.MethodPost && r.URL.Path == "/permissions/perm_1":
 			_ = json.NewEncoder(w).Encode(map[string]string{"status": "resolved", "id": "perm_1", "decision": "allow"})
 		case r.Method == http.MethodPost && r.URL.Path == "/reset":
@@ -149,5 +158,68 @@ func TestAgentHandler_RestEndpointsAndChatStream(t *testing.T) {
 	bodyStr := rec.Body.String()
 	if !strings.Contains(bodyStr, `"type":"text-delta"`) || !strings.Contains(bodyStr, "Pong from GemOps") || !strings.Contains(bodyStr, "data: [DONE]") {
 		t.Fatalf("unexpected SSE chat stream output:\n%s", bodyStr)
+	}
+
+	// 7. GET /api/v1/agent/healthz
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/agent/healthz", nil)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"agentReachable":true`) {
+		t.Fatalf("unexpected /healthz response: code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 8. POST /api/v1/agent/prompt
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/agent/prompt", bytes.NewBufferString(`{"prompt":"hello"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), `"turnId":"t1"`) {
+		t.Fatalf("unexpected /prompt response: code=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 9. GET /api/v1/agent/events (raw SSE proxy)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/agent/events", nil)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Content-Type"), "text/event-stream") || !strings.Contains(rec.Body.String(), "Pong from GemOps") {
+		t.Fatalf("unexpected /events response: code=%d ct=%q body=%s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+
+	// 10. GET /api/v1/agent/agy/usage & /harnesses/common & /harnesses/common/resolved
+	for _, ep := range []string{"/api/v1/agent/agy/usage", "/api/v1/agent/harnesses/common", "/api/v1/agent/harnesses/common/resolved"} {
+		req = httptest.NewRequest(http.MethodGet, ep, nil)
+		rec = httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("unexpected %s response: code=%d body=%s", ep, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestAgentHandler_UnreachableReturns502WithTransportTarget(t *testing.T) {
+	closedSrv := httptest.NewServer(http.NewServeMux())
+	closedURL := closedSrv.URL
+	closedSrv.Close()
+
+	router := setupTestRouter(closedURL)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agent/status", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 on unreachable upstream, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "tcp") || !strings.Contains(rec.Body.String(), closedURL) {
+		t.Fatalf("expected 502 error body to include transport target %q, got %s", closedURL, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/agent/healthz", nil)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 on /healthz, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"agentReachable":false`) || !strings.Contains(rec.Body.String(), closedURL) {
+		t.Fatalf("expected /healthz to report unreachable target %q, got %s", closedURL, rec.Body.String())
 	}
 }

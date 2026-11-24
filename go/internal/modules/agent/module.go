@@ -30,10 +30,17 @@ func InitModule(cfg *config.Config, jwtManager *security.JWTManager) *Module {
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	agentGroup := rg.Group("/agent")
 	{
+		agentGroup.GET("/healthz", m.Handler.GetHealth)
 		agentGroup.POST("/chat", m.Handler.Chat)
+		agentGroup.POST("/prompt", m.Handler.Prompt)
+		agentGroup.GET("/events", m.Handler.Events)
 		agentGroup.GET("/status", m.Handler.GetStatus)
 		agentGroup.GET("/info", m.Handler.GetInfo)
+		agentGroup.GET("/agy/info", m.Handler.GetInfo)
+		agentGroup.GET("/agy/usage", m.Handler.GetUsage)
 		agentGroup.GET("/harnesses", m.Handler.ListHarnesses)
+		agentGroup.GET("/harnesses/:id", m.Handler.GetHarness)
+		agentGroup.GET("/harnesses/:id/resolved", m.Handler.GetResolvedHarness)
 		agentGroup.GET("/session/config", m.Handler.GetSessionConfig)
 		agentGroup.POST("/session/config", m.Handler.UpdateSessionConfig)
 		agentGroup.POST("/permissions/:id", m.Handler.ResolvePermission)
