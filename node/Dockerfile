@@ -11,6 +11,7 @@ COPY package*.json tsconfig.json ./
 RUN npm ci
 COPY src/ ./src/
 RUN npm run build
+RUN node -e "require('fs').writeFileSync('dist/build-info.json', JSON.stringify({ buildTime: new Date().toISOString() }))"
 
 # --- runtime: prod deps only + compiled dist/ ---
 FROM node:20-slim

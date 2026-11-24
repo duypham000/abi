@@ -22,7 +22,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// BuildTime is injected at compile time via -ldflags "-X main.BuildTime=...".
+var BuildTime = "dev"
+
 func main() {
+	startedAt := time.Now().UTC().Format(time.RFC3339)
+
 	// 1. Load configuration
 	cfg := config.LoadConfig()
 
@@ -106,8 +111,24 @@ func main() {
 		goGroup.GET("/actuator/health", healthHandler)
 	}
 
+	cicdTestHandler := func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"success":   true,
+			"status":    "ok",
+			"cicd":      "verified",
+			"service":   "tomo-backend",
+			"version":   "cicd-test-v1",
+			"buildTime": BuildTime,
+			"startedAt": startedAt,
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+	router.GET("/cicd-test", cicdTestHandler)
+	goGroup.GET("/cicd-test", cicdTestHandler)
+
 	// Register API v1 routes helper
 	registerApiRoutes := func(rg *gin.RouterGroup) {
+		rg.GET("/cicd-test", cicdTestHandler)
 		authModule.RegisterRoutes(rg, jwtManager)
 		docsModule.RegisterRoutes(rg, jwtManager)
 		githubModule.RegisterRoutes(rg, jwtManager)

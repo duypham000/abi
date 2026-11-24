@@ -9,11 +9,25 @@
 //   CORS_ORIGIN           allowed origin(s) (default "*")
 //   DEFAULT_SOURCE_LANG / DEFAULT_TARGET_LANG  fallback languages
 
+import { readFileSync } from 'node:fs';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { config } from '../config.js';
 import translateRoutes from '../translate/routes/translate.route.js';
 import mcpRoutes from '../mcp/routes.js';
+
+const startedAt = new Date().toISOString();
+let buildTime = 'dev';
+try {
+  const buildInfo = JSON.parse(
+    readFileSync(new URL('../build-info.json', import.meta.url), 'utf8'),
+  ) as { buildTime?: string };
+  if (buildInfo.buildTime) {
+    buildTime = buildInfo.buildTime;
+  }
+} catch {
+  // build-info.json is only generated during Docker/CI builds
+}
 
 const fastify = Fastify({
   logger: true,
@@ -31,6 +45,28 @@ await fastify.register(cors, {
 // Liveness check (support both root /health and prefixed /node/health)
 fastify.get('/health', async () => ({ status: 'ok' }));
 fastify.get('/node/health', async () => ({ status: 'ok' }));
+
+// CI/CD verification endpoint (unthrottled across all prefixes)
+const cicdTestHandler = async () => ({
+  success: true,
+  status: 'ok',
+  cicd: 'verified',
+  service: 'tomo-node',
+  role: 'api',
+  version: 'cicd-test-v1',
+  buildTime,
+  startedAt,
+  timestamp: new Date().toISOString(),
+});
+for (const path of [
+  '/cicd-test',
+  '/node/cicd-test',
+  '/api/v1/cicd-test',
+  '/node/api/v1/cicd-test',
+  '/node/v1/cicd-test',
+]) {
+  fastify.get(path, cicdTestHandler);
+}
 
 // Translate routes (support both standard /api/v1 and prefixed /node/api/v1, /node/v1, /node)
 await fastify.register(translateRoutes, { prefix: '/api/v1' });

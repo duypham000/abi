@@ -19,10 +19,24 @@ if (!process.env.REDIS) {
   process.env.REDIS = 'redis://127.0.0.1:6379'
 }
 
+import { readFileSync } from 'node:fs'
 import * as uws from 'uws'
 import * as jose from 'jose'
 import { registerYWebsocketServer } from '@y/redis'
 import { JavaStorage } from '../yjs/javaStorage.js'
+
+const startedAt = new Date().toISOString()
+let buildTime = 'dev'
+try {
+  const buildInfo = JSON.parse(
+    readFileSync(new URL('../build-info.json', import.meta.url), 'utf8')
+  )
+  if (buildInfo.buildTime) {
+    buildTime = buildInfo.buildTime
+  }
+} catch {
+  // build-info.json is only generated during Docker/CI builds
+}
 
 // Priority: YJS_PORT -> NODE_YJS_PORT -> (server role PORT) -> 1234
 const port = parseInt(
@@ -157,6 +171,25 @@ app.get('/ws/yjs/health', (res) => {
      .writeHeader('Content-Type', 'application/json')
      .end(JSON.stringify({ status: 'ok', role: 'server', prefix: redisPrefix }))
 })
+
+const sendCicdTest = (res) => {
+  res.writeStatus('200 OK')
+     .writeHeader('Content-Type', 'application/json')
+     .end(JSON.stringify({
+       success: true,
+       status: 'ok',
+       cicd: 'verified',
+       service: 'tomo-node',
+       role: 'server',
+       version: 'cicd-test-v1',
+       buildTime,
+       startedAt,
+       timestamp: new Date().toISOString(),
+     }))
+}
+
+app.get('/cicd-test', sendCicdTest)
+app.get('/ws/yjs/cicd-test', sendCicdTest)
 
 // HTTP fallback: return 426 Upgrade Required for non-WebSocket GETs to document paths
 // to prevent client confusion from an accidental 200 OK

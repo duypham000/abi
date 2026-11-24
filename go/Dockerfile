@@ -19,7 +19,7 @@ RUN if [ ! -f .env.production ]; then touch .env.production; fi
 # Build static binary supporting multi-architecture cross-compilation
 ARG TARGETOS
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -a -installsuffix cgo -o tomo-server ./cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -a -installsuffix cgo -ldflags="-X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o tomo-server ./cmd/server/main.go
 
 # Production Stage
 FROM alpine:3.19
