@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"tomo-backend/internal/infrastructure/logger"
 	"tomo-backend/internal/infrastructure/response"
 	"tomo-backend/internal/infrastructure/security"
 	"tomo-backend/internal/modules/agent/client"
@@ -306,6 +307,15 @@ func (h *AgentHandler) Reset(c *gin.Context) {
 func (h *AgentHandler) writeUpstreamError(c *gin.Context, err error) {
 	var connErr *client.ConnectionError
 	if errors.As(err, &connErr) {
+		if logger.Log != nil {
+			logger.Log.Error("GemOps agent upstream unreachable",
+				"method", c.Request.Method,
+				"path", c.Request.URL.Path,
+				"mode", connErr.Transport.Mode,
+				"target", connErr.Transport.Target,
+				"error", connErr.Error(),
+			)
+		}
 		response.Error(
 			c,
 			http.StatusBadGateway,
@@ -320,6 +330,14 @@ func (h *AgentHandler) writeUpstreamError(c *gin.Context, err error) {
 		if code < 400 || code >= 600 {
 			code = http.StatusBadGateway
 		}
+		if logger.Log != nil {
+			logger.Log.Warn("GemOps agent upstream HTTP error",
+				"method", c.Request.Method,
+				"path", c.Request.URL.Path,
+				"status", code,
+				"message", upstreamErr.Message,
+			)
+		}
 		response.Error(c, code, upstreamErr.Message, upstreamErr.Error())
 		return
 	}
@@ -327,6 +345,13 @@ func (h *AgentHandler) writeUpstreamError(c *gin.Context, err error) {
 		strings.Contains(strings.ToLower(err.Error()), "decision must be") {
 		response.BadRequest(c, err.Error(), err)
 		return
+	}
+	if logger.Log != nil {
+		logger.Log.Error("GemOps agent service unavailable",
+			"method", c.Request.Method,
+			"path", c.Request.URL.Path,
+			"error", err.Error(),
+		)
 	}
 	response.Error(c, http.StatusBadGateway, "GemOps agent service unavailable", err.Error())
 }
