@@ -21,6 +21,7 @@ services:
       - GEMOPS_AUTH_TOKEN=${GEMOPS_AUTH_TOKEN:-}
       - GEMOPS_DEFAULT_HARNESS=${GEMOPS_DEFAULT_HARNESS:-}
       - GEMOPS_TURN_TIMEOUT_SEC=${GEMOPS_TURN_TIMEOUT_SEC:-300}
+      - TOMO_API_KEY=${TOMO_API_KEY:-}
     volumes:
       - tomo_workspace_data:/app/data
       - /run/agent:/run/agent
@@ -53,6 +54,7 @@ services:
       - TOMO_API_BASE=http://go-backend:8080/api/v1
       - TOMO_WS_URL=ws://node-yjs:1234/ws/yjs
       - YJS_SECRET=${YJS_SECRET}
+      - TOMO_API_KEY=${TOMO_API_KEY:-}
     depends_on:
       - go-backend
     deploy:
