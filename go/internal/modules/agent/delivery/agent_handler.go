@@ -72,6 +72,27 @@ func (h *AgentHandler) Chat(c *gin.Context) {
 	if strings.TrimSpace(req.HarnessID) == "" {
 		req.HarnessID = strings.TrimSpace(c.GetHeader("X-Harness-Id"))
 	}
+	if strings.TrimSpace(req.HarnessID) == "" {
+		req.HarnessID = strings.TrimSpace(c.Query("harnessId"))
+	}
+	if strings.TrimSpace(req.ConversationID) == "" {
+		req.ConversationID = strings.TrimSpace(req.SessionID)
+	}
+	if strings.TrimSpace(req.ConversationID) == "" {
+		req.ConversationID = strings.TrimSpace(req.ID)
+	}
+	if strings.TrimSpace(req.ConversationID) == "" {
+		req.ConversationID = strings.TrimSpace(c.GetHeader("X-Conversation-Id"))
+	}
+	if strings.TrimSpace(req.ConversationID) == "" {
+		req.ConversationID = strings.TrimSpace(c.GetHeader("X-Session-Id"))
+	}
+	if strings.TrimSpace(req.ConversationID) == "" {
+		req.ConversationID = strings.TrimSpace(c.Query("conversationId"))
+	}
+	if strings.TrimSpace(req.ID) == "" {
+		req.ID = req.ConversationID
+	}
 
 	actor := h.resolveActor(c)
 	var writeMu sync.Mutex
@@ -178,6 +199,18 @@ func (h *AgentHandler) Prompt(c *gin.Context) {
 	}
 	if strings.TrimSpace(req.HarnessID) == "" {
 		req.HarnessID = strings.TrimSpace(c.Query("harnessId"))
+	}
+	if strings.TrimSpace(req.ConversationID) == "" {
+		req.ConversationID = strings.TrimSpace(req.SessionID)
+	}
+	if strings.TrimSpace(req.ConversationID) == "" {
+		req.ConversationID = strings.TrimSpace(c.GetHeader("X-Conversation-Id"))
+	}
+	if strings.TrimSpace(req.ConversationID) == "" {
+		req.ConversationID = strings.TrimSpace(c.GetHeader("X-Session-Id"))
+	}
+	if strings.TrimSpace(req.ConversationID) == "" {
+		req.ConversationID = strings.TrimSpace(c.Query("conversationId"))
 	}
 	res, err := h.svc.StartPrompt(c.Request.Context(), req, h.resolveActor(c))
 	if err != nil {
@@ -364,12 +397,311 @@ func (h *AgentHandler) DeleteSession(c *gin.Context) {
 		return
 	}
 	harnessID := strings.TrimSpace(c.Query("harnessId"))
+	if harnessID == "" {
+		harnessID = strings.TrimSpace(c.GetHeader("X-Harness-Id"))
+	}
 	res, err := h.svc.DeleteSession(c.Request.Context(), id, harnessID)
 	if err != nil {
 		h.writeUpstreamError(c, err)
 		return
 	}
 	response.OK(c, "Agent session deleted", res)
+}
+
+func (h *AgentHandler) GetAgyConfig(c *gin.Context) {
+	res, err := h.svc.GetAgyConfig(c.Request.Context())
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent CLI config fetched", res)
+}
+
+func (h *AgentHandler) UpdateAgyConfig(c *gin.Context) {
+	var body map[string]interface{}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.BadRequest(c, "Invalid CLI config body", err)
+		return
+	}
+	res, err := h.svc.UpdateAgyConfig(c.Request.Context(), body, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent CLI config updated", res)
+}
+
+func (h *AgentHandler) ListAgyPrompts(c *gin.Context) {
+	res, err := h.svc.ListAgyPrompts(c.Request.Context())
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent system prompts fetched", res)
+}
+
+func (h *AgentHandler) SaveAgyPrompt(c *gin.Context) {
+	var req dto.GemOpsSavePromptRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid system prompt body", err)
+		return
+	}
+	res, err := h.svc.SaveAgyPrompt(c.Request.Context(), req, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent system prompt saved", res)
+}
+
+func (h *AgentHandler) DeleteAgyPrompt(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing prompt id", nil)
+		return
+	}
+	res, err := h.svc.DeleteAgyPrompt(c.Request.Context(), id, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent system prompt deleted", res)
+}
+
+func (h *AgentHandler) RunAgyCommand(c *gin.Context) {
+	var req dto.GemOpsCustomCommandRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid command request body", err)
+		return
+	}
+	if strings.TrimSpace(req.HarnessID) == "" {
+		req.HarnessID = strings.TrimSpace(c.GetHeader("X-Harness-Id"))
+	}
+	if strings.TrimSpace(req.HarnessID) == "" {
+		req.HarnessID = strings.TrimSpace(c.Query("harnessId"))
+	}
+	res, err := h.svc.RunAgyCommand(c.Request.Context(), req, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent command executed", res)
+}
+
+func (h *AgentHandler) TriggerUpdate(c *gin.Context) {
+	var req dto.GemOpsUpdateRequest
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "Invalid update request body", err)
+			return
+		}
+	}
+	res, err := h.svc.TriggerUpdate(c.Request.Context(), req, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.Success(c, http.StatusAccepted, "Agent update started", res)
+}
+
+func (h *AgentHandler) CreateHarness(c *gin.Context) {
+	var spec map[string]interface{}
+	if err := c.ShouldBindJSON(&spec); err != nil {
+		response.BadRequest(c, "Invalid harness specification body", err)
+		return
+	}
+	res, err := h.svc.CreateHarness(c.Request.Context(), spec, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.Created(c, "Agent harness created", res)
+}
+
+func (h *AgentHandler) UpdateHarness(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing harness id", nil)
+		return
+	}
+	var spec map[string]interface{}
+	if err := c.ShouldBindJSON(&spec); err != nil {
+		response.BadRequest(c, "Invalid harness specification body", err)
+		return
+	}
+	res, err := h.svc.UpdateHarness(c.Request.Context(), id, spec, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent harness updated", res)
+}
+
+func (h *AgentHandler) DeleteHarness(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing harness id", nil)
+		return
+	}
+	res, err := h.svc.DeleteHarness(c.Request.Context(), id, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent harness deleted", res)
+}
+
+func (h *AgentHandler) ValidateHarness(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing harness id", nil)
+		return
+	}
+	var spec map[string]interface{}
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&spec); err != nil {
+			response.BadRequest(c, "Invalid harness specification body", err)
+			return
+		}
+	}
+	res, err := h.svc.ValidateHarness(c.Request.Context(), id, spec)
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent harness validated", res)
+}
+
+func (h *AgentHandler) EvaluateHarness(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing harness id", nil)
+		return
+	}
+	var req map[string]interface{}
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "Invalid harness evaluate body", err)
+			return
+		}
+	}
+	res, err := h.svc.EvaluateHarness(c.Request.Context(), id, req)
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent harness evaluated", res)
+}
+
+func (h *AgentHandler) CloneHarness(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing source harness id", nil)
+		return
+	}
+	var req dto.GemOpsCloneHarnessRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid clone harness body", err)
+		return
+	}
+	res, err := h.svc.CloneHarness(c.Request.Context(), id, req, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.Created(c, "Agent harness cloned", res)
+}
+
+func (h *AgentHandler) GetHarnessSkill(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	name := strings.TrimSpace(c.Param("name"))
+	if id == "" || name == "" {
+		response.BadRequest(c, "Missing harness id or skill name", nil)
+		return
+	}
+	res, err := h.svc.GetHarnessSkill(c.Request.Context(), id, name)
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent harness skill fetched", res)
+}
+
+func (h *AgentHandler) SaveHarnessSkill(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	name := strings.TrimSpace(c.Param("name"))
+	if id == "" || name == "" {
+		response.BadRequest(c, "Missing harness id or skill name", nil)
+		return
+	}
+	var req dto.GemOpsSaveSkillRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid harness skill body", err)
+		return
+	}
+	res, err := h.svc.SaveHarnessSkill(c.Request.Context(), id, name, req, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent harness skill saved", res)
+}
+
+func (h *AgentHandler) DeleteHarnessSkill(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	name := strings.TrimSpace(c.Param("name"))
+	if id == "" || name == "" {
+		response.BadRequest(c, "Missing harness id or skill name", nil)
+		return
+	}
+	res, err := h.svc.DeleteHarnessSkill(c.Request.Context(), id, name, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent harness skill deleted", res)
+}
+
+func (h *AgentHandler) ListSecrets(c *gin.Context) {
+	scope := strings.TrimSpace(c.Query("scope"))
+	if scope == "" {
+		scope = strings.TrimSpace(c.Query("harnessId"))
+	}
+	res, err := h.svc.ListSecrets(c.Request.Context(), scope)
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent secrets fetched", res)
+}
+
+func (h *AgentHandler) SaveSecret(c *gin.Context) {
+	var req dto.GemOpsSetSecretRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid secret body", err)
+		return
+	}
+	res, err := h.svc.SaveSecret(c.Request.Context(), req, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent secret saved", res)
+}
+
+func (h *AgentHandler) DeleteSecret(c *gin.Context) {
+	scope := strings.TrimSpace(c.Param("scope"))
+	key := strings.TrimSpace(c.Param("key"))
+	if scope == "" || key == "" {
+		response.BadRequest(c, "Missing secret scope or key", nil)
+		return
+	}
+	res, err := h.svc.DeleteSecret(c.Request.Context(), scope, key, h.resolveActor(c))
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent secret deleted", res)
 }
 
 func (h *AgentHandler) writeUpstreamError(c *gin.Context, err error) {

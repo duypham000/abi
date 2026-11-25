@@ -103,21 +103,42 @@ export interface AgentHarnessesResponse {
 
 export function resolveAgentApiEndpoint(endpoint?: string): string {
   const trimmed = (endpoint ?? "").trim() || "/api/v1/agent/chat";
-  if (import.meta.env.PROD && trimmed.startsWith("/api/")) {
-    const goApiUrl = ((import.meta.env.VITE_GO_API_URL as string | undefined) ?? "").trim().replace(/\/+$/, "");
+  if (
+    import.meta.env.PROD &&
+    (trimmed.startsWith("/api/") || trimmed.startsWith("/go/"))
+  ) {
+    const goApiUrl = (
+      (import.meta.env.VITE_GO_API_URL as string | undefined) ?? ""
+    )
+      .trim()
+      .replace(/\/+$/, "");
     if (/^https?:\/\//i.test(goApiUrl)) {
+      if (goApiUrl.endsWith("/go") && trimmed.startsWith("/go/")) {
+        return `${goApiUrl}${trimmed.slice(3)}`;
+      }
       return `${goApiUrl}${trimmed}`;
     }
   }
   return trimmed;
 }
 
-function resolveAgentBaseUrl(apiEndpoint?: string): string {
+export function resolveAgentBaseUrl(apiEndpoint?: string): string {
   const resolved = resolveAgentApiEndpoint(apiEndpoint);
   if (resolved.endsWith("/chat")) {
     return resolved.slice(0, -"/chat".length) || "/api/v1/agent";
   }
   return resolved.replace(/\/+$/, "");
+}
+
+export function resolveAgentEventsUrl(
+  apiEndpoint?: string,
+  lastEventId?: string
+): string {
+  const base = resolveAgentBaseUrl(apiEndpoint);
+  if (lastEventId && lastEventId.trim()) {
+    return `${base}/events?lastEventId=${encodeURIComponent(lastEventId.trim())}`;
+  }
+  return `${base}/events`;
 }
 
 async function requestJson<T>(
@@ -262,19 +283,32 @@ export function resetAgentSession(
   });
 }
 
-export function fetchAgentSessions(opts?: {
+export async function fetchAgentSessions(opts?: {
   apiEndpoint?: string;
   apiKey?: string;
 }): Promise<{
   activeConversationId?: string;
   count: number;
+  items: AgentBackendSessionInfo[];
   sessions: AgentBackendSessionInfo[];
 }> {
-  return requestJson<{
+  const raw = await requestJson<{
     activeConversationId?: string;
-    count: number;
-    sessions: AgentBackendSessionInfo[];
+    count?: number;
+    items?: AgentBackendSessionInfo[];
+    sessions?: AgentBackendSessionInfo[];
   }>("/sessions", opts);
+  const list = Array.isArray(raw?.sessions)
+    ? raw.sessions
+    : Array.isArray(raw?.items)
+      ? raw.items
+      : [];
+  return {
+    activeConversationId: raw?.activeConversationId,
+    count: typeof raw?.count === "number" ? raw.count : list.length,
+    items: list,
+    sessions: list,
+  };
 }
 
 export function fetchAgentUsage(opts?: {
@@ -289,12 +323,328 @@ export function deleteAgentBackendSession(
   opts?: { apiEndpoint?: string; apiKey?: string; harnessId?: string }
 ): Promise<Record<string, unknown>> {
   const params = new URLSearchParams();
+  const headers: Record<string, string> = {};
   if (opts?.harnessId && opts.harnessId.trim()) {
     params.set("harnessId", opts.harnessId.trim());
+    headers["X-Harness-Id"] = opts.harnessId.trim();
   }
   const qs = params.toString();
   return requestJson<Record<string, unknown>>(
     `/sessions/${encodeURIComponent(conversationId)}${qs ? `?${qs}` : ""}`,
+    {
+      ...opts,
+      headers,
+      method: "DELETE",
+    }
+  );
+}
+
+export function fetchAgentHealth(opts?: {
+  apiEndpoint?: string;
+  apiKey?: string;
+}): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>("/healthz", opts);
+}
+
+export function fetchAgentMeta(opts?: {
+  apiEndpoint?: string;
+  apiKey?: string;
+}): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>("/meta", opts);
+}
+
+export function startAgentPrompt(
+  body: {
+    prompt: string;
+    harnessId?: string;
+    conversationId?: string;
+    sessionConfig?: AgentBackendSessionConfig;
+  },
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<{
+  status: string;
+  turnId: string;
+  harnessId: string;
+  conversationId?: string;
+}> {
+  const headers: Record<string, string> = {};
+  if (body.harnessId && body.harnessId.trim()) {
+    headers["X-Harness-Id"] = body.harnessId.trim();
+  }
+  if (body.conversationId && body.conversationId.trim()) {
+    headers["X-Conversation-Id"] = body.conversationId.trim();
+  }
+  return requestJson<{
+    status: string;
+    turnId: string;
+    harnessId: string;
+    conversationId?: string;
+  }>("/prompt", {
+    ...opts,
+    headers,
+    method: "POST",
+    body,
+  });
+}
+
+export function fetchAgentAgyConfig(opts?: {
+  apiEndpoint?: string;
+  apiKey?: string;
+}): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>("/agy/config", opts);
+}
+
+export function updateAgentAgyConfig(
+  settings: Record<string, unknown>,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>("/agy/config", {
+    ...opts,
+    method: "PUT",
+    body: settings,
+  });
+}
+
+export function fetchAgentPrompts(opts?: {
+  apiEndpoint?: string;
+  apiKey?: string;
+}): Promise<{ items: Record<string, unknown>[] }> {
+  return requestJson<{ items: Record<string, unknown>[] }>("/agy/prompts", opts);
+}
+
+export function saveAgentPrompt(
+  prompt: { id: string; content: string },
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>("/agy/prompts", {
+    ...opts,
+    method: "POST",
+    body: prompt,
+  });
+}
+
+export function deleteAgentPrompt(
+  id: string,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/agy/prompts/${encodeURIComponent(id)}`,
+    {
+      ...opts,
+      method: "DELETE",
+    }
+  );
+}
+
+export function runAgentAgyCommand(
+  req: {
+    command: string;
+    args?: string[];
+    harnessId?: string;
+    timeoutSec?: number;
+  },
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  const headers: Record<string, string> = {};
+  if (req.harnessId && req.harnessId.trim()) {
+    headers["X-Harness-Id"] = req.harnessId.trim();
+  }
+  return requestJson<Record<string, unknown>>("/agy/command", {
+    ...opts,
+    headers,
+    method: "POST",
+    body: req,
+  });
+}
+
+export function triggerAgentUpdate(
+  req?: { branch?: string; restart?: boolean; rebuildWeb?: boolean },
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>("/update", {
+    ...opts,
+    method: "POST",
+    body: req ?? {},
+  });
+}
+
+export function fetchAgentHarness(
+  id: string,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/harnesses/${encodeURIComponent(id)}`,
+    opts
+  );
+}
+
+export function createAgentHarness(
+  spec: Record<string, unknown>,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>("/harnesses", {
+    ...opts,
+    method: "POST",
+    body: spec,
+  });
+}
+
+export function updateAgentHarness(
+  id: string,
+  spec: Record<string, unknown>,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/harnesses/${encodeURIComponent(id)}`,
+    {
+      ...opts,
+      method: "PUT",
+      body: spec,
+    }
+  );
+}
+
+export function deleteAgentHarness(
+  id: string,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/harnesses/${encodeURIComponent(id)}`,
+    {
+      ...opts,
+      method: "DELETE",
+    }
+  );
+}
+
+export function fetchAgentResolvedHarness(
+  id: string,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/harnesses/${encodeURIComponent(id)}/resolved`,
+    opts
+  );
+}
+
+export function validateAgentHarness(
+  id: string,
+  spec?: Record<string, unknown>,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/harnesses/${encodeURIComponent(id)}/validate`,
+    {
+      ...opts,
+      method: "POST",
+      body: spec,
+    }
+  );
+}
+
+export function evaluateAgentHarness(
+  id: string,
+  body?: Record<string, unknown>,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/harnesses/${encodeURIComponent(id)}/evaluate`,
+    {
+      ...opts,
+      method: "POST",
+      body,
+    }
+  );
+}
+
+export function cloneAgentHarness(
+  id: string,
+  req: { targetId: string; name?: string },
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/harnesses/${encodeURIComponent(id)}/clone`,
+    {
+      ...opts,
+      method: "POST",
+      body: req,
+    }
+  );
+}
+
+export function fetchAgentHarnessSkill(
+  id: string,
+  skillName: string,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/harnesses/${encodeURIComponent(id)}/skills/${encodeURIComponent(skillName)}`,
+    opts
+  );
+}
+
+export function saveAgentHarnessSkill(
+  id: string,
+  skillName: string,
+  content: string,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/harnesses/${encodeURIComponent(id)}/skills/${encodeURIComponent(skillName)}`,
+    {
+      ...opts,
+      method: "PUT",
+      body: { content },
+    }
+  );
+}
+
+export function deleteAgentHarnessSkill(
+  id: string,
+  skillName: string,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/harnesses/${encodeURIComponent(id)}/skills/${encodeURIComponent(skillName)}`,
+    {
+      ...opts,
+      method: "DELETE",
+    }
+  );
+}
+
+export function fetchAgentSecrets(
+  scope?: string,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  const qs =
+    scope && scope.trim() ? `?scope=${encodeURIComponent(scope.trim())}` : "";
+  return requestJson<Record<string, unknown>>(`/secrets${qs}`, opts);
+}
+
+export function saveAgentSecret(
+  secret: {
+    scope: string;
+    key: string;
+    value: string;
+    description?: string;
+  },
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>("/secrets", {
+    ...opts,
+    method: "PUT",
+    body: secret,
+  });
+}
+
+export function deleteAgentSecret(
+  scope: string,
+  key: string,
+  opts?: { apiEndpoint?: string; apiKey?: string }
+): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(
+    `/secrets/${encodeURIComponent(scope)}/${encodeURIComponent(key)}`,
     {
       ...opts,
       method: "DELETE",

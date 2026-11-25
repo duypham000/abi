@@ -37,6 +37,25 @@ type AgentBackend interface {
 	Reset(ctx context.Context, compact, hard bool, harnessID, conversationID string) (map[string]interface{}, error)
 	ListSessions(ctx context.Context) (map[string]interface{}, error)
 	DeleteSession(ctx context.Context, conversationID, harnessID string) (map[string]interface{}, error)
+	GetAgyConfig(ctx context.Context) (map[string]interface{}, error)
+	UpdateAgyConfig(ctx context.Context, settings map[string]interface{}, actor string) (map[string]interface{}, error)
+	ListAgyPrompts(ctx context.Context) (map[string]interface{}, error)
+	SaveAgyPrompt(ctx context.Context, req dto.GemOpsSavePromptRequest, actor string) (map[string]interface{}, error)
+	DeleteAgyPrompt(ctx context.Context, id, actor string) (map[string]interface{}, error)
+	RunAgyCommand(ctx context.Context, req dto.GemOpsCustomCommandRequest, actor string) (map[string]interface{}, error)
+	TriggerUpdate(ctx context.Context, req dto.GemOpsUpdateRequest, actor string) (map[string]interface{}, error)
+	CreateHarness(ctx context.Context, spec map[string]interface{}, actor string) (map[string]interface{}, error)
+	UpdateHarness(ctx context.Context, id string, spec map[string]interface{}, actor string) (map[string]interface{}, error)
+	DeleteHarness(ctx context.Context, id, actor string) (map[string]interface{}, error)
+	ValidateHarness(ctx context.Context, id string, spec map[string]interface{}) (map[string]interface{}, error)
+	EvaluateHarness(ctx context.Context, id string, req map[string]interface{}) (map[string]interface{}, error)
+	CloneHarness(ctx context.Context, id string, req dto.GemOpsCloneHarnessRequest, actor string) (map[string]interface{}, error)
+	GetHarnessSkill(ctx context.Context, id, name string) (map[string]interface{}, error)
+	SaveHarnessSkill(ctx context.Context, id, name string, req dto.GemOpsSaveSkillRequest, actor string) (map[string]interface{}, error)
+	DeleteHarnessSkill(ctx context.Context, id, name, actor string) (map[string]interface{}, error)
+	ListSecrets(ctx context.Context, scope string) (map[string]interface{}, error)
+	SaveSecret(ctx context.Context, req dto.GemOpsSetSecretRequest, actor string) (map[string]interface{}, error)
+	DeleteSecret(ctx context.Context, scope, key, actor string) (map[string]interface{}, error)
 	SubscribeEvents(ctx context.Context, lastEventID string) (*client.EventStream, error)
 	StreamRawEvents(ctx context.Context, lastEventID, rawQuery string) (*http.Response, error)
 }
@@ -115,6 +134,14 @@ func (s *AgentService) StartPrompt(ctx context.Context, req dto.GemOpsPromptRequ
 	if strings.TrimSpace(req.HarnessID) == "" {
 		req.HarnessID = s.defaultHarness
 	}
+	if strings.TrimSpace(req.ConversationID) == "" {
+		req.ConversationID = strings.TrimSpace(req.SessionID)
+	}
+	if req.SessionConfig != nil {
+		req.SessionConfig.Model = normalizeGemOpsModel(req.SessionConfig.Model)
+		req.SessionConfig.Mode = normalizeGemOpsMode(req.SessionConfig.Mode)
+		req.SessionConfig.Effort = normalizeGemOpsEffort(req.SessionConfig.Effort)
+	}
 	return s.backend.StartPrompt(ctx, req, actor)
 }
 
@@ -149,6 +176,85 @@ func (s *AgentService) ListSessions(ctx context.Context) (map[string]interface{}
 
 func (s *AgentService) DeleteSession(ctx context.Context, conversationID, harnessID string) (map[string]interface{}, error) {
 	return s.backend.DeleteSession(ctx, conversationID, harnessID)
+}
+
+func (s *AgentService) GetAgyConfig(ctx context.Context) (map[string]interface{}, error) {
+	return s.backend.GetAgyConfig(ctx)
+}
+
+func (s *AgentService) UpdateAgyConfig(ctx context.Context, settings map[string]interface{}, actor string) (map[string]interface{}, error) {
+	return s.backend.UpdateAgyConfig(ctx, settings, actor)
+}
+
+func (s *AgentService) ListAgyPrompts(ctx context.Context) (map[string]interface{}, error) {
+	return s.backend.ListAgyPrompts(ctx)
+}
+
+func (s *AgentService) SaveAgyPrompt(ctx context.Context, req dto.GemOpsSavePromptRequest, actor string) (map[string]interface{}, error) {
+	return s.backend.SaveAgyPrompt(ctx, req, actor)
+}
+
+func (s *AgentService) DeleteAgyPrompt(ctx context.Context, id, actor string) (map[string]interface{}, error) {
+	return s.backend.DeleteAgyPrompt(ctx, id, actor)
+}
+
+func (s *AgentService) RunAgyCommand(ctx context.Context, req dto.GemOpsCustomCommandRequest, actor string) (map[string]interface{}, error) {
+	if strings.TrimSpace(req.HarnessID) == "" {
+		req.HarnessID = s.defaultHarness
+	}
+	return s.backend.RunAgyCommand(ctx, req, actor)
+}
+
+func (s *AgentService) TriggerUpdate(ctx context.Context, req dto.GemOpsUpdateRequest, actor string) (map[string]interface{}, error) {
+	return s.backend.TriggerUpdate(ctx, req, actor)
+}
+
+func (s *AgentService) CreateHarness(ctx context.Context, spec map[string]interface{}, actor string) (map[string]interface{}, error) {
+	return s.backend.CreateHarness(ctx, spec, actor)
+}
+
+func (s *AgentService) UpdateHarness(ctx context.Context, id string, spec map[string]interface{}, actor string) (map[string]interface{}, error) {
+	return s.backend.UpdateHarness(ctx, id, spec, actor)
+}
+
+func (s *AgentService) DeleteHarness(ctx context.Context, id, actor string) (map[string]interface{}, error) {
+	return s.backend.DeleteHarness(ctx, id, actor)
+}
+
+func (s *AgentService) ValidateHarness(ctx context.Context, id string, spec map[string]interface{}) (map[string]interface{}, error) {
+	return s.backend.ValidateHarness(ctx, id, spec)
+}
+
+func (s *AgentService) EvaluateHarness(ctx context.Context, id string, req map[string]interface{}) (map[string]interface{}, error) {
+	return s.backend.EvaluateHarness(ctx, id, req)
+}
+
+func (s *AgentService) CloneHarness(ctx context.Context, id string, req dto.GemOpsCloneHarnessRequest, actor string) (map[string]interface{}, error) {
+	return s.backend.CloneHarness(ctx, id, req, actor)
+}
+
+func (s *AgentService) GetHarnessSkill(ctx context.Context, id, name string) (map[string]interface{}, error) {
+	return s.backend.GetHarnessSkill(ctx, id, name)
+}
+
+func (s *AgentService) SaveHarnessSkill(ctx context.Context, id, name string, req dto.GemOpsSaveSkillRequest, actor string) (map[string]interface{}, error) {
+	return s.backend.SaveHarnessSkill(ctx, id, name, req, actor)
+}
+
+func (s *AgentService) DeleteHarnessSkill(ctx context.Context, id, name, actor string) (map[string]interface{}, error) {
+	return s.backend.DeleteHarnessSkill(ctx, id, name, actor)
+}
+
+func (s *AgentService) ListSecrets(ctx context.Context, scope string) (map[string]interface{}, error) {
+	return s.backend.ListSecrets(ctx, scope)
+}
+
+func (s *AgentService) SaveSecret(ctx context.Context, req dto.GemOpsSetSecretRequest, actor string) (map[string]interface{}, error) {
+	return s.backend.SaveSecret(ctx, req, actor)
+}
+
+func (s *AgentService) DeleteSecret(ctx context.Context, scope, key, actor string) (map[string]interface{}, error) {
+	return s.backend.DeleteSecret(ctx, scope, key, actor)
 }
 
 // StreamChat starts a turn on gemops-agent and translates its SSE stream into AI SDK v6 UIMessageChunk frames.
@@ -252,10 +358,11 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 		}
 	}()
 
+	conversationID := firstNonEmptyString(req.ConversationID, req.SessionID, req.ID)
 	promptResp, err := s.backend.StartPrompt(streamCtx, dto.GemOpsPromptRequest{
 		Prompt:         promptText,
 		HarnessID:      harnessID,
-		ConversationID: strings.TrimSpace(req.ID),
+		ConversationID: conversationID,
 		SessionConfig:  sessionCfg,
 	}, actor)
 	if err != nil {

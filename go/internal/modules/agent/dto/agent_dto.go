@@ -44,6 +44,8 @@ type ClientAgentConfig struct {
 // ChatRequest is the JSON body sent by HttpAgentTransport (AI SDK v6 DefaultChatTransport) to POST /agent/chat.
 type ChatRequest struct {
 	ID              string                 `json:"id"`
+	ConversationID  string                 `json:"conversationId,omitempty"`
+	SessionID       string                 `json:"sessionId,omitempty"`
 	Messages        []UIMessage            `json:"messages"`
 	Trigger         string                 `json:"trigger,omitempty"`
 	MessageID       string                 `json:"messageId,omitempty"`
@@ -76,7 +78,48 @@ type GemOpsPromptRequest struct {
 	Prompt         string               `json:"prompt"`
 	HarnessID      string               `json:"harnessId,omitempty"`
 	ConversationID string               `json:"conversationId,omitempty"`
+	SessionID      string               `json:"sessionId,omitempty"`
 	SessionConfig  *GemOpsSessionConfig `json:"sessionConfig,omitempty"`
+}
+
+// GemOpsSavePromptRequest is sent to gemops POST /agy/prompts.
+type GemOpsSavePromptRequest struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
+}
+
+// GemOpsCustomCommandRequest is sent to gemops POST /agy/command.
+type GemOpsCustomCommandRequest struct {
+	Command    string   `json:"command"`
+	Args       []string `json:"args,omitempty"`
+	HarnessID  string   `json:"harnessId,omitempty"`
+	TimeoutSec int      `json:"timeoutSec,omitempty"`
+}
+
+// GemOpsUpdateRequest is sent to gemops POST /update.
+type GemOpsUpdateRequest struct {
+	Branch     string `json:"branch,omitempty"`
+	Restart    *bool  `json:"restart,omitempty"`
+	RebuildWeb *bool  `json:"rebuildWeb,omitempty"`
+}
+
+// GemOpsCloneHarnessRequest is sent to gemops POST /harnesses/{id}/clone.
+type GemOpsCloneHarnessRequest struct {
+	TargetID string `json:"targetId"`
+	Name     string `json:"name,omitempty"`
+}
+
+// GemOpsSaveSkillRequest is sent to gemops PUT /harnesses/{id}/skills/{name}.
+type GemOpsSaveSkillRequest struct {
+	Content string `json:"content"`
+}
+
+// GemOpsSetSecretRequest is sent to gemops PUT/POST /secrets.
+type GemOpsSetSecretRequest struct {
+	Scope       string `json:"scope"`
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	Description string `json:"description,omitempty"`
 }
 
 // GemOpsPromptResponse is returned by gemops POST /prompt (202 Accepted).

@@ -65,6 +65,51 @@ func TestAgentHandler_RestEndpointsAndChatStream(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "common", "name": "Common"})
 		case r.Method == http.MethodGet && r.URL.Path == "/harnesses/common/resolved":
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "common", "resolved": true})
+		case r.Method == http.MethodGet && r.URL.Path == "/sessions":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"items": []map[string]interface{}{{"conversationId": "c1", "turns": 1}},
+				"count": 1,
+			})
+		case r.Method == http.MethodDelete && r.URL.Path == "/sessions/c1":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "deleted", "conversationId": "c1"})
+		case r.Method == http.MethodGet && r.URL.Path == "/agy/config":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"settings": map[string]interface{}{"model": "default"}})
+		case r.Method == http.MethodPut && r.URL.Path == "/agy/config":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "updated"})
+		case r.Method == http.MethodGet && r.URL.Path == "/agy/prompts":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"items": []string{"default"}})
+		case r.Method == http.MethodPost && r.URL.Path == "/agy/prompts":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "p1"})
+		case r.Method == http.MethodDelete && r.URL.Path == "/agy/prompts/p1":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "deleted", "id": "p1"})
+		case r.Method == http.MethodPost && r.URL.Path == "/agy/command":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"stdout": "ok"})
+		case r.Method == http.MethodPost && r.URL.Path == "/harnesses":
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "h2"})
+		case r.Method == http.MethodPut && r.URL.Path == "/harnesses/h2":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "h2"})
+		case r.Method == http.MethodDelete && r.URL.Path == "/harnesses/h2":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "deleted", "id": "h2"})
+		case r.Method == http.MethodPost && r.URL.Path == "/harnesses/common/validate":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"valid": true})
+		case r.Method == http.MethodPost && r.URL.Path == "/harnesses/common/evaluate":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"passed": true})
+		case r.Method == http.MethodPost && r.URL.Path == "/harnesses/common/clone":
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "h3"})
+		case r.Method == http.MethodGet && r.URL.Path == "/harnesses/common/skills/sk1":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": "sk1", "content": "# skill"})
+		case r.Method == http.MethodPut && r.URL.Path == "/harnesses/common/skills/sk1":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": "sk1"})
+		case r.Method == http.MethodDelete && r.URL.Path == "/harnesses/common/skills/sk1":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "deleted"})
+		case r.Method == http.MethodGet && r.URL.Path == "/secrets":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"items": []string{}})
+		case r.Method == http.MethodPut && r.URL.Path == "/secrets":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "saved"})
+		case r.Method == http.MethodDelete && r.URL.Path == "/secrets/common/API_KEY":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"deleted": true})
 		case r.Method == http.MethodPost && r.URL.Path == "/permissions/perm_1":
 			_ = json.NewEncoder(w).Encode(map[string]string{"status": "resolved", "id": "perm_1", "decision": "allow"})
 		case r.Method == http.MethodPost && r.URL.Path == "/reset":
@@ -185,14 +230,33 @@ func TestAgentHandler_RestEndpointsAndChatStream(t *testing.T) {
 		t.Fatalf("unexpected /events response: code=%d ct=%q body=%s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
 	}
 
-	// 10. GET /api/v1/agent/agy/usage & /harnesses/common & /harnesses/common/resolved
-	for _, ep := range []string{"/api/v1/agent/agy/usage", "/api/v1/agent/harnesses/common", "/api/v1/agent/harnesses/common/resolved"} {
+	// 10. GET /api/v1/agent/agy/usage & /harnesses/common & /harnesses/common/resolved & new endpoints
+	for _, ep := range []string{
+		"/api/v1/agent/agy/usage",
+		"/api/v1/agent/usage",
+		"/api/v1/agent/meta",
+		"/api/v1/agent/sessions",
+		"/api/v1/agent/agy/config",
+		"/api/v1/agent/agy/prompts",
+		"/api/v1/agent/harnesses/common",
+		"/api/v1/agent/harnesses/common/resolved",
+		"/api/v1/agent/harnesses/common/skills/sk1",
+		"/api/v1/agent/secrets",
+	} {
 		req = httptest.NewRequest(http.MethodGet, ep, nil)
 		rec = httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("unexpected %s response: code=%d body=%s", ep, rec.Code, rec.Body.String())
 		}
+	}
+
+	// Verify /sessions normalized both items and sessions
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/agent/sessions", nil)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `"items"`) || !strings.Contains(rec.Body.String(), `"sessions"`) {
+		t.Fatalf("expected /sessions to contain both items and sessions, got %s", rec.Body.String())
 	}
 }
 

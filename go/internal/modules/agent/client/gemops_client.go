@@ -467,16 +467,209 @@ func (c *GemOpsClient) ListSessions(ctx context.Context) (map[string]interface{}
 	if err := c.doJSON(ctx, http.MethodGet, "/sessions", nil, nil, &out); err != nil {
 		return nil, err
 	}
+	if out == nil {
+		out = map[string]interface{}{}
+	}
+	if items, hasItems := out["items"]; hasItems {
+		if _, hasSessions := out["sessions"]; !hasSessions {
+			out["sessions"] = items
+		}
+	} else if sessions, hasSessions := out["sessions"]; hasSessions {
+		out["items"] = sessions
+	}
 	return out, nil
 }
 
 func (c *GemOpsClient) DeleteSession(ctx context.Context, conversationID, harnessID string) (map[string]interface{}, error) {
 	path := "/sessions/" + url.PathEscape(strings.TrimSpace(conversationID))
+	var headers map[string]string
 	if trimmedHarness := strings.TrimSpace(harnessID); trimmedHarness != "" {
 		path += "?harnessId=" + url.QueryEscape(trimmedHarness)
+		headers = map[string]string{"X-Harness-Id": trimmedHarness}
 	}
 	var out map[string]interface{}
-	if err := c.doJSON(ctx, http.MethodDelete, path, nil, nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodDelete, path, headers, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) GetAgyConfig(ctx context.Context) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodGet, "/agy/config", nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) UpdateAgyConfig(ctx context.Context, settings map[string]interface{}, actor string) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPut, "/agy/config", actorHeaders(actor), settings, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) ListAgyPrompts(ctx context.Context) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodGet, "/agy/prompts", nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) SaveAgyPrompt(ctx context.Context, req dto.GemOpsSavePromptRequest, actor string) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPost, "/agy/prompts", actorHeaders(actor), req, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) DeleteAgyPrompt(ctx context.Context, id, actor string) (map[string]interface{}, error) {
+	path := "/agy/prompts/" + url.PathEscape(strings.TrimSpace(id))
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodDelete, path, actorHeaders(actor), nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) RunAgyCommand(ctx context.Context, req dto.GemOpsCustomCommandRequest, actor string) (map[string]interface{}, error) {
+	headers := actorHeaders(actor)
+	if hid := strings.TrimSpace(req.HarnessID); hid != "" {
+		if headers == nil {
+			headers = map[string]string{}
+		}
+		headers["X-Harness-Id"] = hid
+	}
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPost, "/agy/command", headers, req, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) TriggerUpdate(ctx context.Context, req dto.GemOpsUpdateRequest, actor string) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPost, "/update", actorHeaders(actor), req, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) CreateHarness(ctx context.Context, spec map[string]interface{}, actor string) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPost, "/harnesses", actorHeaders(actor), spec, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) UpdateHarness(ctx context.Context, id string, spec map[string]interface{}, actor string) (map[string]interface{}, error) {
+	path := "/harnesses/" + url.PathEscape(strings.TrimSpace(id))
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPut, path, actorHeaders(actor), spec, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) DeleteHarness(ctx context.Context, id, actor string) (map[string]interface{}, error) {
+	path := "/harnesses/" + url.PathEscape(strings.TrimSpace(id))
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodDelete, path, actorHeaders(actor), nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) ValidateHarness(ctx context.Context, id string, spec map[string]interface{}) (map[string]interface{}, error) {
+	path := "/harnesses/" + url.PathEscape(strings.TrimSpace(id)) + "/validate"
+	var body interface{}
+	if len(spec) > 0 {
+		body = spec
+	}
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPost, path, nil, body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) EvaluateHarness(ctx context.Context, id string, req map[string]interface{}) (map[string]interface{}, error) {
+	path := "/harnesses/" + url.PathEscape(strings.TrimSpace(id)) + "/evaluate"
+	var body interface{}
+	if len(req) > 0 {
+		body = req
+	}
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPost, path, nil, body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) CloneHarness(ctx context.Context, id string, req dto.GemOpsCloneHarnessRequest, actor string) (map[string]interface{}, error) {
+	path := "/harnesses/" + url.PathEscape(strings.TrimSpace(id)) + "/clone"
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPost, path, actorHeaders(actor), req, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) GetHarnessSkill(ctx context.Context, id, name string) (map[string]interface{}, error) {
+	path := "/harnesses/" + url.PathEscape(strings.TrimSpace(id)) + "/skills/" + url.PathEscape(strings.TrimSpace(name))
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) SaveHarnessSkill(ctx context.Context, id, name string, req dto.GemOpsSaveSkillRequest, actor string) (map[string]interface{}, error) {
+	path := "/harnesses/" + url.PathEscape(strings.TrimSpace(id)) + "/skills/" + url.PathEscape(strings.TrimSpace(name))
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPut, path, actorHeaders(actor), req, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) DeleteHarnessSkill(ctx context.Context, id, name, actor string) (map[string]interface{}, error) {
+	path := "/harnesses/" + url.PathEscape(strings.TrimSpace(id)) + "/skills/" + url.PathEscape(strings.TrimSpace(name))
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodDelete, path, actorHeaders(actor), nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) ListSecrets(ctx context.Context, scope string) (map[string]interface{}, error) {
+	path := "/secrets"
+	if trimmedScope := strings.TrimSpace(scope); trimmedScope != "" {
+		path += "?scope=" + url.QueryEscape(trimmedScope)
+	}
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) SaveSecret(ctx context.Context, req dto.GemOpsSetSecretRequest, actor string) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodPut, "/secrets", actorHeaders(actor), req, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) DeleteSecret(ctx context.Context, scope, key, actor string) (map[string]interface{}, error) {
+	path := "/secrets/" + url.PathEscape(strings.TrimSpace(scope)) + "/" + url.PathEscape(strings.TrimSpace(key))
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodDelete, path, actorHeaders(actor), nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

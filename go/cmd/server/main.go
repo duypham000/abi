@@ -75,7 +75,7 @@ func main() {
 	router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-Yjs-Token, Mcp-Session-Id, MCP-Protocol-Version, X-Agent-Api-Key, X-Harness-Id, X-Conversation-Id, X-Actor, Last-Event-ID")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-Yjs-Token, Mcp-Session-Id, MCP-Protocol-Version, X-Agent-Api-Key, X-Harness-Id, X-Conversation-Id, X-Session-Id, X-Actor, Last-Event-ID")
 		c.Writer.Header().Set("Access-Control-Expose-Headers", "Mcp-Session-Id, x-vercel-ai-ui-message-stream")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 
@@ -152,9 +152,11 @@ func main() {
 	// Legacy endpoint compatibility (/api/v1/base/docs... and /go/api/v1/base/docs...)
 	baseV1 := router.Group("/api/v1/base")
 	docsModule.RegisterRoutes(baseV1, jwtManager)
+	agentModule.RegisterRoutes(baseV1)
 
 	goBaseV1 := router.Group("/go/api/v1/base")
 	docsModule.RegisterRoutes(goBaseV1, jwtManager)
+	agentModule.RegisterRoutes(goBaseV1)
 
 	// 7. Start HTTP Server with Graceful Shutdown
 	srv := &http.Server{
