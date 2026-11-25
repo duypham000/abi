@@ -8,6 +8,8 @@ interface CanvasListProps {
   onDelete: (id: number) => void;
   isDeleting?: boolean;
   isLoading?: boolean;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
 }
 
 export default function CanvasList({
@@ -15,6 +17,8 @@ export default function CanvasList({
   onDelete,
   isDeleting,
   isLoading,
+  selectedIds,
+  onToggleSelect,
 }: CanvasListProps) {
   if (isLoading) {
     return (
@@ -40,6 +44,8 @@ export default function CanvasList({
           canvas={canvas}
           onDelete={onDelete}
           isDeleting={isDeleting}
+          selected={selectedIds?.has(canvas.id)}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </div>

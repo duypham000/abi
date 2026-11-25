@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { Excalidraw, Sidebar as ExcalidrawSidebar } from "@excalidraw/excalidraw";
-import { FileTextOutlined, FormOutlined } from "@ant-design/icons";
+import { FileTextOutlined, FormOutlined, SaveOutlined } from "@ant-design/icons";
+import { Button, Empty, Tooltip } from "antd";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
 import { nanoid } from "nanoid";
@@ -10,7 +11,11 @@ import { type RootState } from "@/store";
 import { Loading } from "@/components/ui/Loading/Loading";
 import { useCreateNoteMutation } from "@/infrastructure/api/notesApi";
 import { useTouchDevice } from "@/hooks/useTouchDevice";
-import { useCanvasEditor } from "../../hooks/useCanvasEditor";
+import {
+  useCanvasEditor,
+  sanitizeAppState,
+} from "../../hooks/useCanvasEditor";
+import type { CanvasScene } from "@/core/interfaces/canvas";
 import { useCanvasUiStore } from "../../store/canvasUiStore";
 import { useCanvasYjsCollaboration } from "../../hooks/useCanvasYjsCollaboration";
 import { EmbeddedDocFrame } from "./components/EmbeddedDocFrame";
@@ -37,6 +42,8 @@ export default function CanvasEditorPage() {
     saveStatus,
     initialScene,
     handleSceneChange,
+    triggerSave,
+    getLatestScene,
     createNewCanvas,
   } = useCanvasEditor(canvasId);
   const isTouch = useTouchDevice();
@@ -442,8 +449,33 @@ export default function CanvasEditorPage() {
     [handleInsertDoc]
   );
 
+  const getCurrentScene = useCallback((): CanvasScene => {
+    const activeApi = excalidrawAPIRef.current;
+    if (activeApi) {
+      const elements = activeApi.getSceneElements();
+      const appState = activeApi.getAppState() as Record<string, unknown>;
+      const files = activeApi.getFiles() as Record<string, unknown>;
+      return {
+        elements,
+        appState: sanitizeAppState(appState),
+        files,
+      };
+    }
+    return getLatestScene();
+  }, [getLatestScene]);
+
+  const handleSaveShortcut = useCallback(async () => {
+    const currentScene = getCurrentScene();
+    await triggerSave(currentScene);
+  }, [getCurrentScene, triggerSave]);
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void handleSaveShortcut();
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       if (target) {
@@ -461,7 +493,7 @@ export default function CanvasEditorPage() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleToggleDocsSidebar, handleAddNote]);
+  }, [handleToggleDocsSidebar, handleAddNote, handleSaveShortcut]);
 
   const handlePointerUpdate = useCallback(
     (payload: any) => {
@@ -508,12 +540,9 @@ export default function CanvasEditorPage() {
           gap: 16,
         }}
       >
-        <p style={{ color: "rgba(255,255,255,0.65)", fontSize: 16 }}>
-          Canvas không tồn tại hoặc đã bị xóa
-        </p>
-        <button
-          type="button"
-          className="canvas-new-btn"
+        <Empty description="Canvas không tồn tại hoặc đã bị xóa" />
+        <Button
+          type="primary"
           onClick={async () => {
             try {
               const newCanvas = await createNewCanvas();
@@ -524,7 +553,7 @@ export default function CanvasEditorPage() {
           }}
         >
           Tạo canvas mới
-        </button>
+        </Button>
       </main>
     );
   }
@@ -541,11 +570,44 @@ export default function CanvasEditorPage() {
     <main className="dashboard-main canvas-editor-main">
       <div className="canvas-editor-header">
         <h2 className="canvas-editor-title">{canvas?.title || "Untitled Canvas"}</h2>
-        <span className="canvas-editor-save-status">
-          {saveStatus === "saving" && "Saving…"}
-          {saveStatus === "success" && "Saved"}
-          {saveStatus === "error" && "Save failed"}
-        </span>
+        <div className="canvas-editor-header-right">
+          {collaboration?.isConnected && (
+            <span
+              style={{
+                fontSize: 12,
+                color: "#52c41a",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                marginRight: 8,
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  backgroundColor: "#52c41a",
+                }}
+              />
+              Live
+            </span>
+          )}
+          <span className="canvas-editor-save-status">
+            {saveStatus === "saving" && "Saving…"}
+            {saveStatus === "success" && "Saved"}
+            {saveStatus === "error" && "Save failed"}
+          </span>
+          <Tooltip title="Lưu (Ctrl+S)">
+            <Button
+              size="small"
+              type="text"
+              icon={<SaveOutlined />}
+              loading={saveStatus === "saving"}
+              onClick={handleSaveShortcut}
+            />
+          </Tooltip>
+        </div>
       </div>
 
       <div

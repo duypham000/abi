@@ -3,7 +3,15 @@ import { useDispatch } from "react-redux";
 import { useGetCanvasByIdQuery, useCreateCanvasMutation, useUpdateCanvasMutation } from "@/infrastructure/api/canvasApi";
 import { setPageTitle } from "@/store/appSlice";
 import type { AppDispatch } from "@/store";
-import type { CanvasScene } from "@/core/interfaces/canvas";
+import {
+  parseCanvasMetadata,
+  serializeCanvasMetadata,
+  type CanvasScene,
+} from "@/core/interfaces/canvas";
+import {
+  generateLowResCanvasThumbnail,
+  setCachedCanvasThumbnail,
+} from "../utils/canvasThumbnail";
 
 export type SaveStatus = "idle" | "saving" | "success" | "error";
 
@@ -103,10 +111,18 @@ export function useCanvasEditor(id: number, autoSave = true) {
         successTimerRef.current = null;
       }
 
+      const existingMeta = parseCanvasMetadata(canvas?.metadata ?? null);
+      const thumb = await generateLowResCanvasThumbnail(sceneToSave);
+      if (thumb) setCachedCanvasThumbnail(id, thumb);
+      const nextMetadata = serializeCanvasMetadata({
+        ...existingMeta,
+        thumbnail: thumb ?? existingMeta.thumbnail,
+      });
+
       const payload = {
         title: canvas?.title ?? "Untitled Canvas",
         scene: serialized,
-        metadata: canvas?.metadata ?? null,
+        metadata: nextMetadata,
         lastSync: new Date().toISOString(),
         status: (canvas?.status ?? 1) as 0 | 1,
       };

@@ -93,5 +93,23 @@ services:
     mem_limit: 450m
     restart: always
 
+  web:
+    image: ghcr.io/duypham000/tomo-web:latest
+    container_name: tomo-web-app
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    depends_on:
+      - go-backend
+      - node-api
+      - node-yjs
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 32M
+    mem_limit: 128m
+    restart: always
+
 volumes:
   tomo_workspace_data:

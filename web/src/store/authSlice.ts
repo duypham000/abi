@@ -20,15 +20,30 @@ export interface AuthState {
 
 /** Decode the user claims from a JWT access token (no verification). */
 export function decodeUser(token: string): AuthUser | null {
+  if (!token) return null;
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    const parsed = JSON.parse(jsonPayload);
+    const email = parsed.email || "";
+    const username =
+      parsed.username || (email ? email.split("@")[0] : "User");
     return {
-      userId: payload.userId,
-      username: payload.sub,
-      email: payload.email,
-      role: payload.role,
+      userId: parsed.user_id || parsed.userId || parsed.sub || 0,
+      username,
+      email,
+      role: parsed.role || "USER",
     };
-  } catch {
+  } catch (err) {
+    console.error("Failed to decode JWT claims:", err);
     return null;
   }
 }

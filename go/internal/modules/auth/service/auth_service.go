@@ -70,8 +70,29 @@ func (s *authServiceImpl) Register(ctx context.Context, req dto.RegisterRequest)
 		role = domain.RoleUser
 	}
 
+	username := strings.TrimSpace(req.Username)
+	if username == "" {
+		if idx := strings.Index(req.Email, "@"); idx > 0 {
+			username = req.Email[:idx]
+		} else {
+			username = req.Email
+		}
+		if existingByName, err := s.userRepo.FindByIdentifier(ctx, username); err == nil && existingByName != nil {
+			username = username + "-" + uuid.New().String()[:8]
+		}
+	} else {
+		existingByName, err := s.userRepo.FindByIdentifier(ctx, username)
+		if err != nil {
+			return nil, err
+		}
+		if existingByName != nil {
+			return nil, ErrUserExists
+		}
+	}
+
 	user := &domain.User{
 		ID:           uuid.New().String(),
+		Username:     username,
 		Email:        req.Email,
 		PasswordHash: hashedPassword,
 		FullName:     req.FullName,

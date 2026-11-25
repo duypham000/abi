@@ -3,6 +3,7 @@
    line-number gutter, shiki overlay highlighting, light/dark theme. */
 
 :root {
+  --affine-background-primary-color: #ffffff;
   --affine-background-code-block: #f7f8fa;
   --affine-code-border: rgba(15, 23, 42, 0.06);
   --affine-code-header-bg: rgba(255, 255, 255, 0.6);
@@ -22,7 +23,10 @@
   --affine-accent: #2563eb;
 }
 
-[data-theme="dark"] {
+[data-theme="dark"],
+.theme-dark,
+[data-color-scheme="dark"] {
+  --affine-background-primary-color: #1e1f24;
   --affine-background-code-block: #1e1f24;
   --affine-code-border: rgba(255, 255, 255, 0.08);
   --affine-code-header-bg: rgba(255, 255, 255, 0.02);
@@ -370,7 +374,9 @@
   padding: 2px;
   backdrop-filter: blur(6px);
 }
-[data-theme="dark"] .cbx-mermaid-controls {
+[data-theme="dark"] .cbx-mermaid-controls,
+.theme-dark .cbx-mermaid-controls,
+[data-color-scheme="dark"] .cbx-mermaid-controls {
   background: rgba(40, 40, 40, 0.85);
 }
 .cbx-mermaid-ctrl-btn {

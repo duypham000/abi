@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { FileText, LogOut, Menu, Palette } from "lucide-react";
+import { FileText, KeyRound, LogOut, Menu, Palette } from "lucide-react";
 import type { AppDispatch, RootState } from "@/store";
 import { setSidebarOpen, toggleSidebar } from "@/store/appSlice";
 import { useAuth } from "@/features/auth/hooks/useAuth";
@@ -50,6 +50,9 @@ export function AppShell() {
           {user && (
             <span className="app-shell-user" title={user.email}>
               {user.username}
+              {user.role && (
+                <span className="app-shell-role-badge">{user.role}</span>
+              )}
             </span>
           )}
           <button
@@ -93,6 +96,15 @@ export function AppShell() {
               >
                 <Palette size={16} />
                 <span>Canvas</span>
+              </NavLink>
+              <NavLink
+                to="/api-keys"
+                className={({ isActive }) =>
+                  isActive ? "app-shell-nav-item active" : "app-shell-nav-item"
+                }
+              >
+                <KeyRound size={16} />
+                <span>API Keys</span>
               </NavLink>
             </nav>
           </aside>

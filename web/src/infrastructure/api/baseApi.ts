@@ -120,6 +120,6 @@ const baseQueryWithTransform: BaseQueryFn<
 export const baseApi = createApi({
   reducerPath: "api",
   baseQuery: baseQueryWithTransform,
-  tagTypes: ["Doc", "Canvas", "Note", "Series", "SearchIndex"] as const,
+  tagTypes: ["Doc", "Canvas", "Note", "Series", "SearchIndex", "User", "ApiKey"] as const,
   endpoints: () => ({}),
 });

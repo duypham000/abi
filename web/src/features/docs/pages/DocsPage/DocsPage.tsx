@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
-import { message, Select } from "antd";
+import { message, Modal, Select } from "antd";
 import { type AppDispatch } from "@/store";
 import { setPageTitle } from "@/store/appSlice";
 import { useDocs } from "../../hooks/useDocs";
@@ -43,6 +43,7 @@ export default function DocsPage() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [createDoc, { isLoading: isCreating }] = useCreateDocMutation();
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(searchQuery), 300);
@@ -56,6 +57,72 @@ export default function DocsPage() {
 
   const displayDocs = debouncedQuery ? (searchResults ?? []) : docs;
   const isLoadingDisplay = debouncedQuery ? isSearching : isLoading;
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const validIds = new Set(displayDocs.map((d) => d.id));
+      const next = new Set(Array.from(prev).filter((id) => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [displayDocs]);
+
+  const handleToggleSelect = useCallback((id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const allSelected =
+    displayDocs.length > 0 && displayDocs.every((d) => selectedIds.has(d.id));
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(displayDocs.map((d) => d.id)));
+    }
+  }, [allSelected, displayDocs]);
+
+  const handleDeleteSelected = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    Modal.confirm({
+      title: `Xoá ${ids.length} tài liệu đã chọn?`,
+      content: "Hành động này không thể hoàn tác.",
+      okText: "Xoá",
+      okType: "danger",
+      cancelText: "Huỷ",
+      onOk: async () => {
+        for (const id of ids) {
+          await deleteDoc(id);
+        }
+        setSelectedIds(new Set());
+        message.success(`Đã xoá ${ids.length} tài liệu`);
+      },
+    });
+  }, [selectedIds, deleteDoc]);
+
+  const handleDeleteAll = useCallback(() => {
+    if (displayDocs.length === 0) return;
+    const ids = displayDocs.map((d) => d.id);
+    Modal.confirm({
+      title: `Xoá toàn bộ ${ids.length} tài liệu?`,
+      content: "Tất cả tài liệu sẽ bị xoá vĩnh viễn.",
+      okText: "Xoá toàn bộ",
+      okType: "danger",
+      cancelText: "Huỷ",
+      onOk: async () => {
+        for (const id of ids) {
+          await deleteDoc(id);
+        }
+        setSelectedIds(new Set());
+        message.success(`Đã xoá toàn bộ ${ids.length} tài liệu`);
+      },
+    });
+  }, [displayDocs, deleteDoc]);
 
   useEffect(() => {
     dispatch(setPageTitle("Docs"));
@@ -296,11 +363,49 @@ export default function DocsPage() {
             />
           </div>
 
+          <div className="docs-bulk-bar">
+            <label className="docs-bulk-select-all">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={handleToggleSelectAll}
+                disabled={displayDocs.length === 0}
+              />
+              <span>
+                Chọn tất cả ({selectedIds.size}/{displayDocs.length})
+              </span>
+            </label>
+            <div className="docs-bulk-actions">
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  className="docs-bulk-btn docs-bulk-btn--danger"
+                  onClick={handleDeleteSelected}
+                  disabled={isDeleting}
+                >
+                  Xoá đã chọn ({selectedIds.size})
+                </button>
+              )}
+              {displayDocs.length > 0 && (
+                <button
+                  type="button"
+                  className="docs-bulk-btn docs-bulk-btn--danger-outline"
+                  onClick={handleDeleteAll}
+                  disabled={isDeleting}
+                >
+                  Xoá toàn bộ
+                </button>
+              )}
+            </div>
+          </div>
+
           <DocList
             docs={displayDocs}
             onDelete={deleteDoc}
             isDeleting={isDeleting}
             isLoading={isLoadingDisplay}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
           />
         </section>
       </main>

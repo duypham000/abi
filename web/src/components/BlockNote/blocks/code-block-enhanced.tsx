@@ -461,22 +461,41 @@ function CodeBlockComponent({ block, editor, contentRef, askAIRef }: CodeBlockCo
   const [langOpen, setLangOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [captionEditing, setCaptionEditing] = useState(false);
-  const [isDark, setIsDark] = useState<boolean>(() =>
-    typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "dark"
-  );
+  const rootRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const captionInputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<number | null>(null);
 
-  useEffect(() => {
+  const [isDark, setIsDark] = useState<boolean>(false);
+
+  const updateDarkState = useCallback(() => {
+    const el = rootRef.current;
     if (typeof document === "undefined") return;
-    const target = document.documentElement;
-    const obs = new MutationObserver(() => {
-      setIsDark(target.getAttribute("data-theme") === "dark");
-    });
-    obs.observe(target, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => obs.disconnect();
+    const docEl = document.documentElement;
+    const bodyEl = document.body;
+    const isDarkTheme =
+      docEl.getAttribute("data-theme") === "dark" ||
+      docEl.classList.contains("dark") ||
+      docEl.classList.contains("theme-dark") ||
+      bodyEl.classList.contains("dark") ||
+      bodyEl.classList.contains("theme-dark") ||
+      Boolean(el?.closest('[data-theme="dark"], [data-color-scheme="dark"], .theme-dark, .dark'));
+    setIsDark(isDarkTheme);
   }, []);
+
+  useEffect(() => {
+    updateDarkState();
+    if (typeof document === "undefined") return;
+    const observer = new MutationObserver(() => updateDarkState());
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-theme", "class"] });
+    const el = rootRef.current;
+    if (el && el.parentElement) {
+      const bnParent = el.closest(".bn-container, .dashboard-layout, .workspace-shell") || el.parentElement;
+      observer.observe(bnParent, { attributes: true, attributeFilter: ["data-theme", "data-color-scheme", "class"] });
+    }
+    return () => observer.disconnect();
+  }, [updateDarkState]);
 
   useEffect(() => {
     const unsub = editor.onChange(() => {
@@ -493,20 +512,19 @@ function CodeBlockComponent({ block, editor, contentRef, askAIRef }: CodeBlockCo
   }, [editor, block.id]);
 
   useEffect(() => {
-    if (isMermaid) return;
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(async () => {
-      const html = await highlightToHtml(plain || "​", language);
+      const html = await highlightToHtml(plain || "​", language, isDark);
       setHighlighted(html);
     }, 60);
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [plain, language, isMermaid]);
+  }, [plain, language, isDark]);
 
   useEffect(() => {
-    if (!isMermaid) ensureLanguage(language);
-  }, [language, isMermaid]);
+    ensureLanguage(language);
+  }, [language]);
 
   const updateProps = useCallback(
     (patch: Record<string, unknown>) => {
@@ -558,6 +576,7 @@ function CodeBlockComponent({ block, editor, contentRef, askAIRef }: CodeBlockCo
 
   return (
     <div
+      ref={rootRef}
       className={"cbx-root" + (active ? " cbx-root--active" : "")}
       data-wrap={wrap ? "true" : "false"}
       data-collapsed={collapsed && !showPreview ? "true" : "false"}
@@ -725,6 +744,15 @@ export function createCodeBlockEnhanced(askAIRef: MutableRefObject<OnAskAI | nul
           />
         </CodeBlockErrorBoundary>
       ),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      toExternalHTML: ({ block, contentRef }: { block: any; contentRef: any }) => {
+        const lang = block.props?.language || "typescript";
+        return (
+          <pre>
+            <code ref={contentRef} className={`language-${lang}`} data-language={lang} />
+          </pre>
+        );
+      },
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ) as unknown as (opts?: Record<string, unknown>) => any;

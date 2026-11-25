@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { Alert, Typography } from "antd";
 import { Input, ReadonlyInput } from "@/components/ui/Input";
@@ -121,6 +122,16 @@ export default function LoginForm({ step, setStep }: LoginFormProps) {
           >
             Tiếp tục
           </Button>
+
+          <Typography.Paragraph className="!text-center !text-[14px] !leading-[20px] !font-normal !text-[#636369] dark:!text-zinc-400 !mt-2 !mb-0">
+            Bạn chưa có tài khoản?{" "}
+            <Link
+              to="/register"
+              className="font-bold text-[#111827] dark:text-zinc-100 hover:underline"
+            >
+              Đăng ký miễn phí
+            </Link>
+          </Typography.Paragraph>
         </form>
       ) : (
         /* ================= STEP 2 ================= */
@@ -158,6 +169,16 @@ export default function LoginForm({ step, setStep }: LoginFormProps) {
           >
             {isLoggingIn ? "Đang đăng nhập..." : "Đăng nhập"}
           </Button>
+
+          <Typography.Paragraph className="!text-center !text-[14px] !leading-[20px] !font-normal !text-[#636369] dark:!text-zinc-400 !mt-2 !mb-0">
+            Bạn chưa có tài khoản?{" "}
+            <Link
+              to="/register"
+              className="font-bold text-[#111827] dark:text-zinc-100 hover:underline"
+            >
+              Đăng ký miễn phí
+            </Link>
+          </Typography.Paragraph>
         </form>
       )}
     </div>

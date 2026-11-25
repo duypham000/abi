@@ -51,8 +51,9 @@ export async function login(
   }
 
   localStorage.setItem(TOKEN_KEY, token);
-  if (json.data?.refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, json.data.refreshToken);
+  const rt = json.data?.refreshToken || json.data?.refresh_token;
+  if (rt) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, rt);
   }
   notify();
   return token;
@@ -99,8 +100,9 @@ export async function getAccessToken(): Promise<string | null> {
       if (nextToken) {
         localStorage.setItem(TOKEN_KEY, nextToken);
       }
-      if (data?.refreshToken) {
-        localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+      const nextRt = data?.refreshToken || data?.refresh_token;
+      if (nextRt) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, nextRt);
       }
       return nextToken || null;
     } finally {
@@ -113,6 +115,7 @@ export async function getAccessToken(): Promise<string | null> {
 
 export async function logout(): Promise<void> {
   const token = localStorage.getItem(TOKEN_KEY);
+  const rt = localStorage.getItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   notify();
@@ -123,6 +126,7 @@ export async function logout(): Promise<void> {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
+      body: rt ? JSON.stringify({ refresh_token: rt, refreshToken: rt }) : undefined,
     }).catch(() => {});
   }
 }

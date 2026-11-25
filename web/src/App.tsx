@@ -5,6 +5,9 @@ import { RequireAuth } from "@/routes/RequireAuth";
 import { AppShell } from "@/layout/AppShell";
 import { Loading } from "@/components/ui/Loading/Loading";
 import LoginPage from "@/features/auth/pages/LoginPage";
+import RegisterPage from "@/features/auth/pages/RegisterPage";
+import VerifyPage from "@/features/auth/pages/VerifyPage";
+import ApiKeysPage from "@/features/api-keys/pages/ApiKeysPage";
 import DocsPage from "@/features/docs/pages/DocsPage";
 import CanvasListPage from "@/features/canvas/pages/CanvasListPage";
 
@@ -18,6 +21,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify" element={<VerifyPage />} />
 
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
@@ -40,6 +45,7 @@ export default function App() {
                 </Suspense>
               }
             />
+            <Route path="api-keys" element={<ApiKeysPage />} />
           </Route>
         </Route>
 

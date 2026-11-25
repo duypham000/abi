@@ -17,6 +17,7 @@ mini-editor/src-tauri/gen/schemas/
 # Environment files
 .env.production
 !mini-editor/.env.production
+!web/.env.production
 
 # Logs
 logs/
