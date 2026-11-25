@@ -540,9 +540,14 @@ func (s *gitHubService) SaveFile(ctx context.Context, userID string, req dto.Sav
 
 	// Keep backend docs table in sync with the saved workspace file
 	if itemType == "doc" && s.docsService != nil {
-		var contentStr string
+		var contentStr, backendID string
 		var statusVal interface{} = "PUBLISHED"
 		if m, ok := parsedContent.(map[string]interface{}); ok {
+			if bu, ok := m["backend_uuid"].(string); ok {
+				backendID = bu
+			} else if bu, ok := m["backendUuid"].(string); ok {
+				backendID = bu
+			}
 			if st, exists := m["status"]; exists {
 				if st == 0 || st == float64(0) || st == "0" || st == "DRAFT" {
 					statusVal = "DRAFT"
@@ -557,10 +562,11 @@ func (s *gitHubService) SaveFile(ctx context.Context, userID string, req dto.Sav
 			}
 		}
 		_, _, _ = s.docsService.SyncFromGit(ctx, userID, docsDto.CreateDocFromGitRequest{
-			Title:   title,
-			Content: contentStr,
-			GitSlug: slug,
-			Status:  statusVal,
+			Title:     title,
+			Content:   contentStr,
+			GitSlug:   slug,
+			BackendID: backendID,
+			Status:    statusVal,
 		})
 	}
 

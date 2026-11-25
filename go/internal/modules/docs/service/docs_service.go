@@ -56,8 +56,27 @@ func NewDocsService(docRepo repository.DocRepository, revRepo repository.Revisio
 }
 
 func (s *docsServiceImpl) CreateDoc(ctx context.Context, ownerID string, req dto.CreateDocRequest) (*dto.DocDto, error) {
+	if req.Slug != "" {
+		if existing, err := s.docRepo.FindBySlug(ctx, req.Slug); err == nil && existing != nil {
+			existing.Title = req.Title
+			existing.Content = req.Content
+			if req.Status != "" {
+				existing.Status = req.Status
+			}
+			existing.UpdatedAt = time.Now()
+			if err := s.docRepo.UpdateDoc(ctx, existing); err != nil {
+				return nil, err
+			}
+			result := dto.ToDocDto(existing)
+			return &result, nil
+		}
+	}
+
 	docID := uuid.New().String()
-	slug := generateSlug(req.Title) + "-" + docID[:8]
+	slug := strings.TrimSpace(req.Slug)
+	if slug == "" {
+		slug = generateSlug(req.Title) + "-" + docID[:8]
+	}
 
 	status := req.Status
 	if status == "" {
@@ -116,6 +135,14 @@ func (s *docsServiceImpl) UpdateDoc(ctx context.Context, id, userID string, req 
 		// Keep existing slug stable (e.g. "doc-180015" or Git-linked slug) so Git/SQLite links never drift on rename.
 		if doc.Slug == "" {
 			doc.Slug = generateSlug(doc.Title) + "-" + doc.ID[:8]
+		}
+	}
+	if req.Slug != nil {
+		newSlug := strings.TrimSpace(*req.Slug)
+		if newSlug != "" && newSlug != doc.Slug {
+			if conflict, err := s.docRepo.FindBySlug(ctx, newSlug); err == nil && conflict == nil {
+				doc.Slug = newSlug
+			}
 		}
 	}
 	if req.Content != nil {
@@ -253,38 +280,79 @@ func (s *docsServiceImpl) CreateRevision(ctx context.Context, docID, authorID, s
 }
 
 func (s *docsServiceImpl) SyncFromGit(ctx context.Context, ownerID string, req dto.CreateDocFromGitRequest) (*dto.DocDto, bool, error) {
+	var bySlug *domain.Doc
+	var byID *domain.Doc
+
 	if req.GitSlug != "" {
-		// Look up by slug first, then fallback to FindByID (matches id, trimmed, doc-trimmed, slug).
-		existing, err := s.docRepo.FindBySlug(ctx, req.GitSlug)
-		if err != nil || existing == nil {
-			existing, err = s.docRepo.FindByID(ctx, req.GitSlug)
+		if found, err := s.docRepo.FindBySlug(ctx, req.GitSlug); err == nil && found != nil {
+			bySlug = found
+		} else if found, err := s.docRepo.FindByID(ctx, req.GitSlug); err == nil && found != nil {
+			bySlug = found
 		}
-		if err == nil && existing != nil {
-			hasChanges := false
-			if req.Title != "" && existing.Title != req.Title {
-				existing.Title = req.Title
-				hasChanges = true
-			}
-			if req.Content != existing.Content && (req.Content != "" || existing.Content == "") {
-				existing.Content = req.Content
-				hasChanges = true
-			}
-			if sStr, ok := req.Status.(string); ok && sStr != "" && string(existing.Status) != sStr {
-				existing.Status = domain.DocStatus(sStr)
-				hasChanges = true
-			}
-			if hasChanges {
-				existing.UpdatedAt = time.Now()
-				if err := s.docRepo.UpdateDoc(ctx, existing); err != nil {
-					return nil, false, err
+	}
+	if req.BackendID != "" {
+		if found, err := s.docRepo.FindByID(ctx, req.BackendID); err == nil && found != nil {
+			byID = found
+		}
+	}
+
+	// If duplicate records exist (one by GitSlug and one by BackendID), merge and delete the extra one.
+	if bySlug != nil && byID != nil && bySlug.ID != byID.ID {
+		_ = s.docRepo.DeleteDoc(ctx, byID.ID)
+		byID = nil
+	}
+
+	existing := bySlug
+	if existing == nil {
+		existing = byID
+	}
+
+	// Fallback: match an orphaned auto-slugged doc with the same owner + title + content
+	// created before slug unification so Pull never inserts a duplicate.
+	if existing == nil && ownerID != "" && req.Title != "" {
+		if allDocs, err := s.docRepo.ListAllDocs(ctx, ownerID, nil); err == nil {
+			for i := range allDocs {
+				cand := &allDocs[i]
+				if len(cand.ID) >= 8 && cand.Title == req.Title && cand.Content == req.Content &&
+					strings.HasSuffix(cand.Slug, "-"+cand.ID[:8]) {
+					existing = cand
+					break
 				}
-				_, _ = s.CreateRevision(ctx, existing.ID, ownerID, "Synchronized from GitHub workspace", []byte(req.Content))
-				result := dto.ToDocDto(existing)
-				return &result, true, nil
 			}
-			result := dto.ToDocDto(existing)
-			return &result, false, nil
 		}
+	}
+
+	if existing != nil {
+		hasChanges := false
+		if req.GitSlug != "" && existing.Slug != req.GitSlug {
+			if conflict, err := s.docRepo.FindBySlug(ctx, req.GitSlug); err == nil && conflict == nil {
+				existing.Slug = req.GitSlug
+				hasChanges = true
+			}
+		}
+		if req.Title != "" && existing.Title != req.Title {
+			existing.Title = req.Title
+			hasChanges = true
+		}
+		if req.Content != existing.Content && (req.Content != "" || existing.Content == "") {
+			existing.Content = req.Content
+			hasChanges = true
+		}
+		if sStr, ok := req.Status.(string); ok && sStr != "" && string(existing.Status) != sStr {
+			existing.Status = domain.DocStatus(sStr)
+			hasChanges = true
+		}
+		if hasChanges {
+			existing.UpdatedAt = time.Now()
+			if err := s.docRepo.UpdateDoc(ctx, existing); err != nil {
+				return nil, false, err
+			}
+			_, _ = s.CreateRevision(ctx, existing.ID, ownerID, "Synchronized from GitHub workspace", []byte(req.Content))
+			result := dto.ToDocDto(existing)
+			return &result, true, nil
+		}
+		result := dto.ToDocDto(existing)
+		return &result, false, nil
 	}
 
 	docID := uuid.New().String()
@@ -429,8 +497,23 @@ func (s *docsServiceImpl) SyncPullRemote(ctx context.Context, ownerID string, si
 		return nil, err
 	}
 
+	// Deduplicate legacy duplicate pairs (one with "doc-<num>" slug, one auto-slugged "<title>-<uuid8>")
+	canonicalByKey := make(map[string]domain.Doc)
+	for _, d := range docs {
+		if strings.HasPrefix(d.Slug, "doc-") {
+			canonicalByKey[d.Title+"\x00"+d.Content] = d
+		}
+	}
+
 	var items []dto.DocDto
 	for _, doc := range docs {
+		isAutoSlugged := len(doc.ID) >= 8 && strings.HasSuffix(doc.Slug, "-"+doc.ID[:8])
+		if isAutoSlugged {
+			if canonical, exists := canonicalByKey[doc.Title+"\x00"+doc.Content]; exists && canonical.ID != doc.ID {
+				_ = s.docRepo.DeleteDoc(ctx, doc.ID)
+				continue
+			}
+		}
 		items = append(items, dto.ToDocDto(&doc))
 	}
 

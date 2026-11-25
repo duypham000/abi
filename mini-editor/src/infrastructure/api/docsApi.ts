@@ -34,9 +34,11 @@ function extractRemoteSyncError(err: unknown): { message: string; isNetwork: boo
   return { message: msg, isNetwork };
 }
 
-function toGoDocPayload(body: DocRequest) {
+function toGoDocPayload(body: DocRequest, localId?: number) {
+  const slug = body.slug || (localId && localId > 0 ? `doc-${localId}` : undefined);
   return {
     title: body.title || "Untitled",
+    ...(slug ? { slug } : {}),
     content: body.content ?? "",
     status: normalizeDocStatus(body.status) === 1 ? "PUBLISHED" : "DRAFT",
   };
@@ -245,7 +247,7 @@ export const docsApi = baseApi.injectEndpoints({
           }
         }
 
-        const goPayload = toGoDocPayload(body);
+        const goPayload = toGoDocPayload(body, localDoc?.id);
         try {
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
@@ -298,7 +300,7 @@ export const docsApi = baseApi.injectEndpoints({
           content: body.content,
           status: body.status,
         });
-        const goPayload = toGoDocPayload(body);
+        const goPayload = toGoDocPayload(body, localDoc?.id);
         let remoteSyncError: string | null = null;
         let remoteSyncNetworkError = false;
 

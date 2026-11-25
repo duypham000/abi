@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "@/presentation/store";
 import { docsApi } from "@/infrastructure/api/docsApi";
-import { cacheDoc } from "@/infrastructure/tauri/docCacheService";
+import { cacheDoc, deduplicateLocalDocs } from "@/infrastructure/tauri/docCacheService";
 import { parseOrHashId } from "@/core/utils/idUtils";
 import {
   useGetGithubUserQuery,
@@ -158,6 +158,7 @@ export function GitPanel() {
             await cacheDoc(doc, { force: true });
             syncedCount++;
           }
+          await deduplicateLocalDocs();
         }
         dispatch(docsApi.util.invalidateTags(["Doc"]));
       } catch (dbSyncErr) {

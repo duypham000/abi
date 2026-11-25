@@ -48,9 +48,9 @@ func (s *gitHubService) syncWorkspaceToDBInternal(ctx context.Context, userID, r
 			continue
 		}
 
-		// Parse title/slug/content from the JSON file
+		// Parse title/slug/content/backend_uuid from the JSON file
 		var rawDoc map[string]interface{}
-		var title, gitSlug, status, contentStr string
+		var title, gitSlug, backendID, status, contentStr string
 
 		if err := json.Unmarshal(data, &rawDoc); err == nil {
 			if t, ok := rawDoc["title"].(string); ok {
@@ -58,6 +58,11 @@ func (s *gitHubService) syncWorkspaceToDBInternal(ctx context.Context, userID, r
 			}
 			if s, ok := rawDoc["slug"].(string); ok {
 				gitSlug = s
+			}
+			if bu, ok := rawDoc["backend_uuid"].(string); ok {
+				backendID = bu
+			} else if bu, ok := rawDoc["backendUuid"].(string); ok {
+				backendID = bu
 			}
 			if st, ok := rawDoc["status"].(string); ok {
 				status = st
@@ -89,10 +94,11 @@ func (s *gitHubService) syncWorkspaceToDBInternal(ctx context.Context, userID, r
 		}
 
 		req := docsDto.CreateDocFromGitRequest{
-			Title:   title,
-			Content: contentStr,
-			GitSlug: gitSlug,
-			Status:  status,
+			Title:     title,
+			Content:   contentStr,
+			GitSlug:   gitSlug,
+			BackendID: backendID,
+			Status:    status,
 		}
 
 		_, _, syncErr := s.docsService.SyncFromGit(ctx, userID, req)

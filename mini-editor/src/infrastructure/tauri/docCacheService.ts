@@ -208,9 +208,81 @@ async function findLocalDocRow(
 
 // ─── SQLite Full CRUD API for Docs ─────────────────────────────────────────
 
+const DOC_NUMERIC_LOCAL_ID_RE = /^doc-(\d+)$/;
+
+function pickPreferredDocRow(a: LocalDoc, b: LocalDoc): LocalDoc {
+  const aNumeric = DOC_NUMERIC_LOCAL_ID_RE.test(a.local_id) || (a.slug ? DOC_NUMERIC_LOCAL_ID_RE.test(a.slug) : false);
+  const bNumeric = DOC_NUMERIC_LOCAL_ID_RE.test(b.local_id) || (b.slug ? DOC_NUMERIC_LOCAL_ID_RE.test(b.slug) : false);
+  if (aNumeric !== bNumeric) return aNumeric ? a : b;
+  const aDocPrefix = (a.slug ?? "").startsWith("doc-");
+  const bDocPrefix = (b.slug ?? "").startsWith("doc-");
+  if (aDocPrefix !== bDocPrefix) return aDocPrefix ? a : b;
+  if (Boolean(a.backend_uuid) !== Boolean(b.backend_uuid)) return a.backend_uuid ? a : b;
+  return a.updated_at >= b.updated_at ? a : b;
+}
+
+/**
+ * Deduplicate local SQLite doc rows caused by legacy auto-slugged docs vs `doc-<id>` Git docs.
+ */
+export async function deduplicateLocalDocs(): Promise<number> {
+  const db = await docDb();
+  if (!db) return 0;
+
+  const rows: LocalDoc[] = await db.select(`SELECT ${DOC_SELECT_COLS} FROM docs ORDER BY updated_at DESC`);
+  if (rows.length < 2) return 0;
+
+  const toDelete = new Set<string>();
+
+  // 1. Multiple rows sharing the same backend_uuid
+  const byUuid = new Map<string, LocalDoc[]>();
+  for (const row of rows) {
+    if (!row.backend_uuid) continue;
+    const list = byUuid.get(row.backend_uuid) ?? [];
+    list.push(row);
+    byUuid.set(row.backend_uuid, list);
+  }
+  for (const group of byUuid.values()) {
+    if (group.length < 2) continue;
+    let keeper = group[0];
+    for (let i = 1; i < group.length; i++) {
+      keeper = pickPreferredDocRow(keeper, group[i]);
+    }
+    for (const row of group) {
+      if (row.local_id !== keeper.local_id) {
+        toDelete.add(row.local_id);
+      }
+    }
+  }
+
+  // 2. Legacy pair: one row with slug "doc-*" and another with auto-generated slug ending "-<uuid8>"
+  const remaining = rows.filter((r) => !toDelete.has(r.local_id));
+  const docSlugRows = remaining.filter((r) => (r.slug ?? "").startsWith("doc-") || DOC_NUMERIC_LOCAL_ID_RE.test(r.local_id));
+  for (const row of remaining) {
+    if (!row.backend_uuid || !row.slug || row.slug.startsWith("doc-")) continue;
+    const uuidPrefix = row.backend_uuid.slice(0, 8);
+    if (!uuidPrefix || !row.slug.endsWith(`-${uuidPrefix}`)) continue;
+
+    const match = docSlugRows.find(
+      (candidate) =>
+        candidate.local_id !== row.local_id &&
+        candidate.title === row.title &&
+        (candidate.content ?? "") === (row.content ?? "")
+    );
+    if (match) {
+      toDelete.add(row.local_id);
+    }
+  }
+
+  for (const localId of toDelete) {
+    await db.execute(`DELETE FROM docs WHERE local_id = ?`, [localId]);
+  }
+  return toDelete.size;
+}
+
 export async function listDocsFromSqlite(params?: { page?: number; size?: number; seriesId?: number }): Promise<PageResult<DocDto>> {
   const db = await docDb();
   if (!db) return { items: [], total: 0, page: 0, pageSize: 20 };
+  await deduplicateLocalDocs();
   let rows: LocalDoc[];
   if (params?.seriesId) {
     rows = await db.select(`SELECT ${DOC_SELECT_COLS} FROM docs WHERE series_id = ? ORDER BY updated_at DESC`, [params.seriesId]);
@@ -584,6 +656,9 @@ export async function saveDocLocally(
         existing.local_id,
       ]
     );
+    if (resolvedUuid) {
+      await db.execute(`DELETE FROM docs WHERE backend_uuid = ? AND local_id != ?`, [resolvedUuid, existing.local_id]);
+    }
   } else {
     const localId = strId.startsWith("doc-") ? strId : `doc-${strId}`;
     const resolvedNumId = !isNaN(numId) && numId > 0 ? numId : parseOrHashId(localId, "doc-");

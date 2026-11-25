@@ -8,6 +8,7 @@ import (
 
 type CreateDocRequest struct {
 	Title    string           `json:"title" binding:"required"`
+	Slug     string           `json:"slug"`
 	Content  string           `json:"content"`
 	Status   domain.DocStatus `json:"status"`
 	ParentID *string          `json:"parent_id"`
@@ -17,19 +18,21 @@ type CreateDocRequest struct {
 // GitSlug is the file-system slug (e.g. "doc-180015") used for idempotency:
 // if a doc with the same (owner_id, slug) already exists it is returned as-is.
 type CreateDocFromGitRequest struct {
-	Title   string           `json:"title"`
-	Content string           `json:"content"`
-	GitSlug string           `json:"git_slug"` // e.g. "doc-180015"
-	Status  interface{}      `json:"status"`
+	Title     string      `json:"title"`
+	Content   string      `json:"content"`
+	GitSlug   string      `json:"git_slug"` // e.g. "doc-180015"
+	BackendID string      `json:"backend_id,omitempty"`
+	Status    interface{} `json:"status"`
 }
 
 type UpdateDocRequest struct {
-	Title    *string           `json:"title"`
-	Content  *string           `json:"content"`
-	Status   *domain.DocStatus `json:"status"`
-	ParentID *string           `json:"parent_id"`
-	IsPinned *bool             `json:"is_pinned"`
-	IsStarred *bool            `json:"is_starred"`
+	Title     *string           `json:"title"`
+	Slug      *string           `json:"slug"`
+	Content   *string           `json:"content"`
+	Status    *domain.DocStatus `json:"status"`
+	ParentID  *string           `json:"parent_id"`
+	IsPinned  *bool             `json:"is_pinned"`
+	IsStarred *bool             `json:"is_starred"`
 }
 
 type DocDto struct {

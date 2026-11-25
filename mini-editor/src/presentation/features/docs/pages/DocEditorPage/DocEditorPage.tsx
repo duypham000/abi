@@ -410,6 +410,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
       }
       const payload = {
         id: doc.id,
+        backend_uuid: doc.backendUuid ?? undefined,
         title: latestTitle,
         slug: `doc-${doc.id}`,
         status: latestStatus,
