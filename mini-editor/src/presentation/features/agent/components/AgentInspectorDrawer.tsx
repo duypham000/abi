@@ -12,7 +12,10 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentRuntimeConfig } from "@/core/interfaces/agent";
+import {
+  normalizeAgentMode,
+  type AgentRuntimeConfig,
+} from "@/core/interfaces/agent";
 import type {
   AgentBackendInfo,
   AgentBackendSessionConfig,
@@ -44,7 +47,7 @@ export interface AgentInspectorDrawerProps {
   onUpdateConfig: (partial: Partial<AgentRuntimeConfig>) => void;
   onResetConfig: () => void;
   onRefreshBackendMeta: () => Promise<void>;
-  onResetBackendSession: (compact: boolean) => Promise<void>;
+  onResetBackendSession: (compact: boolean, hard?: boolean) => Promise<void>;
   onApplySessionConfig: (patch: AgentBackendSessionConfig) => Promise<void>;
 }
 
@@ -75,7 +78,14 @@ export function AgentInspectorDrawer({
     setActionMsg(null);
     try {
       await onApplySessionConfig({
+        model: config.modelId || undefined,
+        mode: normalizeAgentMode(config.mode),
+        effort:
+          config.reasoningEffort === "off"
+            ? undefined
+            : config.reasoningEffort,
         systemPromptAppend: config.systemPromptAppend,
+        restartIfNeeded: true,
       });
       setActionMsg("Session config synced to GemOps.");
     } catch (err) {
@@ -85,18 +95,26 @@ export function AgentInspectorDrawer({
     } finally {
       setIsApplying(false);
     }
-  }, [config.systemPromptAppend, onApplySessionConfig]);
+  }, [
+    config.modelId,
+    config.mode,
+    config.reasoningEffort,
+    config.systemPromptAppend,
+    onApplySessionConfig,
+  ]);
 
   const handleReset = useCallback(
-    async (compact: boolean) => {
+    async (compact: boolean, hard = false) => {
       setIsApplying(true);
       setActionMsg(null);
       try {
-        await onResetBackendSession(compact);
+        await onResetBackendSession(compact, hard);
         setActionMsg(
-          compact
-            ? "Session compacted (<=300 words) and process restarted."
-            : "Session reset cleanly."
+          hard
+            ? "GemOps ACP process restarted."
+            : compact
+              ? "Session compacted (<=300 words); warm ACP process kept alive."
+              : "Current conversation session reset."
         );
       } catch (err) {
         setActionMsg(
@@ -213,30 +231,57 @@ export function AgentInspectorDrawer({
                       {backendInfo?.version || "—"}
                     </div>
                   </div>
+                  <div className="rounded-lg border border-border bg-background p-2.5">
+                    <div className="text-[10px] text-muted-foreground">
+                      Warm Sessions
+                    </div>
+                    <div className="mt-0.5 truncate font-mono font-semibold">
+                      {backendStatus?.sessionsCount ?? (backendStatus?.sessions?.length ?? 1)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border bg-background p-2.5">
+                    <div className="text-[10px] text-muted-foreground">
+                      Active Conv
+                    </div>
+                    <div className="mt-0.5 truncate font-mono font-semibold">
+                      {backendStatus?.activeConversationId || "—"}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <Button
                     className="h-7 gap-1.5 text-xs"
                     disabled={isApplying}
-                    onClick={() => void handleReset(true)}
+                    onClick={() => void handleReset(true, false)}
                     size="xs"
                     type="button"
                     variant="outline"
                   >
                     <Minimize2Icon className="size-3.5" />
-                    Compact &amp; Close
+                    Compact Session
                   </Button>
                   <Button
                     className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive"
                     disabled={isApplying}
-                    onClick={() => void handleReset(false)}
+                    onClick={() => void handleReset(false, false)}
                     size="xs"
                     type="button"
                     variant="outline"
                   >
                     <Trash2Icon className="size-3.5" />
                     Reset Session
+                  </Button>
+                  <Button
+                    className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive"
+                    disabled={isApplying}
+                    onClick={() => void handleReset(false, true)}
+                    size="xs"
+                    type="button"
+                    variant="outline"
+                  >
+                    <RefreshCwIcon className="size-3.5" />
+                    Hard Restart
                   </Button>
                 </div>
               </div>

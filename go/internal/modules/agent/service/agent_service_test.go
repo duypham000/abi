@@ -26,7 +26,10 @@ type fakeGemOpsServer struct {
 	lastPermDec    string
 	cancelCalled   bool
 	resetCompact   bool
+	resetHard      bool
 	resetHarnessID string
+	resetConvID    string
+	deletedSessID  string
 	promptStatus   int
 	promptErrMsg   string
 }
@@ -110,18 +113,42 @@ func newFakeGemOpsServer(onPrompt func(s *fakeGemOpsServer, turnID string)) *fak
 	mux.HandleFunc("POST /reset", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.resetCompact = r.URL.Query().Get("compact") == "1"
+		f.resetHard = r.URL.Query().Get("hard") == "1"
 		f.resetHarnessID = r.URL.Query().Get("harnessId")
+		f.resetConvID = r.URL.Query().Get("conversationId")
 		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "reset", "compact": f.resetCompact})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "reset", "compact": f.resetCompact, "hard": f.resetHard})
+	})
+	mux.HandleFunc("GET /sessions", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"activeConversationId": "sess_conv_1",
+			"count":                1,
+			"sessions": []dto.GemOpsSessionInfo{
+				{ConversationID: "sess_conv_1", HarnessID: "abi", Turns: 2, EstimatedChars: 420},
+			},
+		})
+	})
+	mux.HandleFunc("DELETE /sessions/{id}", func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		f.deletedSessID = r.PathValue("id")
+		f.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "deleted", "conversationId": r.PathValue("id")})
 	})
 	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(dto.GemOpsStatusResponse{
-			State:           "IDLE",
-			ActiveHarnessID: "abi",
-			GeminiPID:       1234,
-			GeminiRSSMB:     95,
+			State:                "IDLE",
+			ActiveHarnessID:      "abi",
+			ActiveConversationID: "sess_conv_1",
+			SessionsCount:        1,
+			Sessions: []dto.GemOpsSessionInfo{
+				{ConversationID: "sess_conv_1", HarnessID: "abi", Turns: 2, EstimatedChars: 420},
+			},
+			GeminiPID:   1234,
+			GeminiRSSMB: 95,
 		})
 	})
 	mux.HandleFunc("GET /agy/info", func(w http.ResponseWriter, r *http.Request) {
@@ -198,6 +225,7 @@ func TestStreamChat_TextReasoningToolUsage(t *testing.T) {
 				"input_tokens":  120,
 				"output_tokens": 30,
 				"total_tokens":  150,
+				"size":          1048576,
 			},
 		})
 		s.publish("8", "turn_complete", map[string]interface{}{
@@ -282,6 +310,9 @@ func TestStreamChat_TextReasoningToolUsage(t *testing.T) {
 	if usage["totalTokens"] != int64(150) {
 		t.Fatalf("expected totalTokens=150, got %#v", usage["totalTokens"])
 	}
+	if meta["contextWindow"] != int64(1048576) {
+		t.Fatalf("expected contextWindow=1048576, got %#v", meta["contextWindow"])
+	}
 }
 
 func TestStreamChat_PermissionApprovalAndDeny(t *testing.T) {
@@ -323,9 +354,13 @@ func TestStreamChat_PermissionApprovalAndDeny(t *testing.T) {
 		t.Fatalf("StreamChat error: %v", err)
 	}
 
-	var seenApproval, seenDenied bool
+	var seenInputStart, seenApproval, seenDenied bool
 	for _, ch := range chunks {
 		switch ch["type"] {
+		case "tool-input-start":
+			if ch["toolCallId"] == "call_99" {
+				seenInputStart = true
+			}
 		case "tool-approval-request":
 			if ch["approvalId"] == "perm_123" && ch["toolCallId"] == "call_99" {
 				seenApproval = true
@@ -336,8 +371,44 @@ func TestStreamChat_PermissionApprovalAndDeny(t *testing.T) {
 			}
 		}
 	}
-	if !seenApproval || !seenDenied {
-		t.Fatalf("expected approval request and denied output chunks, got: %+v", chunks)
+	if !seenInputStart || !seenApproval || !seenDenied {
+		t.Fatalf("expected tool-input-start, approval request and denied output chunks, got: %+v", chunks)
+	}
+}
+
+func TestAgentService_SessionsAndResetFlags(t *testing.T) {
+	fake := newFakeGemOpsServer(nil)
+	defer fake.close()
+
+	gemClient := client.NewGemOpsClient(fake.server.URL, "")
+	svc := service.NewAgentService(gemClient, "abi", 10*time.Second)
+
+	st, err := svc.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if st.SessionsCount != 1 || len(st.Sessions) != 1 || st.Sessions[0].ConversationID != "sess_conv_1" {
+		t.Fatalf("expected status.sessions preserved, got %+v", st)
+	}
+
+	if _, err := svc.Reset(context.Background(), true, true, "abi", "sess_conv_1"); err != nil {
+		t.Fatalf("Reset failed: %v", err)
+	}
+	fake.mu.Lock()
+	compact, hard, hid, cid := fake.resetCompact, fake.resetHard, fake.resetHarnessID, fake.resetConvID
+	fake.mu.Unlock()
+	if !compact || !hard || hid != "abi" || cid != "sess_conv_1" {
+		t.Fatalf("unexpected reset query params: compact=%v hard=%v harness=%q conv=%q", compact, hard, hid, cid)
+	}
+
+	if _, err := svc.DeleteSession(context.Background(), "sess_conv_1", "abi"); err != nil {
+		t.Fatalf("DeleteSession failed: %v", err)
+	}
+	fake.mu.Lock()
+	deleted := fake.deletedSessID
+	fake.mu.Unlock()
+	if deleted != "sess_conv_1" {
+		t.Fatalf("expected deleted session sess_conv_1, got %q", deleted)
 	}
 }
 

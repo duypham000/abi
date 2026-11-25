@@ -471,10 +471,21 @@ function ComposerInner({
     return availableModes[0] ?? "default";
   }, [mode, availableModes]);
 
+  const reasoningOrder = useMemo<ReasoningEffort[]>(() => {
+    const serverEfforts = (backendInfo?.efforts ?? []).filter(
+      (e): e is ReasoningEffort =>
+        ["low", "medium", "high", "xhigh", "max"].includes(e)
+    );
+    return [
+      "off",
+      ...(serverEfforts.length > 0 ? serverEfforts : REASONING_ORDER.slice(1)),
+    ];
+  }, [backendInfo?.efforts]);
+
   const nextReasoningEffort = useMemo(() => {
-    const idx = REASONING_ORDER.indexOf(reasoningEffort);
-    return REASONING_ORDER[(idx + 1) % REASONING_ORDER.length];
-  }, [reasoningEffort]);
+    const idx = reasoningOrder.indexOf(reasoningEffort);
+    return reasoningOrder[(idx + 1) % reasoningOrder.length];
+  }, [reasoningEffort, reasoningOrder]);
 
   const isGenerating = status === "submitted" || status === "streaming";
   const hasPayload = inputValue.trim().length > 0;

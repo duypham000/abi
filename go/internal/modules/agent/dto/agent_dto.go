@@ -16,8 +16,11 @@ type WorkspaceContextItem struct {
 
 // UIMessagePart represents one part in an AI SDK v6 UIMessage.
 type UIMessagePart struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
+	Type      string `json:"type"`
+	Text      string `json:"text,omitempty"`
+	URL       string `json:"url,omitempty"`
+	MediaType string `json:"mediaType,omitempty"`
+	Filename  string `json:"filename,omitempty"`
 }
 
 // UIMessage represents an incoming chat message from AI SDK v6 DefaultChatTransport.
@@ -99,31 +102,44 @@ type GemOpsPendingApproval struct {
 	ExpiresAt  string   `json:"expiresAt"`
 }
 
+// GemOpsSessionInfo mirrors one warm conversation entry from gemops GET /status or GET /sessions.
+type GemOpsSessionInfo struct {
+	ConversationID  string `json:"conversationId"`
+	ACPSessionID    string `json:"acpSessionId,omitempty"`
+	HarnessID       string `json:"harnessId,omitempty"`
+	Turns           int    `json:"turns"`
+	EstimatedChars  int    `json:"estimatedChars"`
+	CreatedAt       string `json:"createdAt,omitempty"`
+	LastUsedAt      string `json:"lastUsedAt,omitempty"`
+	NeedsNewSession bool   `json:"needsNewSession,omitempty"`
+}
+
 // GemOpsStatusResponse mirrors gemops GET /status.
 type GemOpsStatusResponse struct {
-	InstanceID          string                  `json:"instanceId,omitempty"`
-	State               string                  `json:"state"`
-	StateSeq            uint64                  `json:"stateSeq"`
-	DefaultHarnessID    string                  `json:"defaultHarnessId"`
-	ActiveHarnessID     string                  `json:"activeHarnessId"`
-	ActiveHarnessName   string                  `json:"activeHarnessName,omitempty"`
+	InstanceID           string                  `json:"instanceId,omitempty"`
+	State                string                  `json:"state"`
+	StateSeq             uint64                  `json:"stateSeq"`
+	DefaultHarnessID     string                  `json:"defaultHarnessId"`
+	ActiveHarnessID      string                  `json:"activeHarnessId"`
+	ActiveHarnessName    string                  `json:"activeHarnessName,omitempty"`
 	ActiveHarnessRev     string                  `json:"activeHarnessRevision,omitempty"`
 	ActivePolicyProfile  string                  `json:"activePolicyProfile,omitempty"`
 	ActiveConversationID string                  `json:"activeConversationId,omitempty"`
 	SessionID            string                  `json:"sessionId,omitempty"`
 	SessionsCount        int                     `json:"sessionsCount,omitempty"`
-	ActiveTurnID        string                  `json:"activeTurnId,omitempty"`
-	ActiveToolsCount    int                     `json:"activeToolsCount"`
-	GeminiPID           int                     `json:"geminiPid"`
-	GeminiRSSMB         int64                   `json:"geminiRssMB"`
-	GoAllocMB           float64                 `json:"goAllocMB"`
-	TurnCount           int                     `json:"turnCount"`
-	IdleSeconds         int64                   `json:"idleSeconds"`
-	HasSummary          bool                    `json:"hasSummary"`
-	SummaryPreview      string                  `json:"summaryPreview,omitempty"`
-	PendingApprovals    []GemOpsPendingApproval `json:"pendingApprovals"`
-	SessionConfig       GemOpsSessionConfig     `json:"sessionConfig"`
-	LastUsage           map[string]interface{}  `json:"lastUsage,omitempty"`
+	Sessions             []GemOpsSessionInfo     `json:"sessions,omitempty"`
+	ActiveTurnID         string                  `json:"activeTurnId,omitempty"`
+	ActiveToolsCount     int                     `json:"activeToolsCount"`
+	GeminiPID            int                     `json:"geminiPid"`
+	GeminiRSSMB          int64                   `json:"geminiRssMB"`
+	GoAllocMB            float64                 `json:"goAllocMB"`
+	TurnCount            int                     `json:"turnCount"`
+	IdleSeconds          int64                   `json:"idleSeconds"`
+	HasSummary           bool                    `json:"hasSummary"`
+	SummaryPreview       string                  `json:"summaryPreview,omitempty"`
+	PendingApprovals     []GemOpsPendingApproval `json:"pendingApprovals"`
+	SessionConfig        GemOpsSessionConfig     `json:"sessionConfig"`
+	LastUsage            map[string]interface{}  `json:"lastUsage,omitempty"`
 }
 
 // GemOpsModelOption mirrors gemops agy.ModelOption.

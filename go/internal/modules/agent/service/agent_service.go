@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,7 +34,7 @@ type AgentBackend interface {
 	StartPrompt(ctx context.Context, req dto.GemOpsPromptRequest, actor string) (*dto.GemOpsPromptResponse, error)
 	ResolvePermission(ctx context.Context, permID, decision, actor string) (map[string]interface{}, error)
 	Cancel(ctx context.Context) (map[string]interface{}, error)
-	Reset(ctx context.Context, compact bool, harnessID, conversationID string) (map[string]interface{}, error)
+	Reset(ctx context.Context, compact, hard bool, harnessID, conversationID string) (map[string]interface{}, error)
 	ListSessions(ctx context.Context) (map[string]interface{}, error)
 	DeleteSession(ctx context.Context, conversationID, harnessID string) (map[string]interface{}, error)
 	SubscribeEvents(ctx context.Context, lastEventID string) (*client.EventStream, error)
@@ -104,6 +105,7 @@ func (s *AgentService) GetSessionConfig(ctx context.Context) (*dto.GemOpsSession
 }
 
 func (s *AgentService) UpdateSessionConfig(ctx context.Context, cfg dto.GemOpsSessionConfig, actor string) (map[string]interface{}, error) {
+	cfg.Model = normalizeGemOpsModel(cfg.Model)
 	cfg.Mode = normalizeGemOpsMode(cfg.Mode)
 	cfg.Effort = normalizeGemOpsEffort(cfg.Effort)
 	return s.backend.UpdateSessionConfig(ctx, cfg, actor)
@@ -137,8 +139,8 @@ func (s *AgentService) Cancel(ctx context.Context) (map[string]interface{}, erro
 	return s.backend.Cancel(ctx)
 }
 
-func (s *AgentService) Reset(ctx context.Context, compact bool, harnessID, conversationID string) (map[string]interface{}, error) {
-	return s.backend.Reset(ctx, compact, harnessID, conversationID)
+func (s *AgentService) Reset(ctx context.Context, compact, hard bool, harnessID, conversationID string) (map[string]interface{}, error) {
+	return s.backend.Reset(ctx, compact, hard, harnessID, conversationID)
 }
 
 func (s *AgentService) ListSessions(ctx context.Context) (map[string]interface{}, error) {
@@ -281,14 +283,15 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 	}
 
 	state := &streamTranslator{
-		acceptedTurnID:  acceptedTurnID,
-		modelID:         requestedModelID,
-		startTime:       startTime,
-		emit:            emit,
-		emittedTools:    make(map[string]bool),
-		terminalTools:   make(map[string]bool),
-		permToToolCall:  make(map[string]string),
-		toolNamesByCall: make(map[string]string),
+		acceptedTurnID:      acceptedTurnID,
+		modelID:             requestedModelID,
+		startTime:           startTime,
+		emit:                emit,
+		emittedTools:        make(map[string]bool),
+		terminalTools:       make(map[string]bool),
+		unresolvedApprovals: make(map[string]bool),
+		permToToolCall:      make(map[string]string),
+		toolNamesByCall:     make(map[string]string),
 	}
 
 	var lastEventID string
@@ -440,14 +443,16 @@ type streamTranslator struct {
 	startTime      time.Time
 	emit           ChunkEmitter
 
-	partSeq         int
-	openReasoningID string
-	openTextID      string
-	emittedTools    map[string]bool
-	terminalTools   map[string]bool
-	permToToolCall  map[string]string
-	toolNamesByCall map[string]string
-	lastUsage       map[string]interface{}
+	partSeq             int
+	openReasoningID     string
+	openTextID          string
+	emittedTools        map[string]bool
+	terminalTools       map[string]bool
+	unresolvedApprovals map[string]bool
+	permToToolCall      map[string]string
+	toolNamesByCall     map[string]string
+	lastUsage           map[string]interface{}
+	lastContextWindow   int64
 }
 
 func (t *streamTranslator) nextPartID(prefix string) string {
@@ -515,6 +520,9 @@ func (t *streamTranslator) buildFinishChunk(finishReason, finishDetail string) m
 	}
 	if t.lastUsage != nil {
 		meta["usage"] = t.lastUsage
+	}
+	if t.lastContextWindow > 0 {
+		meta["contextWindow"] = t.lastContextWindow
 	}
 	return map[string]interface{}{
 		"type":            "finish",
@@ -600,6 +608,7 @@ func (t *streamTranslator) handleEvent(ev *dto.GemOpsEvent) (bool, error) {
 		permID, _ := payload["id"].(string)
 		decision, _ := payload["decision"].(string)
 		if toolCallID, ok := t.permToToolCall[permID]; ok && strings.EqualFold(decision, "deny") {
+			delete(t.unresolvedApprovals, toolCallID)
 			if !t.terminalTools[toolCallID] {
 				t.terminalTools[toolCallID] = true
 				return false, t.emit(map[string]interface{}{
@@ -613,6 +622,9 @@ func (t *streamTranslator) handleEvent(ev *dto.GemOpsEvent) (bool, error) {
 	case "usage_update":
 		if rawUsage, ok := payload["usage"].(map[string]interface{}); ok {
 			t.lastUsage = normalizeUsage(rawUsage)
+			if cw := extractContextWindow(rawUsage); cw > 0 {
+				t.lastContextWindow = cw
+			}
 		}
 		return false, nil
 
@@ -647,6 +659,18 @@ func (t *streamTranslator) handleEvent(ev *dto.GemOpsEvent) (bool, error) {
 		return true, t.finishWithError("gemops session was reset")
 
 	case "turn_complete":
+		for toolCallID := range t.unresolvedApprovals {
+			delete(t.unresolvedApprovals, toolCallID)
+			if !t.terminalTools[toolCallID] {
+				t.terminalTools[toolCallID] = true
+				if err := t.emit(map[string]interface{}{
+					"type":       "tool-output-denied",
+					"toolCallId": toolCallID,
+				}); err != nil {
+					return true, err
+				}
+			}
+		}
 		if err := t.closeOpenTextAndReasoning(); err != nil {
 			return true, err
 		}
@@ -723,6 +747,7 @@ func (t *streamTranslator) handleToolUpdate(payload map[string]interface{}) erro
 	normStatus := strings.ToLower(strings.TrimSpace(status))
 	switch normStatus {
 	case "completed", "complete", "done", "succeeded", "success", "finished":
+		delete(t.unresolvedApprovals, toolCallID)
 		t.terminalTools[toolCallID] = true
 		outputVal := extractToolOutput(rawMap, payload)
 		return t.emit(map[string]interface{}{
@@ -732,6 +757,7 @@ func (t *streamTranslator) handleToolUpdate(payload map[string]interface{}) erro
 			"dynamic":    true,
 		})
 	case "failed", "error", "cancelled", "canceled", "rejected", "denied", "aborted":
+		delete(t.unresolvedApprovals, toolCallID)
 		t.terminalTools[toolCallID] = true
 		errText := firstNonEmptyString(
 			stringFromMap(rawMap, "error", "errorText", "message"),
@@ -764,6 +790,19 @@ func (t *streamTranslator) handlePermissionRequest(rawData json.RawMessage) erro
 
 	if !t.emittedTools[toolCallID] {
 		t.emittedTools[toolCallID] = true
+		startChunk := map[string]interface{}{
+			"type":       "tool-input-start",
+			"toolCallId": toolCallID,
+			"toolName":   toolName,
+			"dynamic":    true,
+		}
+		if title != "" {
+			startChunk["title"] = title
+		}
+		if err := t.emit(startChunk); err != nil {
+			return err
+		}
+
 		inputObj := map[string]interface{}{}
 		if pa.Kind != "" {
 			inputObj["kind"] = pa.Kind
@@ -792,6 +831,10 @@ func (t *streamTranslator) handlePermissionRequest(rawData json.RawMessage) erro
 		}
 	}
 
+	if t.unresolvedApprovals == nil {
+		t.unresolvedApprovals = make(map[string]bool)
+	}
+	t.unresolvedApprovals[toolCallID] = true
 	return t.emit(map[string]interface{}{
 		"type":       "tool-approval-request",
 		"approvalId": pa.ID,
@@ -808,11 +851,21 @@ func buildPromptText(req dto.ChatRequest) string {
 		}
 		var sb strings.Builder
 		for _, part := range msg.Parts {
-			if part.Type == "text" && strings.TrimSpace(part.Text) != "" {
-				if sb.Len() > 0 {
-					sb.WriteString("\n")
+			switch part.Type {
+			case "text":
+				if strings.TrimSpace(part.Text) != "" {
+					if sb.Len() > 0 {
+						sb.WriteString("\n")
+					}
+					sb.WriteString(part.Text)
 				}
-				sb.WriteString(part.Text)
+			case "file":
+				if attachmentText := formatAttachedFilePart(part); attachmentText != "" {
+					if sb.Len() > 0 {
+						sb.WriteString("\n")
+					}
+					sb.WriteString(attachmentText)
+				}
 			}
 		}
 		userText = strings.TrimSpace(sb.String())
@@ -912,6 +965,49 @@ func normalizeUsage(raw map[string]interface{}) map[string]interface{} {
 		"totalTokens":       totalTokens,
 		"cachedInputTokens": cacheReadTokens,
 		"reasoningTokens":   reasoningTokens,
+	}
+}
+
+func extractContextWindow(raw map[string]interface{}) int64 {
+	return numberFromMap(raw, "size", "contextWindow", "context_window", "maxTokens", "max_tokens")
+}
+
+func formatAttachedFilePart(part dto.UIMessagePart) string {
+	name := strings.TrimSpace(part.Filename)
+	if name == "" {
+		name = "attachment"
+	}
+	mediaType := strings.ToLower(strings.TrimSpace(part.MediaType))
+	rawURL := strings.TrimSpace(part.URL)
+	if strings.HasPrefix(rawURL, "data:") {
+		if commaIdx := strings.Index(rawURL, ","); commaIdx > 0 {
+			header := strings.ToLower(rawURL[5:commaIdx])
+			payload := rawURL[commaIdx+1:]
+			if mediaType == "" {
+				mediaType = strings.Split(header, ";")[0]
+			}
+			if isTextLikeMediaType(mediaType) && strings.Contains(header, ";base64") {
+				if decoded, err := base64.StdEncoding.DecodeString(payload); err == nil && len(decoded) > 0 && len(decoded) <= 64*1024 {
+					return fmt.Sprintf("[Attached file: %s (%s)]\n```\n%s\n```", name, mediaType, string(decoded))
+				}
+			}
+		}
+	}
+	if mediaType != "" {
+		return fmt.Sprintf("[Attached file: %s (%s)]", name, mediaType)
+	}
+	return fmt.Sprintf("[Attached file: %s]", name)
+}
+
+func isTextLikeMediaType(mediaType string) bool {
+	if strings.HasPrefix(mediaType, "text/") {
+		return true
+	}
+	switch mediaType {
+	case "application/json", "application/xml", "application/javascript", "application/typescript", "application/x-yaml", "application/yaml":
+		return true
+	default:
+		return false
 	}
 }
 

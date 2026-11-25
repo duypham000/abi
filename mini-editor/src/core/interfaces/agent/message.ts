@@ -58,6 +58,7 @@ export interface AgentMessageMetadata {
   createdAt?: string;
   durationMs?: number;
   usage?: LanguageModelUsage;
+  contextWindow?: number;
   finishReason?: string;
   stoppedByUser?: boolean;
   branchGroupId?: string;

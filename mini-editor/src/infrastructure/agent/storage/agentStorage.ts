@@ -1,5 +1,7 @@
 import {
   DEFAULT_RUNTIME_CONFIG,
+  normalizeAgentMode,
+  normalizeReasoningEffort,
   type AgentRuntimeConfig,
   type AgentSession,
   type CheckpointSnapshot,
@@ -28,13 +30,18 @@ export async function loadSessions(): Promise<AgentSession[]> {
     const raw = await getItem(AGENT_STORAGE_KEYS.sessions);
     const parsed = safeJsonParse<unknown>(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item): item is AgentSession =>
-        Boolean(item) &&
-        typeof item === "object" &&
-        typeof (item as AgentSession).id === "string" &&
-        Array.isArray((item as AgentSession).messages)
-    );
+    return parsed
+      .filter(
+        (item): item is AgentSession =>
+          Boolean(item) &&
+          typeof item === "object" &&
+          typeof (item as AgentSession).id === "string" &&
+          Array.isArray((item as AgentSession).messages)
+      )
+      .map((item) => ({
+        ...item,
+        mode: normalizeAgentMode(item.mode),
+      }));
   } catch {
     return [];
   }
@@ -79,6 +86,8 @@ export async function loadConfig(): Promise<AgentRuntimeConfig | null> {
     return {
       ...DEFAULT_RUNTIME_CONFIG,
       ...parsed,
+      mode: normalizeAgentMode(parsed.mode),
+      reasoningEffort: normalizeReasoningEffort(parsed.reasoningEffort),
       toolPermissions: {
         ...DEFAULT_RUNTIME_CONFIG.toolPermissions,
         ...(parsed.toolPermissions ?? {}),

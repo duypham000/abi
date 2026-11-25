@@ -425,10 +425,13 @@ func (c *GemOpsClient) Cancel(ctx context.Context) (map[string]interface{}, erro
 	return out, nil
 }
 
-func (c *GemOpsClient) Reset(ctx context.Context, compact bool, harnessID, conversationID string) (map[string]interface{}, error) {
+func (c *GemOpsClient) Reset(ctx context.Context, compact, hard bool, harnessID, conversationID string) (map[string]interface{}, error) {
 	q := url.Values{}
 	if compact {
 		q.Set("compact", "1")
+	}
+	if hard {
+		q.Set("hard", "1")
 	}
 	trimmedHarness := strings.TrimSpace(harnessID)
 	if trimmedHarness != "" {

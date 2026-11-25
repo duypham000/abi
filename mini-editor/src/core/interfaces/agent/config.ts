@@ -1,10 +1,52 @@
 import type { AgentToolName } from "./message";
 
-export type AgentMode = "agent" | "plan" | "ask" | "debug";
+export type AgentMode =
+  | "default"
+  | "accept-edits"
+  | "auto"
+  | "plan"
+  | "agent"
+  | "ask"
+  | "debug";
 
 export type ApprovalPolicy = "ask" | "auto-safe" | "auto-all";
 
-export type ReasoningEffort = "off" | "low" | "medium" | "high";
+export type ReasoningEffort =
+  | "off"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max";
+
+export function normalizeAgentMode(mode?: string | null): AgentMode {
+  const trimmed = (mode ?? "").trim().toLowerCase();
+  if (
+    trimmed === "accept-edits" ||
+    trimmed === "auto" ||
+    trimmed === "plan"
+  ) {
+    return trimmed;
+  }
+  return "default";
+}
+
+export function normalizeReasoningEffort(
+  effort?: string | null
+): ReasoningEffort {
+  const trimmed = (effort ?? "").trim().toLowerCase();
+  switch (trimmed) {
+    case "off":
+    case "low":
+    case "medium":
+    case "high":
+    case "xhigh":
+    case "max":
+      return trimmed;
+    default:
+      return "medium";
+  }
+}
 
 export type TransportMode = "mock" | "http";
 
@@ -323,7 +365,7 @@ export const DEFAULT_AGENT_PROFILE: AgentProfile = {
     "Local-first engineering & documentation agent for mini-editor, Go backend, and Yjs CRDT workspaces.",
   systemInstructions:
     "Respect TypeScript strict mode, ProseMirror single-instance pins, local-first SQLite caching, and verify changes with tsc before committing.",
-  defaultMode: "agent",
+  defaultMode: "default",
   defaultModelId: "",
   personaVariant: "obsidian",
   voiceId: "nova",
@@ -347,7 +389,7 @@ export const DEFAULT_RUNTIME_CONFIG: AgentRuntimeConfig = {
   harnessId: "",
   systemPromptAppend: "",
   modelId: "",
-  mode: "agent",
+  mode: "default",
   approvalPolicy: "ask",
   reasoningEffort: "medium",
   mockSpeed: "fast",

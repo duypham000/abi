@@ -330,6 +330,8 @@ func (h *AgentHandler) Cancel(c *gin.Context) {
 func (h *AgentHandler) Reset(c *gin.Context) {
 	compactQ := strings.ToLower(strings.TrimSpace(c.Query("compact")))
 	compact := compactQ == "1" || compactQ == "true" || compactQ == "yes"
+	hardQ := strings.ToLower(strings.TrimSpace(c.Query("hard")))
+	hard := hardQ == "1" || hardQ == "true" || hardQ == "yes"
 	harnessID := strings.TrimSpace(c.Query("harnessId"))
 	if harnessID == "" {
 		harnessID = strings.TrimSpace(c.GetHeader("X-Harness-Id"))
@@ -338,7 +340,7 @@ func (h *AgentHandler) Reset(c *gin.Context) {
 	if conversationID == "" {
 		conversationID = strings.TrimSpace(c.GetHeader("X-Conversation-Id"))
 	}
-	res, err := h.svc.Reset(c.Request.Context(), compact, harnessID, conversationID)
+	res, err := h.svc.Reset(c.Request.Context(), compact, hard, harnessID, conversationID)
 	if err != nil {
 		h.writeUpstreamError(c, err)
 		return

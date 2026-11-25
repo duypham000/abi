@@ -17,13 +17,14 @@ import {
 import type { AgentToolPart } from "@/core/interfaces/agent";
 import { getToolName, type DynamicToolUIPart } from "ai";
 import { ShieldAlertIcon, ShieldCheckIcon, ShieldXIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export type SupportedToolPart = AgentToolPart | DynamicToolUIPart;
 
 export interface ToolPartRendererProps {
   part: SupportedToolPart;
-  onApproveTool: (approvalId: string, reason?: string) => void;
-  onDenyTool: (approvalId: string, reason?: string) => void;
+  onApproveTool: (approvalId: string, reason?: string) => void | Promise<void>;
+  onDenyTool: (approvalId: string, reason?: string) => void | Promise<void>;
 }
 
 function summarizeApprovalTarget(input: unknown): string | null {
@@ -49,15 +50,41 @@ function ToolApprovalCard({
 }: {
   part: SupportedToolPart;
   toolName: string;
-  onApproveTool: (approvalId: string, reason?: string) => void;
-  onDenyTool: (approvalId: string, reason?: string) => void;
+  onApproveTool: (approvalId: string, reason?: string) => void | Promise<void>;
+  onDenyTool: (approvalId: string, reason?: string) => void | Promise<void>;
 }) {
+  const [submittingDecision, setSubmittingDecision] = useState<
+    "allow" | "deny" | null
+  >(null);
+  const approvalId =
+    "approval" in part && part.approval ? part.approval.id : undefined;
+
+  useEffect(() => {
+    if (part.state !== "approval-requested") {
+      setSubmittingDecision(null);
+    }
+  }, [part.state, approvalId]);
+
   if (!("approval" in part) || !part.approval) {
     return null;
   }
 
   const approval = part.approval;
   const targetSummary = summarizeApprovalTarget(part.input);
+
+  const handleDecision = async (decision: "allow" | "deny") => {
+    if (submittingDecision !== null) return;
+    setSubmittingDecision(decision);
+    try {
+      if (decision === "allow") {
+        await onApproveTool(approval.id, "Approved by user");
+      } else {
+        await onDenyTool(approval.id, "Denied by user");
+      }
+    } catch {
+      setSubmittingDecision(null);
+    }
+  };
 
   return (
     <Confirmation approval={approval} state={part.state}>
@@ -98,16 +125,18 @@ function ToolApprovalCard({
 
       <ConfirmationActions>
         <ConfirmationAction
-          onClick={() => onDenyTool(approval.id, "Denied by user")}
+          disabled={submittingDecision !== null}
+          onClick={() => void handleDecision("deny")}
           variant="outline"
         >
-          Deny
+          {submittingDecision === "deny" ? "Denying…" : "Deny"}
         </ConfirmationAction>
         <ConfirmationAction
-          onClick={() => onApproveTool(approval.id, "Approved by user")}
+          disabled={submittingDecision !== null}
+          onClick={() => void handleDecision("allow")}
           variant="default"
         >
-          Approve &amp; Execute
+          {submittingDecision === "allow" ? "Approving…" : "Approve & Execute"}
         </ConfirmationAction>
       </ConfirmationActions>
     </Confirmation>

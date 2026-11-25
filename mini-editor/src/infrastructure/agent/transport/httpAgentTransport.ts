@@ -1,4 +1,8 @@
-import type { AgentRuntimeConfig, AgentUIMessage } from "@/core/interfaces/agent";
+import {
+  normalizeAgentMode,
+  type AgentRuntimeConfig,
+  type AgentUIMessage,
+} from "@/core/interfaces/agent";
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
 import { resolveAgentApiEndpoint } from "../api/agentBackendApi";
 import {
@@ -32,11 +36,23 @@ function normalizeHeaders(
   return { ...input };
 }
 
+export type SessionMetaGetter = (chatId: string) =>
+  | {
+      mode?: string;
+      modelId?: string;
+    }
+  | undefined;
+
 export class HttpAgentTransport implements ChatTransport<AgentUIMessage> {
   private readonly getConfig: () => AgentRuntimeConfig;
+  private readonly getSessionMeta?: SessionMetaGetter;
 
-  constructor(getConfig: () => AgentRuntimeConfig) {
+  constructor(
+    getConfig: () => AgentRuntimeConfig,
+    getSessionMeta?: SessionMetaGetter
+  ) {
     this.getConfig = getConfig;
+    this.getSessionMeta = getSessionMeta;
   }
 
   private createUnderlyingTransport(): DefaultChatTransport<AgentUIMessage> {
@@ -60,25 +76,38 @@ export class HttpAgentTransport implements ChatTransport<AgentUIMessage> {
       },
       prepareSendMessagesRequest: async (reqOptions) => {
         const currentConfig = this.getConfig();
+        const sessionMeta = this.getSessionMeta?.(reqOptions.id);
+        const resolvedMode = normalizeAgentMode(
+          sessionMeta?.mode ?? currentConfig.mode
+        );
+        const resolvedModelId =
+          sessionMeta?.modelId !== undefined
+            ? sessionMeta.modelId
+            : currentConfig.modelId;
         const extraBody =
           reqOptions.body && typeof reqOptions.body === "object"
             ? reqOptions.body
             : {};
+        const reqHeaders = normalizeHeaders(reqOptions.headers);
+        if (reqOptions.id && reqOptions.id.trim()) {
+          reqHeaders["X-Conversation-Id"] = reqOptions.id.trim();
+        }
 
         return {
           api: resolveApiUrl(currentConfig.apiEndpoint),
-          headers: normalizeHeaders(reqOptions.headers),
+          headers: reqHeaders,
           credentials: reqOptions.credentials,
           body: {
             ...extraBody,
             id: reqOptions.id,
+            conversationId: reqOptions.id,
             messages: reqOptions.messages,
             trigger: reqOptions.trigger,
             messageId: reqOptions.messageId,
             requestMetadata: reqOptions.requestMetadata,
             agentConfig: {
-              modelId: currentConfig.modelId,
-              mode: currentConfig.mode,
+              modelId: resolvedModelId,
+              mode: resolvedMode,
               reasoningEffort: currentConfig.reasoningEffort,
               harnessId: currentConfig.harnessId,
               systemPromptAppend: currentConfig.systemPromptAppend,

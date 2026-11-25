@@ -107,10 +107,19 @@ function mergeContextItems(
 
 function computeContextUsage(
   messages: AgentUIMessage[],
-  modelId: string
+  modelId: string,
+  backendStatus?: AgentBackendStatus | null
 ): AgentContextUsage {
   const matchedModel = DEFAULT_MODELS.find((m) => m.id === modelId);
-  const maxTokens = matchedModel?.contextWindow ?? 128000;
+  const statusWindow =
+    typeof backendStatus?.lastUsage?.size === "number" &&
+    backendStatus.lastUsage.size > 0
+      ? backendStatus.lastUsage.size
+      : undefined;
+  let maxTokens =
+    statusWindow ??
+    matchedModel?.contextWindow ??
+    (modelId === "" ? 1_000_000 : 128_000);
 
   let hasUsage = false;
   let inputTokens = 0;
@@ -124,6 +133,12 @@ function computeContextUsage(
 
   for (const msg of messages) {
     if (msg.role !== "assistant") continue;
+    if (
+      typeof msg.metadata?.contextWindow === "number" &&
+      msg.metadata.contextWindow > 0
+    ) {
+      maxTokens = msg.metadata.contextWindow;
+    }
     const u = msg.metadata?.usage;
     if (!u) continue;
     hasUsage = true;
@@ -215,9 +230,14 @@ export function useAgentRuntime() {
     void hydrate();
   }, [hydrate]);
 
-  // Memoize dynamic transport reading live store config
+  // Memoize dynamic transport reading live store config and per-session mode/model
   const transport = useMemo(
-    () => createAgentTransport(() => useAgentStore.getState().config),
+    () =>
+      createAgentTransport(
+        () => useAgentStore.getState().config,
+        (chatId) =>
+          useAgentStore.getState().sessions.find((s) => s.id === chatId)
+      ),
     []
   );
 
@@ -609,11 +629,15 @@ export function useAgentRuntime() {
         apiEndpoint: currentCfg.apiEndpoint,
         apiKey: currentCfg.apiKey,
       });
-      await addToolApprovalResponse({
-        id: approvalId,
-        approved: true,
-        ...(reason !== undefined ? { reason } : {}),
-      });
+      try {
+        await addToolApprovalResponse({
+          id: approvalId,
+          approved: true,
+          ...(reason !== undefined ? { reason } : {}),
+        });
+      } catch {
+        // SSE stream remains open and will emit tool-output-available
+      }
     },
     [addToolApprovalResponse]
   );
@@ -626,11 +650,15 @@ export function useAgentRuntime() {
         apiEndpoint: currentCfg.apiEndpoint,
         apiKey: currentCfg.apiKey,
       });
-      await addToolApprovalResponse({
-        id: approvalId,
-        approved: false,
-        ...(reason !== undefined ? { reason } : {}),
-      });
+      try {
+        await addToolApprovalResponse({
+          id: approvalId,
+          approved: false,
+          ...(reason !== undefined ? { reason } : {}),
+        });
+      } catch {
+        // SSE stream remains open and will emit tool-output-denied
+      }
     },
     [addToolApprovalResponse]
   );
@@ -961,17 +989,19 @@ export function useAgentRuntime() {
     void cancelAgentTurn({
       apiEndpoint: currentCfg.apiEndpoint,
       apiKey: currentCfg.apiKey,
+      conversationId: activeSessionIdRef.current,
     }).catch(() => undefined);
     await stop();
   }, [isAudioSpeaking, stop]);
 
   const resetBackendSession = useCallback(
-    async (compact: boolean) => {
+    async (compact: boolean, hard = false) => {
       const currentCfg = useAgentStore.getState().config;
       await resetAgentSession(compact, currentCfg.harnessId, {
         apiEndpoint: currentCfg.apiEndpoint,
         apiKey: currentCfg.apiKey,
         conversationId: activeSessionIdRef.current,
+        hard,
       });
       await refreshBackendMeta();
     },
@@ -1034,8 +1064,8 @@ export function useAgentRuntime() {
 
   const effectiveModelId = activeSession.modelId || config.modelId;
   const contextUsage = useMemo(
-    () => computeContextUsage(messages, effectiveModelId),
-    [messages, effectiveModelId]
+    () => computeContextUsage(messages, effectiveModelId, backendStatus),
+    [messages, effectiveModelId, backendStatus]
   );
 
   const sessionTodos: QueueTodoItem[] = activeSession.todos;

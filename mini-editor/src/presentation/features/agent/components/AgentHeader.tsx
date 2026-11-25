@@ -406,7 +406,10 @@ export function AgentHeader({
             <button
               className="agent-wide-only shrink-0 cursor-pointer items-center"
               onClick={onOpenInspectorRuntime}
-              title={backendError ?? "Inspect GemOps runtime & harness"}
+              title={
+                backendError ??
+                `Inspect GemOps runtime & harness${(backendStatus?.sessionsCount ?? 0) > 1 ? ` (${backendStatus?.sessionsCount} warm sessions)` : ""}`
+              }
               type="button"
             >
               <Badge

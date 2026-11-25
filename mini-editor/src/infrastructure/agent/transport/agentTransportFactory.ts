@@ -1,12 +1,18 @@
 import type { AgentRuntimeConfig, AgentUIMessage } from "@/core/interfaces/agent";
 import type { ChatTransport, UIMessageChunk } from "ai";
-import { HttpAgentTransport } from "./httpAgentTransport";
+import {
+  HttpAgentTransport,
+  type SessionMetaGetter,
+} from "./httpAgentTransport";
 
 export class DynamicAgentTransport implements ChatTransport<AgentUIMessage> {
   private readonly httpTransport: HttpAgentTransport;
 
-  constructor(getConfig: () => AgentRuntimeConfig) {
-    this.httpTransport = new HttpAgentTransport(getConfig);
+  constructor(
+    getConfig: () => AgentRuntimeConfig,
+    getSessionMeta?: SessionMetaGetter
+  ) {
+    this.httpTransport = new HttpAgentTransport(getConfig, getSessionMeta);
   }
 
   sendMessages(
@@ -23,7 +29,8 @@ export class DynamicAgentTransport implements ChatTransport<AgentUIMessage> {
 }
 
 export function createAgentTransport(
-  getConfig: () => AgentRuntimeConfig
+  getConfig: () => AgentRuntimeConfig,
+  getSessionMeta?: SessionMetaGetter
 ): ChatTransport<AgentUIMessage> {
-  return new DynamicAgentTransport(getConfig);
+  return new DynamicAgentTransport(getConfig, getSessionMeta);
 }

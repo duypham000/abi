@@ -25,6 +25,17 @@ export interface AgentBackendSessionConfig {
   restartIfNeeded?: boolean;
 }
 
+export interface AgentBackendSessionInfo {
+  conversationId: string;
+  acpSessionId?: string;
+  harnessId?: string;
+  turns: number;
+  estimatedChars: number;
+  createdAt?: string;
+  lastUsedAt?: string;
+  needsNewSession?: boolean;
+}
+
 export interface AgentBackendStatus {
   instanceId?: string;
   state: "STOPPED" | "IDLE" | "BUSY" | "WAITING_APPROVAL" | "COMPACTING" | string;
@@ -34,7 +45,10 @@ export interface AgentBackendStatus {
   activeHarnessName?: string;
   activeHarnessRevision?: string;
   activePolicyProfile?: string;
+  activeConversationId?: string;
   sessionId?: string;
+  sessionsCount?: number;
+  sessions?: AgentBackendSessionInfo[];
   activeTurnId?: string;
   activeToolsCount: number;
   geminiPid: number;
@@ -111,6 +125,7 @@ async function requestJson<T>(
   options: {
     method?: string;
     body?: unknown;
+    headers?: Record<string, string>;
     apiEndpoint?: string;
     apiKey?: string;
   } = {}
@@ -118,6 +133,7 @@ async function requestJson<T>(
   const base = resolveAgentBaseUrl(options.apiEndpoint);
   const headers: Record<string, string> = {
     Accept: "application/json",
+    ...(options.headers ?? {}),
   };
   if (options.body !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -209,9 +225,15 @@ export function resolveAgentPermission(
 export function cancelAgentTurn(opts?: {
   apiEndpoint?: string;
   apiKey?: string;
+  conversationId?: string;
 }): Promise<Record<string, unknown>> {
+  const headers: Record<string, string> = {};
+  if (opts?.conversationId && opts.conversationId.trim()) {
+    headers["X-Conversation-Id"] = opts.conversationId.trim();
+  }
   return requestJson<Record<string, unknown>>("/cancel", {
     ...opts,
+    headers,
     method: "POST",
   });
 }
@@ -219,10 +241,16 @@ export function cancelAgentTurn(opts?: {
 export function resetAgentSession(
   compact: boolean,
   harnessId?: string,
-  opts?: { apiEndpoint?: string; apiKey?: string; conversationId?: string }
+  opts?: {
+    apiEndpoint?: string;
+    apiKey?: string;
+    conversationId?: string;
+    hard?: boolean;
+  }
 ): Promise<Record<string, unknown>> {
   const params = new URLSearchParams();
   if (compact) params.set("compact", "1");
+  if (opts?.hard) params.set("hard", "1");
   if (harnessId && harnessId.trim()) params.set("harnessId", harnessId.trim());
   if (opts?.conversationId && opts.conversationId.trim()) {
     params.set("conversationId", opts.conversationId.trim());
@@ -232,6 +260,28 @@ export function resetAgentSession(
     ...opts,
     method: "POST",
   });
+}
+
+export function fetchAgentSessions(opts?: {
+  apiEndpoint?: string;
+  apiKey?: string;
+}): Promise<{
+  activeConversationId?: string;
+  count: number;
+  sessions: AgentBackendSessionInfo[];
+}> {
+  return requestJson<{
+    activeConversationId?: string;
+    count: number;
+    sessions: AgentBackendSessionInfo[];
+  }>("/sessions", opts);
+}
+
+export function fetchAgentUsage(opts?: {
+  apiEndpoint?: string;
+  apiKey?: string;
+}): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>("/agy/usage", opts);
 }
 
 export function deleteAgentBackendSession(
