@@ -1,7 +1,9 @@
 package security
 
 import (
+	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -16,9 +18,10 @@ type JWTClaims struct {
 }
 
 type JWTManager struct {
-	secretKey     []byte
-	accessTTL     time.Duration
-	refreshTTL    time.Duration
+	secretKey       []byte
+	accessTTL       time.Duration
+	refreshTTL      time.Duration
+	apiKeyValidator APIKeyValidator
 }
 
 func NewJWTManager(secretKey string, accessTTL, refreshTTL time.Duration) *JWTManager {
@@ -72,4 +75,19 @@ func (m *JWTManager) ValidateToken(tokenString string) (*JWTClaims, error) {
 	}
 
 	return claims, nil
+}
+
+func (m *JWTManager) SetAPIKeyValidator(v APIKeyValidator) {
+	m.apiKeyValidator = v
+}
+
+func (m *JWTManager) ValidateAPIKey(ctx context.Context, rawKey string) (*APIKeyClaims, error) {
+	if m == nil || m.apiKeyValidator == nil {
+		return nil, errors.New("api key validator not configured")
+	}
+	trimmed := strings.TrimSpace(rawKey)
+	if trimmed == "" {
+		return nil, errors.New("empty api key")
+	}
+	return m.apiKeyValidator.ValidateAPIKey(ctx, trimmed)
 }

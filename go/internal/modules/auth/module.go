@@ -1,6 +1,10 @@
 package auth
 
 import (
+	"context"
+	"os"
+	"strings"
+
 	"tomo-backend/internal/infrastructure/security"
 	"tomo-backend/internal/modules/auth/delivery"
 	"tomo-backend/internal/modules/auth/domain"
@@ -19,20 +23,38 @@ type Module struct {
 
 func InitModule(db *gorm.DB, jwtManager *security.JWTManager) *Module {
 	// Auto migrate entities
-	_ = db.AutoMigrate(&domain.User{}, &domain.RefreshToken{})
+	_ = db.AutoMigrate(&domain.User{}, &domain.RefreshToken{}, &domain.APIKey{})
 
 	userRepo := repository.NewUserRepository(db)
 	authService := service.NewAuthService(userRepo, jwtManager)
 	authHandler := delivery.NewAuthHandler(authService)
 
+	if jwtManager != nil {
+		jwtManager.SetAPIKeyValidator(authService)
+	}
+
 	// Seed default admin if no users exist
 	seedDefaultAdmin(db)
+
+	// Optional deterministic bootstrap API key for admin/MCP automation
+	if bootstrapKey := firstNonEmptyEnv("TOMO_ADMIN_API_KEY", "TOMO_API_KEY"); bootstrapKey != "" {
+		_ = authService.EnsureBootstrapAPIKey(context.Background(), bootstrapKey)
+	}
 
 	return &Module{
 		UserRepo:    userRepo,
 		AuthService: authService,
 		AuthHandler: authHandler,
 	}
+}
+
+func firstNonEmptyEnv(keys ...string) string {
+	for _, k := range keys {
+		if v := strings.TrimSpace(os.Getenv(k)); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func seedDefaultAdmin(db *gorm.DB) {
@@ -72,5 +94,27 @@ func (m *Module) RegisterRoutes(router *gin.RouterGroup, jwtManager *security.JW
 		{
 			protected.GET("/me", m.AuthHandler.GetMe)
 		}
+
+		// Admin API Key management under /auth/api-keys
+		adminAuthKeys := authGroup.Group("/api-keys")
+		adminAuthKeys.Use(security.AuthMiddleware(jwtManager), security.RequireRoles(string(domain.RoleAdmin)))
+		{
+			adminAuthKeys.GET("", m.AuthHandler.ListAPIKeys)
+			adminAuthKeys.POST("", m.AuthHandler.CreateAPIKey)
+			adminAuthKeys.POST("/:id/revoke", m.AuthHandler.RevokeAPIKey)
+			adminAuthKeys.PATCH("/:id/revoke", m.AuthHandler.RevokeAPIKey)
+			adminAuthKeys.DELETE("/:id", m.AuthHandler.DeleteAPIKey)
+		}
+	}
+
+	// Admin API Key management under /admin/api-keys
+	adminGroup := router.Group("/admin/api-keys")
+	adminGroup.Use(security.AuthMiddleware(jwtManager), security.RequireRoles(string(domain.RoleAdmin)))
+	{
+		adminGroup.GET("", m.AuthHandler.ListAPIKeys)
+		adminGroup.POST("", m.AuthHandler.CreateAPIKey)
+		adminGroup.POST("/:id/revoke", m.AuthHandler.RevokeAPIKey)
+		adminGroup.PATCH("/:id/revoke", m.AuthHandler.RevokeAPIKey)
+		adminGroup.DELETE("/:id", m.AuthHandler.DeleteAPIKey)
 	}
 }

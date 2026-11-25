@@ -2,6 +2,7 @@ import { getMcpConfig } from './config.js';
 
 export interface GoClientOptions {
   apiBase?: string;
+  apiKey?: string;
   authToken?: string;
   yjsSecret?: string;
 }
@@ -67,12 +68,14 @@ export class GoApiError extends Error {
 
 export class GoClient {
   readonly apiBase: string;
+  readonly apiKey: string;
   readonly authToken: string;
   readonly yjsSecret: string;
 
   constructor(opts: GoClientOptions = {}) {
     const cfg = getMcpConfig();
     this.apiBase = (opts.apiBase || cfg.apiBase).replace(/\/+$/, '');
+    this.apiKey = opts.apiKey ?? cfg.apiKey;
     this.authToken = opts.authToken ?? cfg.authToken;
     this.yjsSecret = opts.yjsSecret ?? cfg.yjsSecret;
   }
@@ -82,10 +85,17 @@ export class GoClient {
       'Content-Type': 'application/json',
       ...extra,
     };
-    if (this.authToken) {
-      h.Authorization = this.authToken.startsWith('Bearer ')
-        ? this.authToken
-        : `Bearer ${this.authToken}`;
+    const explicitKey =
+      this.apiKey || (this.authToken.startsWith('tomo_ak_') ? this.authToken : '');
+    if (explicitKey) {
+      h['X-Api-Key'] = explicitKey;
+      h.Authorization = `Bearer ${explicitKey}`;
+    } else if (this.authToken) {
+      const bare = this.authToken.replace(/^Bearer\s+/i, '').trim();
+      h.Authorization = `Bearer ${bare}`;
+      if (bare.split('.').length !== 3) {
+        h['X-Api-Key'] = bare;
+      }
     }
     return h;
   }

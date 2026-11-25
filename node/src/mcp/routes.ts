@@ -4,41 +4,83 @@ import { getMcpConfig } from './config.js';
 import { GoClient } from './goClient.js';
 import { createTomoMcpServer } from './server.js';
 
-function extractAuthToken(
+export interface ExtractedCredentials {
+  apiKey: string;
+  authToken: string;
+}
+
+function firstHeaderString(val: string | string[] | undefined): string {
+  if (typeof val === 'string') return val.trim();
+  if (Array.isArray(val) && typeof val[0] === 'string') return val[0].trim();
+  return '';
+}
+
+export function extractAuthCredentials(
   headers: Record<string, string | string[] | undefined>,
   query: Record<string, unknown>,
-): string {
-  const authHeader = headers.authorization;
-  if (typeof authHeader === 'string' && authHeader.trim()) {
-    return authHeader.replace(/^Bearer\s+/i, '').trim();
+  cfg = getMcpConfig(),
+): ExtractedCredentials {
+  const xApiKey =
+    firstHeaderString(headers['x-api-key']) ||
+    firstHeaderString(headers['x-agent-api-key']) ||
+    (typeof query.api_key === 'string' ? query.api_key.trim() : '');
+  if (xApiKey) {
+    return { apiKey: xApiKey, authToken: '' };
   }
+
+  const authHeader = firstHeaderString(headers.authorization);
+  if (authHeader) {
+    const apiKeyMatch = authHeader.match(/^ApiKey\s+(.+)$/i);
+    if (apiKeyMatch && apiKeyMatch[1].trim()) {
+      return { apiKey: apiKeyMatch[1].trim(), authToken: '' };
+    }
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (token) {
+      if (token.startsWith('tomo_ak_')) {
+        return { apiKey: token, authToken: '' };
+      }
+      return { apiKey: '', authToken: token };
+    }
+  }
+
   if (typeof query.token === 'string' && query.token.trim()) {
-    return query.token.trim();
+    const token = query.token.trim();
+    if (token.startsWith('tomo_ak_')) {
+      return { apiKey: token, authToken: '' };
+    }
+    return { apiKey: '', authToken: token };
   }
-  return getMcpConfig().authToken;
+
+  if (cfg.apiKey) {
+    return { apiKey: cfg.apiKey, authToken: '' };
+  }
+  return { apiKey: '', authToken: cfg.authToken };
 }
 
 const mcpRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/mcp', async (request, reply) => {
-    const token = extractAuthToken(
+    const cfg = getMcpConfig();
+    const creds = extractAuthCredentials(
       request.headers,
       (request.query as Record<string, unknown>) || {},
+      cfg,
     );
-    if (!token) {
+    if (!creds.apiKey && !creds.authToken) {
       return reply.status(401).send({
         jsonrpc: '2.0',
         error: {
           code: -32001,
-          message: 'Unauthorized: provide Authorization: Bearer <jwt>, ?token=, or TOMO_AUTH_TOKEN',
+          message:
+            'Unauthorized: provide X-Api-Key, Authorization: Bearer <api_key|jwt>, ?api_key=, or TOMO_API_KEY',
         },
         id: null,
       });
     }
 
-    const cfg = getMcpConfig();
     const goClient = new GoClient({
       apiBase: cfg.apiBase,
-      authToken: token,
+      apiKey: creds.apiKey,
+      authToken: creds.authToken,
       yjsSecret: cfg.yjsSecret,
     });
     const mcpServer = createTomoMcpServer(goClient);

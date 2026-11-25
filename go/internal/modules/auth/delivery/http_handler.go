@@ -1,6 +1,9 @@
 package delivery
 
 import (
+	"errors"
+	"strings"
+
 	"tomo-backend/internal/infrastructure/response"
 	"tomo-backend/internal/infrastructure/security"
 	"tomo-backend/internal/modules/auth/dto"
@@ -108,4 +111,71 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 	}
 
 	response.OK(c, "User profile retrieved", profile)
+}
+
+func (h *AuthHandler) CreateAPIKey(c *gin.Context) {
+	var req dto.CreateAPIKeyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid API key request", err)
+		return
+	}
+
+	adminUserIDVal, _ := c.Get(security.CtxUserID)
+	adminUserID, _ := adminUserIDVal.(string)
+
+	created, err := h.authService.CreateAPIKey(c.Request.Context(), adminUserID, req)
+	if err != nil {
+		response.InternalServerError(c, "Failed to create API key", err)
+		return
+	}
+
+	response.Created(c, "API key created successfully", created)
+}
+
+func (h *AuthHandler) ListAPIKeys(c *gin.Context) {
+	keys, err := h.authService.ListAPIKeys(c.Request.Context())
+	if err != nil {
+		response.InternalServerError(c, "Failed to list API keys", err)
+		return
+	}
+
+	response.OK(c, "API keys retrieved", keys)
+}
+
+func (h *AuthHandler) RevokeAPIKey(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing API key id", nil)
+		return
+	}
+
+	if err := h.authService.RevokeAPIKey(c.Request.Context(), id); err != nil {
+		if errors.Is(err, service.ErrAPIKeyNotFound) {
+			response.NotFound(c, "API key not found")
+			return
+		}
+		response.InternalServerError(c, "Failed to revoke API key", err)
+		return
+	}
+
+	response.OK(c, "API key revoked", gin.H{"id": id, "revoked": true})
+}
+
+func (h *AuthHandler) DeleteAPIKey(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing API key id", nil)
+		return
+	}
+
+	if err := h.authService.DeleteAPIKey(c.Request.Context(), id); err != nil {
+		if errors.Is(err, service.ErrAPIKeyNotFound) {
+			response.NotFound(c, "API key not found")
+			return
+		}
+		response.InternalServerError(c, "Failed to delete API key", err)
+		return
+	}
+
+	response.OK(c, "API key deleted", gin.H{"id": id, "deleted": true})
 }

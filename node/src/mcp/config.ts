@@ -5,6 +5,7 @@ dotenv.config();
 export interface McpConfig {
   apiBase: string;
   wsUrl: string;
+  apiKey: string;
   authToken: string;
   yjsSecret: string;
   wsSyncTimeoutMs: number;
@@ -52,7 +53,8 @@ export function getMcpConfig(): McpConfig {
   return {
     apiBase: normalizeApiBase(rawApiBase),
     wsUrl: normalizeWsUrl(rawWsUrl),
-    authToken: process.env.TOMO_AUTH_TOKEN || '',
+    apiKey: (process.env.TOMO_API_KEY || '').trim(),
+    authToken: (process.env.TOMO_AUTH_TOKEN || process.env.TOMO_API_KEY || '').trim(),
     yjsSecret,
     wsSyncTimeoutMs: Number(process.env.MCP_YJS_TIMEOUT_MS || 8000),
     wsMaxPayloadBytes: Number(process.env.MCP_YJS_MAX_PAYLOAD_BYTES || 10 * 1024 * 1024),

@@ -16,6 +16,8 @@ import {
   readCanvasFromYDoc,
 } from '../dist/mcp/canvasYjs.js';
 import { createTomoMcpServer } from '../dist/mcp/server.js';
+import { extractAuthCredentials } from '../dist/mcp/routes.js';
+import { GoClient } from '../dist/mcp/goClient.js';
 
 test('blocknoteYjs round-trips Markdown <-> BlockNote Y.XmlFragment(document-store)', () => {
   const ydoc = new Y.Doc();
@@ -399,4 +401,45 @@ test('createTomoMcpServer end-to-end tool calls, resources, and prompts via InMe
   assert.match(prompt.messages[0].content.text, new RegExp(createdDoc.id));
 
   await Promise.all([client.close(), mcpServer.close()]);
+});
+
+test('extractAuthCredentials and GoClient support X-Api-Key and TOMO_API_KEY', async () => {
+  const fromHeader = extractAuthCredentials(
+    { 'x-api-key': 'tomo_ak_abc123' },
+    {},
+    { apiKey: '', authToken: '' },
+  );
+  assert.deepEqual(fromHeader, { apiKey: 'tomo_ak_abc123', authToken: '' });
+
+  const fromBearerApiKey = extractAuthCredentials(
+    { authorization: 'Bearer tomo_ak_bearer456' },
+    {},
+    { apiKey: '', authToken: '' },
+  );
+  assert.deepEqual(fromBearerApiKey, { apiKey: 'tomo_ak_bearer456', authToken: '' });
+
+  const fromConfigFallback = extractAuthCredentials(
+    {},
+    {},
+    { apiKey: 'tomo_ak_env789', authToken: '' },
+  );
+  assert.deepEqual(fromConfigFallback, { apiKey: 'tomo_ak_env789', authToken: '' });
+
+  let capturedHeaders = null;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => {
+    capturedHeaders = init?.headers;
+    return new Response(
+      JSON.stringify({ success: true, data: { items: [], total_items: 0, page: 1, page_size: 20, total_pages: 0 } }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+  try {
+    const gc = new GoClient({ apiBase: 'http://127.0.0.1:8080/api/v1', apiKey: 'tomo_ak_abc123' });
+    await gc.listDocs();
+    assert.equal(capturedHeaders['X-Api-Key'], 'tomo_ak_abc123');
+    assert.equal(capturedHeaders.Authorization, 'Bearer tomo_ak_abc123');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
 });

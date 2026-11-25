@@ -78,3 +78,46 @@ func ToUserDto(u *domain.User) UserDto {
 		CreatedDate: u.CreatedAt.Format(time.RFC3339),
 	}
 }
+
+type CreateAPIKeyRequest struct {
+	Name          string      `json:"name" binding:"required"`
+	UserID        string      `json:"user_id"`
+	Role          domain.Role `json:"role"`
+	Scopes        string      `json:"scopes"`
+	ExpiresInDays int         `json:"expires_in_days"`
+	RawKey        string      `json:"raw_key,omitempty"`
+}
+
+type APIKeyDto struct {
+	ID         string      `json:"id"`
+	Name       string      `json:"name"`
+	KeyPrefix  string      `json:"key_prefix"`
+	UserID     string      `json:"user_id"`
+	Role       domain.Role `json:"role"`
+	Scopes     string      `json:"scopes"`
+	Revoked    bool        `json:"revoked"`
+	ExpiresAt  *time.Time  `json:"expires_at,omitempty"`
+	LastUsedAt *time.Time  `json:"last_used_at,omitempty"`
+	CreatedBy  string      `json:"created_by"`
+	CreatedAt  time.Time   `json:"created_at"`
+	APIKey     string      `json:"api_key,omitempty"`
+	Key        string      `json:"key,omitempty"`
+}
+
+func ToAPIKeyDto(k *domain.APIKey, rawKey string) APIKeyDto {
+	return APIKeyDto{
+		ID:         k.ID,
+		Name:       k.Name,
+		KeyPrefix:  k.KeyPrefix,
+		UserID:     k.UserID,
+		Role:       k.Role,
+		Scopes:     k.Scopes,
+		Revoked:    k.Revoked,
+		ExpiresAt:  k.ExpiresAt,
+		LastUsedAt: k.LastUsedAt,
+		CreatedBy:  k.CreatedBy,
+		CreatedAt:  k.CreatedAt,
+		APIKey:     rawKey,
+		Key:        rawKey,
+	}
+}

@@ -21,11 +21,12 @@ func setupTestAuthService(t *testing.T) (service.AuthService, *gorm.DB) {
 		t.Fatalf("Failed to open memory db: %v", err)
 	}
 
-	_ = db.AutoMigrate(&domain.User{}, &domain.RefreshToken{})
+	_ = db.AutoMigrate(&domain.User{}, &domain.RefreshToken{}, &domain.APIKey{})
 
 	userRepo := repository.NewUserRepository(db)
 	jwtManager := security.NewJWTManager("test-secret", 15*time.Minute, 24*time.Hour)
 	authService := service.NewAuthService(userRepo, jwtManager)
+	jwtManager.SetAPIKeyValidator(authService)
 
 	return authService, db
 }
@@ -157,5 +158,66 @@ func TestAuthService_GetProfile(t *testing.T) {
 	}
 	if profile.Role != domain.RoleAdmin {
 		t.Errorf("Expected role ADMIN, got %s", profile.Role)
+	}
+}
+
+func TestAuthService_APIKeyLifecycle(t *testing.T) {
+	authService, _ := setupTestAuthService(t)
+	ctx := context.Background()
+
+	adminReg, err := authService.Register(ctx, dto.RegisterRequest{
+		Email:    "admin-ak@tomo.com",
+		Password: "password123",
+		FullName: "Admin AK",
+		Role:     domain.RoleAdmin,
+	})
+	if err != nil {
+		t.Fatalf("Register admin failed: %v", err)
+	}
+
+	created, err := authService.CreateAPIKey(ctx, adminReg.User.ID, dto.CreateAPIKeyRequest{
+		Name:   "GemOps ABI MCP",
+		Scopes: "mcp",
+	})
+	if err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+	if created.APIKey == "" || !security.IsAPIKeyFormat(created.APIKey) {
+		t.Fatalf("expected generated tomo_ak_ key, got %q", created.APIKey)
+	}
+
+	claims, err := authService.ValidateAPIKey(ctx, created.APIKey)
+	if err != nil {
+		t.Fatalf("ValidateAPIKey failed: %v", err)
+	}
+	if claims.UserID != adminReg.User.ID || claims.Role != string(domain.RoleAdmin) {
+		t.Fatalf("unexpected APIKeyClaims: %+v", claims)
+	}
+
+	list, err := authService.ListAPIKeys(ctx)
+	if err != nil || len(list) == 0 {
+		t.Fatalf("ListAPIKeys failed: err=%v len=%d", err, len(list))
+	}
+	for _, item := range list {
+		if item.APIKey != "" || item.Key != "" {
+			t.Fatalf("ListAPIKeys must not leak plaintext api_key")
+		}
+	}
+
+	if err := authService.RevokeAPIKey(ctx, created.ID); err != nil {
+		t.Fatalf("RevokeAPIKey failed: %v", err)
+	}
+	if _, err := authService.ValidateAPIKey(ctx, created.APIKey); err == nil {
+		t.Fatalf("expected revoked API key to fail validation")
+	}
+
+	if err := authService.DeleteAPIKey(ctx, created.ID); err != nil {
+		t.Fatalf("DeleteAPIKey failed: %v", err)
+	}
+	if err := authService.EnsureBootstrapAPIKey(ctx, "tomo_ak_bootstrap_test_key_123"); err != nil {
+		t.Fatalf("EnsureBootstrapAPIKey failed: %v", err)
+	}
+	if _, err := authService.ValidateAPIKey(ctx, "tomo_ak_bootstrap_test_key_123"); err != nil {
+		t.Fatalf("expected bootstrap API key to validate: %v", err)
 	}
 }

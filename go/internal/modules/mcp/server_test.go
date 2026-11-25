@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"tomo-backend/internal/infrastructure/security"
+	"tomo-backend/internal/modules/auth"
 	"tomo-backend/internal/modules/docs"
 	"tomo-backend/internal/modules/mcp"
 
@@ -379,4 +380,130 @@ func TestMCP_DocsSeriesCanvasResourcesAndPrompts(t *testing.T) {
 	callTool(t, router, token, "series_delete", map[string]interface{}{"id": sID})
 	callTool(t, router, token, "docs_delete", map[string]interface{}{"id": childID})
 	callTool(t, router, token, "docs_delete", map[string]interface{}{"id": parentID})
+}
+
+func TestMCP_AdminAPIKeyAuthAndManagement(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db, err := gorm.Open(sqlite.Open("file:mcp_apikey_test?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+
+	jwtMgr := security.NewJWTManager("test-jwt-secret", 30*time.Minute, 24*time.Hour)
+	authModule := auth.InitModule(db, jwtMgr)
+	docsModule := docs.InitModule(db, "test-yjs-secret", "ws://127.0.0.1:1234/ws/yjs")
+	mcpModule := mcp.InitModule(db, docsModule.DocsService, docsModule.CanvasService, docsModule.YjsService)
+
+	router := gin.New()
+	mcpModule.RegisterRoutes(router.Group(""), jwtMgr)
+	v1 := router.Group("/api/v1")
+	authModule.RegisterRoutes(v1, jwtMgr)
+	docsModule.RegisterRoutes(v1, jwtMgr)
+	mcpModule.RegisterRoutes(v1, jwtMgr)
+
+	adminToken, _, err := jwtMgr.GenerateAccessToken("00000000-0000-0000-0000-000000000001", "admin@tomo.app", "ADMIN")
+	if err != nil {
+		t.Fatalf("generate admin jwt: %v", err)
+	}
+	userToken, _, err := jwtMgr.GenerateAccessToken("user-regular-1", "user@tomo.app", "USER")
+	if err != nil {
+		t.Fatalf("generate user jwt: %v", err)
+	}
+
+	// 1. Non-admin cannot create or list API keys
+	reqForbidden := httptest.NewRequest(http.MethodPost, "/api/v1/admin/api-keys", strings.NewReader(`{"name":"denied"}`))
+	reqForbidden.Header.Set("Content-Type", "application/json")
+	reqForbidden.Header.Set("Authorization", "Bearer "+userToken)
+	wForbidden := httptest.NewRecorder()
+	router.ServeHTTP(wForbidden, reqForbidden)
+	if wForbidden.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin POST /admin/api-keys, got %d (%s)", wForbidden.Code, wForbidden.Body.String())
+	}
+
+	// 2. Admin creates an API key via /api/v1/admin/api-keys
+	reqCreate := httptest.NewRequest(http.MethodPost, "/api/v1/admin/api-keys", strings.NewReader(`{"name":"gemops-abi"}`))
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.Header.Set("Authorization", "Bearer "+adminToken)
+	wCreate := httptest.NewRecorder()
+	router.ServeHTTP(wCreate, reqCreate)
+	if wCreate.Code != http.StatusCreated {
+		t.Fatalf("expected 201 creating api key, got %d (%s)", wCreate.Code, wCreate.Body.String())
+	}
+	var createEnv struct {
+		Success bool `json:"success"`
+		Data    struct {
+			ID     string `json:"id"`
+			APIKey string `json:"api_key"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(wCreate.Body.Bytes(), &createEnv); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	apiKey := createEnv.Data.APIKey
+	keyID := createEnv.Data.ID
+	if !strings.HasPrefix(apiKey, "tomo_ak_") || keyID == "" {
+		t.Fatalf("unexpected api key payload: %+v", createEnv)
+	}
+
+	// 3. Call /mcp using X-Api-Key header (no JWT)
+	initBody, _ := json.Marshal(map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "initialize",
+		"params":  map[string]interface{}{"protocolVersion": "2025-03-26"},
+	})
+	reqMCP := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initBody))
+	reqMCP.Header.Set("Content-Type", "application/json")
+	reqMCP.Header.Set("X-Api-Key", apiKey)
+	wMCP := httptest.NewRecorder()
+	router.ServeHTTP(wMCP, reqMCP)
+	if wMCP.Code != http.StatusOK {
+		t.Fatalf("expected 200 on /mcp with X-Api-Key, got %d (%s)", wMCP.Code, wMCP.Body.String())
+	}
+
+	// 4. Call /api/v1/docs using Authorization: Bearer <apiKey> (Node GoClient compat)
+	reqDocs := httptest.NewRequest(http.MethodGet, "/api/v1/docs", nil)
+	reqDocs.Header.Set("Authorization", "Bearer "+apiKey)
+	wDocs := httptest.NewRecorder()
+	router.ServeHTTP(wDocs, reqDocs)
+	if wDocs.Code != http.StatusOK {
+		t.Fatalf("expected 200 on /api/v1/docs with Bearer apiKey, got %d (%s)", wDocs.Code, wDocs.Body.String())
+	}
+
+	// 5. Admin lists keys under /api/v1/auth/api-keys (plaintext must not be exposed)
+	reqList := httptest.NewRequest(http.MethodGet, "/api/v1/auth/api-keys", nil)
+	reqList.Header.Set("Authorization", "Bearer "+adminToken)
+	wList := httptest.NewRecorder()
+	router.ServeHTTP(wList, reqList)
+	if wList.Code != http.StatusOK || strings.Contains(wList.Body.String(), apiKey) {
+		t.Fatalf("unexpected list response or leaked plaintext key: code=%d body=%s", wList.Code, wList.Body.String())
+	}
+
+	// 6. Admin revokes the API key -> subsequent /mcp call must return 401
+	reqRevoke := httptest.NewRequest(http.MethodPost, "/api/v1/admin/api-keys/"+keyID+"/revoke", nil)
+	reqRevoke.Header.Set("Authorization", "Bearer "+adminToken)
+	wRevoke := httptest.NewRecorder()
+	router.ServeHTTP(wRevoke, reqRevoke)
+	if wRevoke.Code != http.StatusOK {
+		t.Fatalf("expected 200 revoking api key, got %d (%s)", wRevoke.Code, wRevoke.Body.String())
+	}
+
+	reqRevokedMCP := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(initBody))
+	reqRevokedMCP.Header.Set("Content-Type", "application/json")
+	reqRevokedMCP.Header.Set("X-Api-Key", apiKey)
+	wRevokedMCP := httptest.NewRecorder()
+	router.ServeHTTP(wRevokedMCP, reqRevokedMCP)
+	if wRevokedMCP.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 after revoking api key, got %d", wRevokedMCP.Code)
+	}
+
+	// 7. Admin deletes the API key
+	reqDel := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/api-keys/"+keyID, nil)
+	reqDel.Header.Set("Authorization", "Bearer "+adminToken)
+	wDel := httptest.NewRecorder()
+	router.ServeHTTP(wDel, reqDel)
+	if wDel.Code != http.StatusOK {
+		t.Fatalf("expected 200 deleting api key, got %d (%s)", wDel.Code, wDel.Body.String())
+	}
 }

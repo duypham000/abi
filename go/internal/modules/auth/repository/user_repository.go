@@ -23,6 +23,15 @@ type UserRepository interface {
 	FindRefreshToken(ctx context.Context, tokenStr string) (*domain.RefreshToken, error)
 	RevokeRefreshToken(ctx context.Context, tokenStr string) error
 	RevokeUserRefreshTokens(ctx context.Context, userID string) error
+
+	// API key methods
+	CreateAPIKey(ctx context.Context, apiKey *domain.APIKey) error
+	FindAPIKeyByHash(ctx context.Context, keyHash string) (*domain.APIKey, error)
+	FindAPIKeyByID(ctx context.Context, id string) (*domain.APIKey, error)
+	ListAPIKeys(ctx context.Context) ([]domain.APIKey, error)
+	RevokeAPIKey(ctx context.Context, id string) error
+	DeleteAPIKey(ctx context.Context, id string) error
+	TouchAPIKeyLastUsed(ctx context.Context, id string, usedAt time.Time) error
 }
 
 type userRepositoryImpl struct {
@@ -108,4 +117,58 @@ func (r *userRepositoryImpl) RevokeRefreshToken(ctx context.Context, tokenStr st
 
 func (r *userRepositoryImpl) RevokeUserRefreshTokens(ctx context.Context, userID string) error {
 	return r.db.WithContext(ctx).Model(&domain.RefreshToken{}).Where("user_id = ?", userID).Update("revoked", true).Error
+}
+
+func (r *userRepositoryImpl) CreateAPIKey(ctx context.Context, apiKey *domain.APIKey) error {
+	return r.db.WithContext(ctx).Create(apiKey).Error
+}
+
+func (r *userRepositoryImpl) FindAPIKeyByHash(ctx context.Context, keyHash string) (*domain.APIKey, error) {
+	var apiKey domain.APIKey
+	err := r.db.WithContext(ctx).Where("key_hash = ?", keyHash).First(&apiKey).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &apiKey, err
+}
+
+func (r *userRepositoryImpl) FindAPIKeyByID(ctx context.Context, id string) (*domain.APIKey, error) {
+	var apiKey domain.APIKey
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&apiKey).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &apiKey, err
+}
+
+func (r *userRepositoryImpl) ListAPIKeys(ctx context.Context) ([]domain.APIKey, error) {
+	var keys []domain.APIKey
+	err := r.db.WithContext(ctx).Order("created_at desc").Find(&keys).Error
+	return keys, err
+}
+
+func (r *userRepositoryImpl) RevokeAPIKey(ctx context.Context, id string) error {
+	res := r.db.WithContext(ctx).Model(&domain.APIKey{}).Where("id = ?", id).Update("revoked", true)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *userRepositoryImpl) DeleteAPIKey(ctx context.Context, id string) error {
+	res := r.db.WithContext(ctx).Where("id = ?", id).Delete(&domain.APIKey{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *userRepositoryImpl) TouchAPIKeyLastUsed(ctx context.Context, id string, usedAt time.Time) error {
+	return r.db.WithContext(ctx).Model(&domain.APIKey{}).Where("id = ?", id).Update("last_used_at", usedAt).Error
 }

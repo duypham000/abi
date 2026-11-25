@@ -5,14 +5,15 @@ import { createTomoMcpServer } from '../mcp/server.js';
 
 async function main() {
   const cfg = getMcpConfig();
-  if (!cfg.authToken) {
+  if (!cfg.apiKey && !cfg.authToken) {
     console.error(
-      '[tomo-node-mcp] Warning: TOMO_AUTH_TOKEN is empty. Protected Go backend calls will fail unless authenticated.',
+      '[tomo-node-mcp] Warning: TOMO_API_KEY and TOMO_AUTH_TOKEN are empty. Protected Go backend calls will fail unless authenticated.',
     );
   }
 
   const goClient = new GoClient({
     apiBase: cfg.apiBase,
+    apiKey: cfg.apiKey,
     authToken: cfg.authToken,
     yjsSecret: cfg.yjsSecret,
   });
