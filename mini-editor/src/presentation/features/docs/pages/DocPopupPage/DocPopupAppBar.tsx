@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Input, Modal, Tooltip, Dropdown, Popover, Select, Switch } from "antd";
+import { Input, Tooltip, Dropdown, Popover, Select, Switch } from "antd";
+import type { DeleteScope } from "@/infrastructure/api/docsApi";
+import { confirmDeleteWithScope } from "@/presentation/components/ui/ConfirmDeleteModal/confirmDeleteModal";
 import type { InputRef, MenuProps } from "antd";
 import {
   FileTextOutlined,
@@ -83,7 +85,7 @@ interface DocPopupAppBarProps {
   onStarToggle: () => void;
   onInfoToggle: () => void;
   onSettingsChange: (next: PopupEditorSettings) => void;
-  onDelete: () => void;
+  onDelete: (scope?: DeleteScope) => void;
   onCopyLink: () => void;
   onOpenInNewTab: () => void;
   onViewInfo: () => void;
@@ -284,13 +286,10 @@ export function DocPopupAppBar({
       icon: <DeleteOutlined />,
       danger: true,
       onClick: () =>
-        Modal.confirm({
-          title: "Xoá tài liệu?",
-          content: "Tài liệu này sẽ bị xoá vĩnh viễn.",
-          okText: "Xoá",
-          okType: "danger",
-          cancelText: "Huỷ",
-          onOk: onDelete,
+        confirmDeleteWithScope({
+          entityLabel: "tài liệu",
+          title: docTitle,
+          onConfirm: (scope) => onDelete(scope),
         }),
     },
   ];

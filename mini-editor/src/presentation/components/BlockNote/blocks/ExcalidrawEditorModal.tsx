@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { Modal, Button, Input, Spin } from "antd";
 import { Excalidraw } from "@excalidraw/excalidraw";
-import { exportToBlob } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import {
@@ -11,6 +10,7 @@ import {
 } from "@/infrastructure/api/canvasApi";
 import { parseCanvasMetadata, serializeCanvasMetadata } from "@/core/interfaces/canvas";
 import type { CanvasScene } from "@/core/interfaces/canvas";
+import { generateLowResCanvasThumbnail } from "@/presentation/features/canvas/utils/canvasThumbnail";
 import { DRAFT_PREFIX } from "./excalidraw-block";
 
 const EMPTY_SCENE: CanvasScene = { elements: [], appState: {}, files: {} };
@@ -26,40 +26,11 @@ function parseScene(raw: string | null | undefined): CanvasScene {
 }
 
 async function generateThumbnail(api: ExcalidrawImperativeAPI): Promise<string | null> {
-  try {
-    const elements = api.getSceneElements();
-    if (!elements.length) return null;
-    const blob = await exportToBlob({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      elements: elements as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      appState: { ...(api.getAppState() as any), exportBackground: true },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      files: api.getFiles() as any,
-      mimeType: "image/png",
-      exportPadding: 16,
-    });
-    // Resize to thumbnail (max 600px wide)
-    return await new Promise<string>((resolve) => {
-      const img = new Image();
-      const url = URL.createObjectURL(blob);
-      img.onload = () => {
-        const MAX = 600;
-        const scale = Math.min(1, MAX / img.width);
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext("2d")!;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL("image/png"));
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(""); };
-      img.src = url;
-    });
-  } catch {
-    return null;
-  }
+  return generateLowResCanvasThumbnail({
+    elements: api.getSceneElements(),
+    appState: api.getAppState() as Record<string, unknown>,
+    files: api.getFiles() as Record<string, unknown>,
+  });
 }
 
 interface ExcalidrawEditorModalProps {

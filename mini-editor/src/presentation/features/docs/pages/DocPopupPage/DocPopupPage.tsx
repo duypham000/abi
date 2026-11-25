@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { message, Drawer } from "antd";
-import { useDeleteDocMutation, useCreateDocMutation } from "@/infrastructure/api/docsApi";
+import { useDeleteDocMutation, useCreateDocMutation, type DeleteScope } from "@/infrastructure/api/docsApi";
 import { openInMainWindow } from "@/presentation/hooks/useOpenInMainWindow";
 import { PANEL_TYPES } from "@/presentation/layout/golden/panelRegistry";
 import { parseDocMetadata } from "@/core/interfaces/docs";
@@ -167,8 +167,8 @@ export default function DocPopupPage() {
     editor.focus?.();
   }
 
-  async function handleDelete() {
-    await deleteDoc(docId);
+  async function handleDelete(scope: DeleteScope = "server") {
+    await deleteDoc({ id: docId, scope });
     if (isTauri()) {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       await getCurrentWindow().close();

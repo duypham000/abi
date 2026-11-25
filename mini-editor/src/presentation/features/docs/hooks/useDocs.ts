@@ -2,6 +2,7 @@ import {
   useListDocsQuery,
   useCreateDocMutation,
   useDeleteDocMutation,
+  type DeleteScope,
 } from "@/infrastructure/api/docsApi";
 import type { DocRequest } from "@/core/interfaces/docs";
 
@@ -18,7 +19,8 @@ export function useDocs(page = 0, size = 20, seriesId?: number) {
   const total = data?.total ?? 0;
 
   const handleCreate = (request: DocRequest) => createDoc(request).unwrap();
-  const handleDelete = (id: number) => deleteDoc(id).unwrap();
+  const handleDelete = (id: number, scope: DeleteScope = "server") =>
+    deleteDoc({ id, scope }).unwrap();
 
   return {
     docs,

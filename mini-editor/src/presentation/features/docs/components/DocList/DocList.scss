@@ -1,7 +1,10 @@
 .doc-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color, #e4e4e7);
+  border-radius: 10px;
+  background: var(--card-bg, #ffffff);
+  overflow: hidden;
 }
 
 .doc-list-empty {

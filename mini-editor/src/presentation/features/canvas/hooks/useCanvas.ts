@@ -3,6 +3,7 @@ import {
   useCreateCanvasMutation,
   useDeleteCanvasMutation,
 } from "@/infrastructure/api/canvasApi";
+import type { DeleteScope } from "@/infrastructure/api/docsApi";
 import type { CanvasRequest } from "@/core/interfaces/canvas";
 
 export function useCanvas(page = 0, size = 20) {
@@ -17,7 +18,8 @@ export function useCanvas(page = 0, size = 20) {
   const total = data?.total ?? 0;
 
   const handleCreate = (request: CanvasRequest) => createCanvas(request).unwrap();
-  const handleDelete = (id: number) => deleteCanvas(id).unwrap();
+  const handleDelete = (id: number, scope: DeleteScope = "server") =>
+    deleteCanvas({ id, scope }).unwrap();
 
   return {
     canvases,

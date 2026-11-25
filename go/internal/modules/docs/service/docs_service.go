@@ -181,7 +181,7 @@ func (s *docsServiceImpl) DeleteDoc(ctx context.Context, id, userID string) erro
 		return ErrDocNotFound
 	}
 
-	return s.docRepo.DeleteDoc(ctx, id)
+	return s.docRepo.DeleteDoc(ctx, doc.ID)
 }
 
 func (s *docsServiceImpl) ListDocs(ctx context.Context, ownerID string, parentID *string, page, pageSize int, search string) (*response.PageResponse, error) {

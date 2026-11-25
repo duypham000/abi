@@ -4,7 +4,10 @@ import type { EsIndexInfo } from "@/core/interfaces/search";
 import { parseOrHashId } from "@/core/utils/idUtils";
 import { isTauri } from "@/infrastructure/tauri/sqliteDb";
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
-import { enqueue } from "@/infrastructure/tauri/outboxService";
+import { enqueue, clearQueueForEntity } from "@/infrastructure/tauri/outboxService";
+
+export type DeleteScope = "local" | "server";
+export type DeleteDocArg = number | { id: number; scope?: DeleteScope };
 import { computeDocRemoteHashSync } from "@/core/utils/contentHash";
 import {
   listDocsFromSqlite,
@@ -405,24 +408,47 @@ export const docsApi = baseApi.injectEndpoints({
       invalidatesTags: ["Doc"],
     }),
 
-    deleteDoc: builder.mutation<void, number>({
-      queryFn: async (id, _api, _extraOptions, fetchWithBaseQuery) => {
-        let remoteId: number | string = id;
+    deleteDoc: builder.mutation<void, DeleteDocArg>({
+      queryFn: async (arg, _api, _extraOptions, fetchWithBaseQuery) => {
+        const id = typeof arg === "number" ? arg : arg.id;
+        const scope: DeleteScope = typeof arg === "number" ? "server" : (arg.scope ?? "server");
+        let remoteId: number | string = `doc-${id}`;
+        let gitSlug = `doc-${id}`;
+
         if (isTauri()) {
           try {
             const existing = await getDocFromSqlite(id);
             if (existing?.backendUuid) remoteId = existing.backendUuid;
+            else if (existing?.slug) remoteId = existing.slug;
+            if (existing?.slug) gitSlug = existing.slug;
             await deleteDocFromSqlite(id);
           } catch (err) {
             console.warn("SQLite deleteDoc error:", err);
           }
         }
 
+        if (scope === "local") {
+          if (isTauri()) {
+            await clearQueueForEntity("doc", `doc-${id}`);
+          }
+          return { data: undefined };
+        }
+
         try {
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
-            await fetchWithBaseQuery({ url: `/docs/${remoteId}`, method: "DELETE" });
-            return { data: undefined };
+            const delRes = await fetchWithBaseQuery({ url: `/docs/${remoteId}`, method: "DELETE" });
+            try {
+              await fetchWithBaseQuery({
+                url: `/github/files/delete?path=${encodeURIComponent(`docs/${gitSlug}.json`)}`,
+                method: "DELETE",
+              });
+            } catch {
+              // non-fatal if file is not on git
+            }
+            if (!delRes.error || (delRes.error as { status?: number })?.status === 404) {
+              return { data: undefined };
+            }
           }
         } catch {
           // offline mode
@@ -439,7 +465,7 @@ export const docsApi = baseApi.injectEndpoints({
 
         return { data: undefined };
       },
-      invalidatesTags: ["Doc"],
+      invalidatesTags: ["Doc", "GitStatus"],
     }),
 
     searchDocs: builder.query<DocDto[], string>({

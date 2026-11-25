@@ -1,6 +1,10 @@
 import { baseApi, PageResult, ScrollResult } from "./baseApi";
+import type { DeleteScope } from "./docsApi";
 import type { CanvasDto, CanvasRequest } from "@/core/interfaces/canvas";
+import { getAccessToken } from "@/infrastructure/tauri/authBridge";
 import { isTauri } from "@/infrastructure/tauri/sqliteDb";
+
+export type DeleteCanvasArg = number | { id: number; scope?: DeleteScope };
 import {
   listCanvasFromSqlite,
   getCanvasFromSqlite,
@@ -128,15 +132,36 @@ export const canvasApi = baseApi.injectEndpoints({
       ],
     }),
 
-    deleteCanvas: builder.mutation<void, number>({
-      queryFn: async (id, _api, _extraOptions, fetchWithBaseQuery) => {
+    deleteCanvas: builder.mutation<void, DeleteCanvasArg>({
+      queryFn: async (arg, _api, _extraOptions, fetchWithBaseQuery) => {
+        const id = typeof arg === "number" ? arg : arg.id;
+        const scope: DeleteScope = typeof arg === "number" ? "server" : (arg.scope ?? "server");
+
         if (isTauri()) {
           try {
             await deleteCanvasFromSqlite(id);
-            return { data: undefined };
           } catch (err: unknown) {
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
+          if (scope === "local") {
+            return { data: undefined };
+          }
+          try {
+            const token = await getAccessToken();
+            if (token && token !== "local-standalone-token") {
+              await fetchWithBaseQuery({
+                url: `/github/files/delete?path=${encodeURIComponent(`canvases/canvas-${id}.json`)}`,
+                method: "DELETE",
+              });
+            }
+          } catch {
+            // non-fatal if canvas is not on git
+          }
+          return { data: undefined };
+        }
+
+        if (scope === "local") {
+          return { data: undefined };
         }
         const result = await fetchWithBaseQuery({ url: `/canvas/${id}`, method: "DELETE" });
         return result.data
@@ -144,7 +169,7 @@ export const canvasApi = baseApi.injectEndpoints({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : { error: result.error as any };
       },
-      invalidatesTags: ["Canvas"],
+      invalidatesTags: ["Canvas", "GitStatus"],
     }),
 
     searchCanvas: builder.query<CanvasDto[], string>({

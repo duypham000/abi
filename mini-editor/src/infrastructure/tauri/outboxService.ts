@@ -137,6 +137,19 @@ export async function listQueueForEntity(
   );
 }
 
+/** Remove all pending outbox items for a specific entity (used when deleting locally only). */
+export async function clearQueueForEntity(
+  entityType: EntityType | "doc",
+  localId: string
+): Promise<void> {
+  const conn = await db();
+  if (!conn) return;
+  await conn.execute(
+    "DELETE FROM outbox WHERE entity_type = ? AND local_id = ?",
+    [entityType, localId]
+  );
+}
+
 /** Count items currently waiting. */
 export async function pendingCount(): Promise<number> {
   const conn = await db();

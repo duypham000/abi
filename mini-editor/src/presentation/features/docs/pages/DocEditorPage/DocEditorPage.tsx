@@ -8,7 +8,7 @@ import Sidebar from "@/presentation/features/dashboard/components/Sidebar";
 import { AppBar } from "@/presentation/components/AppBar";
 import { type RootState, type AppDispatch } from "@/presentation/store";
 import { setCurrentDocId } from "@/presentation/store/docsSlice";
-import { useDeleteDocMutation, useCreateDocMutation, docsApi } from "@/infrastructure/api/docsApi";
+import { useDeleteDocMutation, useCreateDocMutation, docsApi, type DeleteScope } from "@/infrastructure/api/docsApi";
 import { cacheDoc } from "@/infrastructure/tauri/docCacheService";
 import { isTauri } from "@/infrastructure/tauri/sqliteDb";
 import { parseDocMetadata } from "@/core/interfaces/docs";
@@ -561,8 +561,8 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
     return () => { tt.off("transaction", update); };
   }, [editor]);
 
-  async function handleDelete() {
-    await deleteDoc(docId);
+  async function handleDelete(scope: DeleteScope = "server") {
+    await deleteDoc({ id: docId, scope });
     navigate("/docs");
   }
 

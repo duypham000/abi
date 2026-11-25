@@ -1,11 +1,12 @@
 import type { CanvasDto } from "@/core/interfaces/canvas";
+import type { DeleteScope } from "@/infrastructure/api/docsApi";
 import { Loading } from "@/presentation/components/ui/Loading/Loading";
 import CanvasCard from "../CanvasCard";
 import "./CanvasList.scss";
 
 interface CanvasListProps {
   canvases: CanvasDto[];
-  onDelete: (id: number) => void;
+  onDelete: (id: number, scope?: DeleteScope) => void;
   isDeleting?: boolean;
   isLoading?: boolean;
 }

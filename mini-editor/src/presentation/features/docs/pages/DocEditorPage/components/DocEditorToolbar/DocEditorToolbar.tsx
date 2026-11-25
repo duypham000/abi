@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Input, Modal, Tooltip, Dropdown, Popover, Radio, Select, Switch } from "antd";
+import { Input, Tooltip, Dropdown, Popover, Radio, Select, Switch } from "antd";
+import type { DeleteScope } from "@/infrastructure/api/docsApi";
+import { confirmDeleteWithScope } from "@/presentation/components/ui/ConfirmDeleteModal/confirmDeleteModal";
 import type { InputRef, MenuProps } from "antd";
 import {
   StarOutlined,
@@ -68,7 +70,7 @@ interface DocEditorToolbarProps {
   onTitleChange: (value: string) => void;
   onStarToggle: () => void;
   onInfoToggle: () => void;
-  onDelete: () => void;
+  onDelete: (scope?: DeleteScope) => void;
   onCopyLink: () => void;
   onSettingsChange: (next: EditorSettings) => void;
   onOpenInNewTab: () => void;
@@ -336,13 +338,10 @@ export function DocEditorToolbar({
       icon: <DeleteOutlined />,
       danger: true,
       onClick: () =>
-        Modal.confirm({
-          title: "Xoá tài liệu?",
-          content: "Tài liệu này sẽ bị xoá vĩnh viễn.",
-          okText: "Xoá",
-          okType: "danger",
-          cancelText: "Huỷ",
-          onOk: onDelete,
+        confirmDeleteWithScope({
+          entityLabel: "tài liệu",
+          title,
+          onConfirm: (scope) => onDelete(scope),
         }),
     },
   ];

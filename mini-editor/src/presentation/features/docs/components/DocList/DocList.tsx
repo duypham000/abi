@@ -1,11 +1,12 @@
 import type { DocDto } from "@/core/interfaces/docs";
+import type { DeleteScope } from "@/infrastructure/api/docsApi";
 import { Loading } from "@/presentation/components/ui/Loading/Loading";
 import DocCard from "../DocCard";
 import "./DocList.scss";
 
 interface DocListProps {
   docs: DocDto[];
-  onDelete: (id: number) => void;
+  onDelete: (id: number, scope?: DeleteScope) => void;
   isDeleting?: boolean;
   isLoading?: boolean;
 }
