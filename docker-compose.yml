@@ -97,7 +97,7 @@ services:
     image: ghcr.io/duypham000/tomo-web:latest
     container_name: tomo-web-app
     ports:
-      - "${WEB_PORT:-5173}:80"
+      - "${WEB_PORT:-5173}:5173"
     depends_on:
       - go-backend
       - node-api
