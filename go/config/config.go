@@ -25,22 +25,29 @@ type Config struct {
 	NodeWsURL            string
 	GemOpsBaseURL        string
 	GemOpsSocketPath     string
+	GemOpsAuthToken      string
+	GemOpsBasicUser      string
+	GemOpsBasicPass      string
 	GemOpsDefaultHarness string
 	GemOpsTurnTimeout    time.Duration
 }
 
 func LoadConfig() *Config {
 	// Attempt loading .env files in priority order
+	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
 	envFile := getEnv("ENV_FILE", "")
 	if envFile != "" {
 		_ = loadDotEnv(envFile)
+	} else if appEnv == "production" {
+		_ = loadDotEnv(".env.production")
+		_ = loadDotEnv(".env")
 	} else {
-		// Load .env or .env.local if present
+		// Load .env.local and .env in non-production environments
 		_ = loadDotEnv(".env.local")
 		_ = loadDotEnv(".env")
 	}
 
-	appEnv := getEnv("APP_ENV", "development")
+	appEnv = getEnv("APP_ENV", "development")
 	if appEnv == "production" {
 		_ = loadDotEnv(".env.production")
 	}
@@ -72,6 +79,9 @@ func LoadConfig() *Config {
 		NodeWsURL:            nodeWsUrl,
 		GemOpsBaseURL:        getEnv("GEMOPS_BASE_URL", getEnv("AGENT_TCP_URL", "http://127.0.0.1:9090")),
 		GemOpsSocketPath:     getEnv("GEMOPS_SOCKET_PATH", getEnv("AGENT_SOCKET_PATH", "/run/agent/agent.sock")),
+		GemOpsAuthToken:      getEnv("GEMOPS_AUTH_TOKEN", getEnv("WEB_AUTH_TOKEN", "")),
+		GemOpsBasicUser:      getEnv("GEMOPS_BASIC_USER", getEnv("WEB_BASIC_USER", "")),
+		GemOpsBasicPass:      getEnv("GEMOPS_BASIC_PASS", getEnv("WEB_BASIC_PASS", "")),
 		GemOpsDefaultHarness: getEnv("GEMOPS_DEFAULT_HARNESS", ""),
 		GemOpsTurnTimeout:    time.Duration(getEnvAsInt("GEMOPS_TURN_TIMEOUT_SEC", 300)) * time.Second,
 	}
@@ -110,6 +120,7 @@ func loadDotEnv(filepath string) error {
 		if len(parts) == 2 {
 			key := strings.TrimSpace(parts[0])
 			val := strings.TrimSpace(parts[1])
+			val = stripUnquotedComment(val)
 			val = strings.Trim(val, `"'`)
 			if _, exists := os.LookupEnv(key); !exists {
 				_ = os.Setenv(key, val)
@@ -118,6 +129,19 @@ func loadDotEnv(filepath string) error {
 	}
 	log.Printf("Loaded environment settings from %s", resolvedPath)
 	return nil
+}
+
+func stripUnquotedComment(val string) string {
+	if len(val) >= 2 && ((val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'')) {
+		return val
+	}
+	if idx := strings.Index(val, " #"); idx >= 0 {
+		return strings.TrimSpace(val[:idx])
+	}
+	if idx := strings.Index(val, "\t#"); idx >= 0 {
+		return strings.TrimSpace(val[:idx])
+	}
+	return val
 }
 
 func getEnv(key, fallback string) string {

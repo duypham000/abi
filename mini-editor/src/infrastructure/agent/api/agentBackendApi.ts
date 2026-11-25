@@ -87,13 +87,23 @@ export interface AgentHarnessesResponse {
   items: AgentHarnessSummary[];
 }
 
-function resolveAgentBaseUrl(apiEndpoint?: string): string {
-  const trimmed = (apiEndpoint ?? "").trim();
-  if (!trimmed) return "/api/v1/agent";
-  if (trimmed.endsWith("/chat")) {
-    return trimmed.slice(0, -"/chat".length) || "/api/v1/agent";
+export function resolveAgentApiEndpoint(endpoint?: string): string {
+  const trimmed = (endpoint ?? "").trim() || "/api/v1/agent/chat";
+  if (import.meta.env.PROD && trimmed.startsWith("/api/")) {
+    const goApiUrl = ((import.meta.env.VITE_GO_API_URL as string | undefined) ?? "").trim().replace(/\/+$/, "");
+    if (/^https?:\/\//i.test(goApiUrl)) {
+      return `${goApiUrl}${trimmed}`;
+    }
   }
-  return trimmed.replace(/\/+$/, "");
+  return trimmed;
+}
+
+function resolveAgentBaseUrl(apiEndpoint?: string): string {
+  const resolved = resolveAgentApiEndpoint(apiEndpoint);
+  if (resolved.endsWith("/chat")) {
+    return resolved.slice(0, -"/chat".length) || "/api/v1/agent";
+  }
+  return resolved.replace(/\/+$/, "");
 }
 
 async function requestJson<T>(

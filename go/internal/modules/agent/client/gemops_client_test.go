@@ -148,3 +148,88 @@ func TestGemOpsClient_DashDisablesTCPAndReturnsConnectionError(t *testing.T) {
 		t.Fatalf("unexpected ConnectionError transport metadata: %+v", connErr.Transport)
 	}
 }
+
+func TestGemOpsClient_RuntimeFallbackWhenUnixDialFails(t *testing.T) {
+	staleSock := filepath.Join(os.TempDir(), fmt.Sprintf("stale_gemops_%d.sock", time.Now().UnixNano()))
+	_ = os.Remove(staleSock)
+	if err := os.WriteFile(staleSock, []byte("stale"), 0600); err != nil {
+		t.Fatalf("failed to create stale socket file: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(staleSock) })
+
+	tcpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/status" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(dto.GemOpsStatusResponse{
+				State:           "IDLE",
+				ActiveHarnessID: "runtime-tcp-fallback",
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer tcpSrv.Close()
+
+	c := client.NewGemOpsClient(tcpSrv.URL, staleSock)
+	status, err := c.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("expected runtime fallback to TCP to succeed, got error: %v", err)
+	}
+	if status.ActiveHarnessID != "runtime-tcp-fallback" {
+		t.Fatalf("expected activeHarnessId 'runtime-tcp-fallback', got %q", status.ActiveHarnessID)
+	}
+
+	ok, code, probeErr := c.CheckStatus(context.Background())
+	if !ok || code != http.StatusOK || probeErr != "" {
+		t.Fatalf("CheckStatus runtime fallback failed: ok=%v code=%d err=%q", ok, code, probeErr)
+	}
+}
+
+func TestGemOpsClient_AutoDetectsGemOpsWebGatewayPrefixAndAuth(t *testing.T) {
+	gwSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/status":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte("<!doctype html><html><body>gemops-web UI</body></html>"))
+		case "/api/agent/status":
+			if r.Header.Get("Authorization") != "Bearer secret-tok" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(dto.GemOpsStatusResponse{
+				State:           "IDLE",
+				ActiveHarnessID: "gemops-web-gateway",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer gwSrv.Close()
+
+	c := client.NewGemOpsClientWithOptions(client.ClientOptions{
+		BaseURL:    gwSrv.URL,
+		SocketPath: "-",
+		AuthToken:  "secret-tok",
+	})
+
+	status, err := c.GetStatus(context.Background())
+	if err != nil {
+		t.Fatalf("expected auto-detected /api/agent gateway to succeed, got: %v", err)
+	}
+	if status.ActiveHarnessID != "gemops-web-gateway" {
+		t.Fatalf("expected 'gemops-web-gateway', got %q", status.ActiveHarnessID)
+	}
+
+	info := c.Info()
+	if info.Mode != "tcp" || info.Target != gwSrv.URL+"/api/agent" {
+		t.Fatalf("expected cached /api/agent prefix in Info(), got %+v", info)
+	}
+
+	ok, code, probeErr := c.CheckStatus(context.Background())
+	if !ok || code != http.StatusOK || probeErr != "" {
+		t.Fatalf("CheckStatus over /api/agent failed: ok=%v code=%d err=%q", ok, code, probeErr)
+	}
+}

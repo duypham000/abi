@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"tomo-backend/internal/infrastructure/logger"
 	"tomo-backend/internal/infrastructure/response"
@@ -72,23 +74,30 @@ func (h *AgentHandler) Chat(c *gin.Context) {
 	}
 
 	actor := h.resolveActor(c)
+	var writeMu sync.Mutex
 	headersWritten := false
 
-	emit := func(chunk map[string]interface{}) error {
-		if !headersWritten {
-			headersWritten = true
-			c.Header("Content-Type", "text/event-stream; charset=utf-8")
-			c.Header("Cache-Control", "no-cache, no-transform")
-			c.Header("Connection", "keep-alive")
-			c.Header("X-Accel-Buffering", "no")
-			c.Header("x-vercel-ai-ui-message-stream", "v1")
-			c.Status(http.StatusOK)
+	writeSSEHeadersLocked := func() {
+		if headersWritten {
+			return
 		}
+		headersWritten = true
+		c.Header("Content-Type", "text/event-stream; charset=utf-8")
+		c.Header("Cache-Control", "no-cache, no-transform")
+		c.Header("Connection", "keep-alive")
+		c.Header("X-Accel-Buffering", "no")
+		c.Header("x-vercel-ai-ui-message-stream", "v1")
+		c.Status(http.StatusOK)
+	}
 
+	emit := func(chunk map[string]interface{}) error {
 		encoded, err := json.Marshal(chunk)
 		if err != nil {
 			return err
 		}
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		writeSSEHeadersLocked()
 		if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", encoded); err != nil {
 			return err
 		}
@@ -96,9 +105,34 @@ func (h *AgentHandler) Chat(c *gin.Context) {
 		return nil
 	}
 
+	heartbeatDone := make(chan struct{})
+	defer close(heartbeatDone)
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-heartbeatDone:
+				return
+			case <-c.Request.Context().Done():
+				return
+			case <-ticker.C:
+				writeMu.Lock()
+				if headersWritten {
+					_, _ = fmt.Fprintf(c.Writer, ": ping %d\n\n", time.Now().Unix())
+					c.Writer.Flush()
+				}
+				writeMu.Unlock()
+			}
+		}
+	}()
+
 	err := h.svc.StreamChat(c.Request.Context(), req, actor, emit)
 	if err != nil {
-		if !headersWritten {
+		writeMu.Lock()
+		started := headersWritten
+		writeMu.Unlock()
+		if !started {
 			h.writeUpstreamError(c, err)
 			return
 		}
@@ -108,16 +142,20 @@ func (h *AgentHandler) Chat(c *gin.Context) {
 				"type":      "error",
 				"errorText": err.Error(),
 			})
+			writeMu.Lock()
 			_, _ = fmt.Fprint(c.Writer, "data: [DONE]\n\n")
 			c.Writer.Flush()
+			writeMu.Unlock()
 		}
 		return
 	}
 
+	writeMu.Lock()
 	if headersWritten {
 		_, _ = fmt.Fprint(c.Writer, "data: [DONE]\n\n")
 		c.Writer.Flush()
 	}
+	writeMu.Unlock()
 }
 
 func (h *AgentHandler) GetStatus(c *gin.Context) {

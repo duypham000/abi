@@ -17,7 +17,13 @@ type Module struct {
 }
 
 func InitModule(cfg *config.Config, jwtManager *security.JWTManager) *Module {
-	gemClient := client.NewGemOpsClient(cfg.GemOpsBaseURL, cfg.GemOpsSocketPath)
+	gemClient := client.NewGemOpsClientWithOptions(client.ClientOptions{
+		BaseURL:    cfg.GemOpsBaseURL,
+		SocketPath: cfg.GemOpsSocketPath,
+		AuthToken:  cfg.GemOpsAuthToken,
+		BasicUser:  cfg.GemOpsBasicUser,
+		BasicPass:  cfg.GemOpsBasicPass,
+	})
 	svc := service.NewAgentService(gemClient, cfg.GemOpsDefaultHarness, cfg.GemOpsTurnTimeout)
 	handler := delivery.NewAgentHandler(svc, jwtManager)
 	return &Module{

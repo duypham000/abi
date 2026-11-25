@@ -1,5 +1,6 @@
 import type { AgentRuntimeConfig, AgentUIMessage } from "@/core/interfaces/agent";
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
+import { resolveAgentApiEndpoint } from "../api/agentBackendApi";
 import {
   DefaultChatTransport,
   type ChatTransport,
@@ -7,8 +8,7 @@ import {
 } from "ai";
 
 function resolveApiUrl(endpoint: string): string {
-  const trimmed = endpoint.trim();
-  return trimmed.length > 0 ? trimmed : "/api/v1/agent/chat";
+  return resolveAgentApiEndpoint(endpoint);
 }
 
 function normalizeHeaders(

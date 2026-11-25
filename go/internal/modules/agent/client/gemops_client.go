@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"tomo-backend/internal/modules/agent/dto"
@@ -56,10 +57,24 @@ type resolvedEndpoint struct {
 	socketNote   string
 }
 
+// ClientOptions configures how GemOpsClient connects to gemops-agent or gemops-web.
+type ClientOptions struct {
+	BaseURL    string
+	SocketPath string
+	AuthToken  string
+	BasicUser  string
+	BasicPass  string
+}
+
 // GemOpsClient communicates with gemops-agent over HTTP (TCP or Unix Domain Socket).
 type GemOpsClient struct {
 	socketPath       string
 	tcpURL           string
+	authToken        string
+	basicUser        string
+	basicPass        string
+	prefixMu         sync.RWMutex
+	tcpPathPrefix    string
 	unixHTTPClient   *http.Client
 	unixStreamClient *http.Client
 	tcpHTTPClient    *http.Client
@@ -70,11 +85,19 @@ type GemOpsClient struct {
 //   - socketPath == "-" disables Unix socket and forces TCP via baseURL.
 //   - baseURL == "-" disables TCP fallback and forces Unix socket.
 //   - When both socketPath and baseURL are configured, prefers Unix when socketPath exists
-//     (or returns a non-NotExist error such as permission denied), and falls back to TCP on NotExist.
+//     and is accessible, and falls back to TCP otherwise (including runtime dial failures).
 //   - When both are empty, defaults to http://127.0.0.1:9090.
 func NewGemOpsClient(baseURL, socketPath string) *GemOpsClient {
-	trimmedBase := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	trimmedSock := strings.TrimSpace(socketPath)
+	return NewGemOpsClientWithOptions(ClientOptions{
+		BaseURL:    baseURL,
+		SocketPath: socketPath,
+	})
+}
+
+// NewGemOpsClientWithOptions creates a GemOpsClient with optional gateway authentication.
+func NewGemOpsClientWithOptions(opts ClientOptions) *GemOpsClient {
+	trimmedBase := strings.TrimRight(strings.TrimSpace(opts.BaseURL), "/")
+	trimmedSock := strings.TrimSpace(opts.SocketPath)
 
 	if trimmedBase == "-" {
 		trimmedBase = ""
@@ -93,6 +116,9 @@ func NewGemOpsClient(baseURL, socketPath string) *GemOpsClient {
 	c := &GemOpsClient{
 		socketPath: trimmedSock,
 		tcpURL:     trimmedBase,
+		authToken:  strings.TrimSpace(opts.AuthToken),
+		basicUser:  strings.TrimSpace(opts.BasicUser),
+		basicPass:  opts.BasicPass,
 	}
 
 	if trimmedSock != "" {
@@ -139,6 +165,49 @@ func NewGemOpsClient(baseURL, socketPath string) *GemOpsClient {
 	return c
 }
 
+func (c *GemOpsClient) tcpEndpoint(socketNote string) resolvedEndpoint {
+	c.prefixMu.RLock()
+	prefix := c.tcpPathPrefix
+	c.prefixMu.RUnlock()
+
+	base := c.tcpURL
+	if prefix != "" && !strings.HasSuffix(base, prefix) {
+		base += prefix
+	}
+
+	return resolvedEndpoint{
+		info: dto.GemOpsTransportInfo{
+			Mode:       "tcp",
+			Target:     base,
+			SocketPath: c.socketPath,
+			TCPURL:     base,
+		},
+		baseURL:      base,
+		httpClient:   c.tcpHTTPClient,
+		streamClient: c.tcpStreamClient,
+		socketNote:   socketNote,
+	}
+}
+
+func (c *GemOpsClient) canTryAgentPrefix(ep resolvedEndpoint) bool {
+	if ep.info.Mode != "tcp" || c.tcpURL == "" {
+		return false
+	}
+	if strings.HasSuffix(ep.baseURL, "/api/agent") {
+		return false
+	}
+	c.prefixMu.RLock()
+	prefix := c.tcpPathPrefix
+	c.prefixMu.RUnlock()
+	return prefix == ""
+}
+
+func (c *GemOpsClient) setTCPPathPrefix(prefix string) {
+	c.prefixMu.Lock()
+	c.tcpPathPrefix = prefix
+	c.prefixMu.Unlock()
+}
+
 func (c *GemOpsClient) resolveEndpoint() resolvedEndpoint {
 	if c.socketPath != "" {
 		unixEP := resolvedEndpoint{
@@ -155,34 +224,30 @@ func (c *GemOpsClient) resolveEndpoint() resolvedEndpoint {
 		if c.tcpURL == "" {
 			return unixEP
 		}
-		if _, statErr := os.Stat(c.socketPath); statErr == nil || !errors.Is(statErr, os.ErrNotExist) {
+		if info, statErr := os.Stat(c.socketPath); statErr == nil && !info.IsDir() {
 			return unixEP
-		}
-		return resolvedEndpoint{
-			info: dto.GemOpsTransportInfo{
-				Mode:       "tcp",
-				Target:     c.tcpURL,
-				SocketPath: c.socketPath,
-				TCPURL:     c.tcpURL,
-			},
-			baseURL:      c.tcpURL,
-			httpClient:   c.tcpHTTPClient,
-			streamClient: c.tcpStreamClient,
-			socketNote:   fmt.Sprintf("socket %s not found; tcp fallback failed", c.socketPath),
+		} else {
+			return c.tcpEndpoint(fmt.Sprintf("socket %s unavailable (%v); tcp fallback failed", c.socketPath, statErr))
 		}
 	}
 
-	return resolvedEndpoint{
-		info: dto.GemOpsTransportInfo{
-			Mode:       "tcp",
-			Target:     c.tcpURL,
-			SocketPath: c.socketPath,
-			TCPURL:     c.tcpURL,
-		},
-		baseURL:      c.tcpURL,
-		httpClient:   c.tcpHTTPClient,
-		streamClient: c.tcpStreamClient,
+	return c.tcpEndpoint("")
+}
+
+func (c *GemOpsClient) applyAuthHeaders(req *http.Request) {
+	if c.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.authToken)
+		req.Header.Set("X-GemOps-Token", c.authToken)
+		return
 	}
+	if c.basicUser != "" && (req.URL == nil || req.URL.User == nil) {
+		req.SetBasicAuth(c.basicUser, c.basicPass)
+	}
+}
+
+func isHTMLContentType(ct string) bool {
+	lower := strings.ToLower(strings.TrimSpace(ct))
+	return strings.Contains(lower, "text/html") || strings.Contains(lower, "application/xhtml+xml")
 }
 
 func (c *GemOpsClient) wrapTransportError(ep resolvedEndpoint, err error) error {
@@ -209,16 +274,45 @@ func (c *GemOpsClient) CheckStatus(ctx context.Context) (bool, int, string) {
 	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, ep.baseURL+"/status", nil)
-	if err != nil {
-		return false, 0, err.Error()
+	doProbe := func(targetEP resolvedEndpoint, path string) (*http.Response, error) {
+		req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, targetEP.baseURL+path, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		c.applyAuthHeaders(req)
+		return targetEP.httpClient.Do(req)
 	}
-	resp, err := ep.httpClient.Do(req)
+
+	resp, err := doProbe(ep, "/status")
+	if err != nil && ep.info.Mode == "unix" && c.tcpURL != "" && c.tcpHTTPClient != nil && ctx.Err() == nil {
+		ep = c.tcpEndpoint(fmt.Sprintf("unix socket %s failed (%v); tcp fallback failed", c.socketPath, err))
+		resp, err = doProbe(ep, "/status")
+	}
 	if err != nil {
 		return false, 0, c.wrapTransportError(ep, err).Error()
 	}
+
+	if (resp.StatusCode == http.StatusNotFound || isHTMLContentType(resp.Header.Get("Content-Type"))) && c.canTryAgentPrefix(ep) {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		_ = resp.Body.Close()
+
+		prefixedResp, prefErr := doProbe(ep, "/api/agent/status")
+		if prefErr == nil {
+			resp = prefixedResp
+			if resp.StatusCode == http.StatusOK && !isHTMLContentType(resp.Header.Get("Content-Type")) {
+				c.setTCPPathPrefix("/api/agent")
+			}
+		} else {
+			return false, 0, c.wrapTransportError(ep, prefErr).Error()
+		}
+	}
+
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode == http.StatusOK && isHTMLContentType(resp.Header.Get("Content-Type")) {
+		return false, http.StatusBadGateway, "upstream returned HTML instead of JSON; verify GEMOPS_BASE_URL points to gemops-agent or gemops-web /api/agent"
+	}
 	return resp.StatusCode == http.StatusOK, resp.StatusCode, ""
 }
 
@@ -353,34 +447,78 @@ func (c *GemOpsClient) Reset(ctx context.Context, compact bool, harnessID string
 // Callers are responsible for closing resp.Body when finished.
 func (c *GemOpsClient) StreamRawEvents(ctx context.Context, lastEventID, rawQuery string) (*http.Response, error) {
 	ep := c.resolveEndpoint()
-	targetURL := ep.baseURL + "/events"
 	cleanLastID := strings.TrimSpace(lastEventID)
-	if strings.TrimSpace(rawQuery) != "" {
-		targetURL += "?" + rawQuery
-	} else if cleanLastID != "" {
-		targetURL += "?lastEventId=" + url.QueryEscape(cleanLastID)
+
+	buildStreamReq := func(targetEP resolvedEndpoint, pathPrefix string) (*http.Request, error) {
+		targetURL := targetEP.baseURL + pathPrefix + "/events"
+		if strings.TrimSpace(rawQuery) != "" {
+			targetURL += "?" + rawQuery
+		} else if cleanLastID != "" {
+			targetURL += "?lastEventId=" + url.QueryEscape(cleanLastID)
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "text/event-stream")
+		if cleanLastID != "" {
+			req.Header.Set("Last-Event-ID", cleanLastID)
+		}
+		c.applyAuthHeaders(req)
+		return req, nil
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+	req, err := buildStreamReq(ep, "")
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Accept", "text/event-stream")
-	if cleanLastID != "" {
-		req.Header.Set("Last-Event-ID", cleanLastID)
-	}
 
 	resp, err := ep.streamClient.Do(req)
+	if err != nil && ep.info.Mode == "unix" && c.tcpURL != "" && c.tcpStreamClient != nil && ctx.Err() == nil {
+		ep = c.tcpEndpoint(fmt.Sprintf("unix socket %s failed (%v); tcp fallback failed", c.socketPath, err))
+		if tcpReq, reqErr := buildStreamReq(ep, ""); reqErr == nil {
+			resp, err = ep.streamClient.Do(tcpReq)
+		}
+	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, err
 		}
 		return nil, c.wrapTransportError(ep, err)
 	}
+
+	if (resp.StatusCode == http.StatusNotFound || isHTMLContentType(resp.Header.Get("Content-Type"))) && c.canTryAgentPrefix(ep) {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		_ = resp.Body.Close()
+
+		prefReq, reqErr := buildStreamReq(ep, "/api/agent")
+		if reqErr != nil {
+			return nil, reqErr
+		}
+		prefResp, prefErr := ep.streamClient.Do(prefReq)
+		if prefErr != nil {
+			if ctx.Err() != nil {
+				return nil, prefErr
+			}
+			return nil, c.wrapTransportError(ep, prefErr)
+		}
+		resp = prefResp
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 && !isHTMLContentType(resp.Header.Get("Content-Type")) {
+			c.setTCPPathPrefix("/api/agent")
+		}
+	}
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		msg := readErrorBody(resp.Body)
 		_ = resp.Body.Close()
 		return nil, &UpstreamError{StatusCode: resp.StatusCode, Message: msg}
+	}
+	if isHTMLContentType(resp.Header.Get("Content-Type")) {
+		_ = resp.Body.Close()
+		return nil, &UpstreamError{
+			StatusCode: http.StatusBadGateway,
+			Message:    "upstream returned HTML instead of SSE stream; verify GEMOPS_BASE_URL points to gemops-agent or gemops-web /api/agent",
+		}
 	}
 	return resp, nil
 }
@@ -496,42 +634,90 @@ func parseEventFrame(id, eventName, rawPayload string) (*dto.GemOpsEvent, error)
 
 func (c *GemOpsClient) doJSON(ctx context.Context, method, path string, headers map[string]string, body interface{}, out interface{}) error {
 	ep := c.resolveEndpoint()
-	var reqBody io.Reader
+	var encoded []byte
 	if body != nil {
-		encoded, err := json.Marshal(body)
+		var err error
+		encoded, err = json.Marshal(body)
 		if err != nil {
 			return err
 		}
-		reqBody = bytes.NewReader(encoded)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, ep.baseURL+path, reqBody)
+	buildReq := func(targetEP resolvedEndpoint, pathPrefix string) (*http.Request, error) {
+		var reqBody io.Reader
+		if encoded != nil {
+			reqBody = bytes.NewReader(encoded)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, targetEP.baseURL+pathPrefix+path, reqBody)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		if encoded != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		c.applyAuthHeaders(req)
+		for k, v := range headers {
+			if strings.TrimSpace(v) != "" {
+				req.Header.Set(k, v)
+			}
+		}
+		return req, nil
+	}
+
+	req, err := buildReq(ep, "")
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	for k, v := range headers {
-		if strings.TrimSpace(v) != "" {
-			req.Header.Set(k, v)
-		}
-	}
 
 	resp, err := ep.httpClient.Do(req)
+	if err != nil && ep.info.Mode == "unix" && c.tcpURL != "" && c.tcpHTTPClient != nil && ctx.Err() == nil {
+		ep = c.tcpEndpoint(fmt.Sprintf("unix socket %s failed (%v); tcp fallback failed", c.socketPath, err))
+		if tcpReq, reqErr := buildReq(ep, ""); reqErr == nil {
+			resp, err = ep.httpClient.Do(tcpReq)
+		}
+	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return err
 		}
 		return c.wrapTransportError(ep, err)
 	}
+
+	if (resp.StatusCode == http.StatusNotFound || isHTMLContentType(resp.Header.Get("Content-Type"))) && c.canTryAgentPrefix(ep) {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		_ = resp.Body.Close()
+
+		prefReq, reqErr := buildReq(ep, "/api/agent")
+		if reqErr != nil {
+			return reqErr
+		}
+		prefResp, prefErr := ep.httpClient.Do(prefReq)
+		if prefErr != nil {
+			if ctx.Err() != nil {
+				return prefErr
+			}
+			return c.wrapTransportError(ep, prefErr)
+		}
+		resp = prefResp
+		if !isHTMLContentType(resp.Header.Get("Content-Type")) && resp.StatusCode != http.StatusNotFound {
+			c.setTCPPathPrefix("/api/agent")
+		}
+	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return &UpstreamError{
 			StatusCode: resp.StatusCode,
 			Message:    readErrorBody(resp.Body),
+		}
+	}
+
+	if isHTMLContentType(resp.Header.Get("Content-Type")) {
+		return &UpstreamError{
+			StatusCode: http.StatusBadGateway,
+			Message:    "upstream returned HTML instead of JSON; verify GEMOPS_BASE_URL points to gemops-agent or gemops-web /api/agent",
 		}
 	}
 

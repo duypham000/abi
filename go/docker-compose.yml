@@ -6,8 +6,12 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tomo-backend-app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
+    group_add:
+      - "${AGENT_CLIENTS_GID:-999}"
     environment:
       - APP_ENV=production
       - SERVER_PORT=8080
@@ -15,8 +19,14 @@ services:
       - DB_DSN=host=postgres-db user=tomo_user password=tomo_password dbname=tomo_db port=5432 sslmode=disable TimeZone=UTC
       - JWT_SECRET=docker-production-jwt-secret-key-32chars
       - YJS_SECRET=docker-production-yjs-secret-key-32chars
+      - GEMOPS_BASE_URL=${GEMOPS_BASE_URL:-http://host.docker.internal:18080/api/agent}
+      - GEMOPS_SOCKET_PATH=${GEMOPS_SOCKET_PATH:-/run/agent/agent.sock}
+      - GEMOPS_AUTH_TOKEN=${GEMOPS_AUTH_TOKEN:-}
+      - GEMOPS_DEFAULT_HARNESS=${GEMOPS_DEFAULT_HARNESS:-}
+      - GEMOPS_TURN_TIMEOUT_SEC=${GEMOPS_TURN_TIMEOUT_SEC:-300}
     volumes:
       - tomo_workspace_data:/app/data
+      - /run/agent:/run/agent
     depends_on:
       postgres-db:
         condition: service_healthy
