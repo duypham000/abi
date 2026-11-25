@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	docsDto "tomo-backend/internal/modules/docs/dto"
 	"tomo-backend/internal/modules/docs/service"
 	"tomo-backend/internal/modules/github/domain"
 	"tomo-backend/internal/modules/github/dto"
@@ -536,6 +537,32 @@ func (s *gitHubService) SaveFile(ctx context.Context, userID string, req dto.Sav
 		Size:      int64(len(formattedBytes)),
 		UpdatedAt: time.Now(),
 	})
+
+	// Keep backend docs table in sync with the saved workspace file
+	if itemType == "doc" && s.docsService != nil {
+		var contentStr string
+		var statusVal interface{} = "PUBLISHED"
+		if m, ok := parsedContent.(map[string]interface{}); ok {
+			if st, exists := m["status"]; exists {
+				if st == 0 || st == float64(0) || st == "0" || st == "DRAFT" {
+					statusVal = "DRAFT"
+				}
+			}
+			if cVal, exists := m["content"]; exists {
+				if cStr, ok := cVal.(string); ok {
+					contentStr = cStr
+				} else if cBytes, err := json.Marshal(cVal); err == nil {
+					contentStr = string(cBytes)
+				}
+			}
+		}
+		_, _, _ = s.docsService.SyncFromGit(ctx, userID, docsDto.CreateDocFromGitRequest{
+			Title:   title,
+			Content: contentStr,
+			GitSlug: slug,
+			Status:  statusVal,
+		})
+	}
 
 	var committed, pushed bool
 	var commitHashStr string

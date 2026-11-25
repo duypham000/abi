@@ -325,6 +325,13 @@ func (s *yjsServiceImpl) UpdateDocMeta(ctx context.Context, docID string, plainT
 		return ErrDocNotFound
 	}
 
+	// Never overwrite BlockNote JSON content with extracted plainText.
+	trimmed := strings.TrimSpace(doc.Content)
+	if strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "{") {
+		doc.UpdatedAt = time.Now()
+		return s.docRepo.UpdateDoc(ctx, doc)
+	}
+
 	doc.Content = plainText
 	doc.UpdatedAt = time.Now()
 	return s.docRepo.UpdateDoc(ctx, doc)

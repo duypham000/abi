@@ -155,10 +155,11 @@ export function GitPanel() {
 
         if (pullRes?.items && Array.isArray(pullRes.items)) {
           for (const doc of pullRes.items) {
-            await cacheDoc(doc);
+            await cacheDoc(doc, { force: true });
             syncedCount++;
           }
         }
+        dispatch(docsApi.util.invalidateTags(["Doc"]));
       } catch (dbSyncErr) {
         console.warn("[GitPanel] syncPullRemote to SQLite failed:", dbSyncErr);
       }

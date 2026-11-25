@@ -42,17 +42,21 @@ function toGoDocPayload(body: DocRequest) {
   };
 }
 
-function normalizeRemoteDoc(raw: unknown): DocDto {
+export function normalizeRemoteDoc(raw: unknown): DocDto {
   const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const rawId = obj.id;
   const uuid =
     typeof rawId === "string" && rawId.length > 10
       ? rawId
       : (obj.backendUuid as string | null) ?? null;
+  const slug = (obj.slug as string | null) ?? null;
+  const slugMatch = slug ? slug.match(/^doc-(\d+)$/) : null;
   const numId =
     typeof rawId === "number"
       ? rawId
-      : parseOrHashId(String(rawId ?? uuid ?? Date.now()), "doc-");
+      : slugMatch
+        ? Number(slugMatch[1])
+        : parseOrHashId(String(rawId ?? uuid ?? Date.now()), "doc-");
   return {
     id: numId,
     title: typeof obj.title === "string" ? obj.title : "Untitled",
@@ -64,7 +68,7 @@ function normalizeRemoteDoc(raw: unknown): DocDto {
     createdBy: (obj.createdBy as DocDto["createdBy"]) ?? null,
     yjsState: (obj.yjsState as string | null) ?? null,
     backendUuid: uuid,
-    slug: (obj.slug as string | null) ?? null,
+    slug,
     remoteStatus: "online",
   };
 }
@@ -92,7 +96,7 @@ export const docsApi = baseApi.injectEndpoints({
                     const items = (res.data as PageResult<DocDto>).items;
                     if (Array.isArray(items) && items.length > 0) {
                       for (const item of items) {
-                        await cacheDoc(item);
+                        await cacheDoc(normalizeRemoteDoc(item));
                       }
                       const fresh = await listDocsFromSqlite(args || undefined);
                       api.dispatch(docsApi.util.upsertQueryData("listDocs", args, fresh));
@@ -168,7 +172,11 @@ export const docsApi = baseApi.injectEndpoints({
                 try {
                   const res = await fetchWithBaseQuery(`/base/docs/${remoteUuid}`);
                   if (res.data) {
-                    const linked = await linkRemoteDocToLocal(id, res.data as Record<string, unknown>, { force: false });
+                    const preSnap = await getDocSyncSnapshot(id);
+                    const canOverwriteLocal = !preSnap || !preSnap.hasUnsyncedRemoteChanges;
+                    const linked = await linkRemoteDocToLocal(id, res.data as Record<string, unknown>, {
+                      force: canOverwriteLocal,
+                    });
                     const snap = await getDocSyncSnapshot(id);
                     const nextDoc = snap?.doc ?? linked ?? local;
                     api.dispatch(
@@ -275,7 +283,7 @@ export const docsApi = baseApi.injectEndpoints({
     }),
 
     updateDoc: builder.mutation<DocDto, { id: number; body: DocRequest }>({
-      queryFn: async ({ id, body }, _api, _extraOptions, fetchWithBaseQuery) => {
+      queryFn: async ({ id, body }, api, _extraOptions, fetchWithBaseQuery) => {
         let localDoc: DocDto | null = null;
         if (isTauri()) {
           try {
@@ -312,14 +320,14 @@ export const docsApi = baseApi.injectEndpoints({
                       confirmedRemoteHash: sentRemoteHash,
                     })
                   : null;
-                return {
-                  data: {
-                    ...(linked ?? normalizeRemoteDoc(result.data)),
-                    remoteStatus: "online",
-                    remoteSyncError: null,
-                    remoteSyncNetworkError: false,
-                  },
+                const finalDoc: DocDto = {
+                  ...(linked ?? normalizeRemoteDoc(result.data)),
+                  remoteStatus: "online",
+                  remoteSyncError: null,
+                  remoteSyncNetworkError: false,
                 };
+                api.dispatch(docsApi.util.upsertQueryData("getDocById", id, finalDoc));
+                return { data: finalDoc };
               }
               const errStatus = (result.error as { status?: number } | undefined)?.status;
               if (errStatus === 404 || errStatus === 500) {
@@ -345,14 +353,14 @@ export const docsApi = baseApi.injectEndpoints({
                       confirmedRemoteHash: sentRemoteHash,
                     })
                   : null;
-                return {
-                  data: {
-                    ...(linked ?? normalizeRemoteDoc(createRes.data)),
-                    remoteStatus: "online",
-                    remoteSyncError: null,
-                    remoteSyncNetworkError: false,
-                  },
+                const finalDoc: DocDto = {
+                  ...(linked ?? normalizeRemoteDoc(createRes.data)),
+                  remoteStatus: "online",
+                  remoteSyncError: null,
+                  remoteSyncNetworkError: false,
                 };
+                api.dispatch(docsApi.util.upsertQueryData("getDocById", id, finalDoc));
+                return { data: finalDoc };
               }
               if (createRes.error) {
                 const extracted = extractRemoteSyncError(createRes.error);
@@ -377,14 +385,14 @@ export const docsApi = baseApi.injectEndpoints({
               payload: body,
             });
           }
-          return {
-            data: {
-              ...localDoc,
-              remoteStatus: "local-only",
-              remoteSyncError,
-              remoteSyncNetworkError,
-            },
+          const offlineDoc: DocDto = {
+            ...localDoc,
+            remoteStatus: "local-only",
+            remoteSyncError,
+            remoteSyncNetworkError,
           };
+          api.dispatch(docsApi.util.upsertQueryData("getDocById", id, offlineDoc));
+          return { data: offlineDoc };
         }
 
         const result = await fetchWithBaseQuery({ url: `/base/docs/${id}`, method: "PUT", body: goPayload });
@@ -392,10 +400,7 @@ export const docsApi = baseApi.injectEndpoints({
           ? { data: normalizeRemoteDoc(result.data) }
           : { error: result.error as any };
       },
-      invalidatesTags: (_res, _err, { id }) => [
-        { type: "Doc" as const, id },
-        "Doc",
-      ],
+      invalidatesTags: ["Doc"],
     }),
 
     deleteDoc: builder.mutation<void, number>({
@@ -536,6 +541,18 @@ export const docsApi = baseApi.injectEndpoints({
           status: "PUBLISHED",
         },
       }),
+      async onQueryStarted(arg, { queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          if (isTauri() && data) {
+            const slugMatch = arg.gitSlug.match(/^doc-(\d+)$/);
+            const numId = slugMatch ? Number(slugMatch[1]) : parseOrHashId(arg.gitSlug, "doc-");
+            await linkRemoteDocToLocal(numId, data as unknown as Record<string, unknown>, { force: true });
+          }
+        } catch {
+          // non-fatal
+        }
+      },
       invalidatesTags: ["Doc"],
     }),
     syncPushLocal: builder.mutation<
@@ -554,6 +571,10 @@ export const docsApi = baseApi.injectEndpoints({
         url: "/base/docs/sync/pull",
         params: args?.since ? { since: args.since } : undefined,
       }),
+      transformResponse: (res: { items?: unknown[]; total?: number }) => {
+        const items = Array.isArray(res?.items) ? res.items.map(normalizeRemoteDoc) : [];
+        return { items, total: res?.total ?? items.length };
+      },
       providesTags: ["Doc"],
     }),
     getYjsToken: builder.query<{ token: string; url: string; expiresIn: number }, number | string>({

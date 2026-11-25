@@ -20,6 +20,7 @@ import {
 import { pingServer } from "@/infrastructure/api/sessionBootstrap";
 import { replayOutbox } from "@/infrastructure/tauri/syncEngine";
 import { isTauri } from "@/infrastructure/tauri/sqliteDb";
+import { cacheDoc } from "@/infrastructure/tauri/docCacheService";
 import { githubApi } from "@/infrastructure/api/githubApi";
 import { docsApi } from "@/infrastructure/api/docsApi";
 
@@ -105,6 +106,23 @@ export function useConnectivityManager() {
           );
         } catch {
           // Not fatal
+        }
+
+        // Step 4: Pull updated docs from backend DB into local SQLite cache
+        if (isTauri()) {
+          try {
+            const pullRes = await dispatch(
+              docsApi.endpoints.syncPullRemote.initiate(undefined, { forceRefetch: true })
+            ).unwrap();
+            if (pullRes?.items && Array.isArray(pullRes.items)) {
+              for (const doc of pullRes.items) {
+                await cacheDoc(doc, { force: true });
+              }
+            }
+            dispatch(docsApi.util.invalidateTags(["Doc"]));
+          } catch {
+            // Not fatal
+          }
         }
       } catch (err) {
         console.warn("[ConnectivityManager] Sync error during reconnect:", err);

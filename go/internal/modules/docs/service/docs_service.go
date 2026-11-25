@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	ErrDocNotFound = errors.New("document not found")
+	ErrDocNotFound     = errors.New("document not found")
 	ErrUnauthorizedDoc = errors.New("unauthorized access to document")
 )
 
@@ -29,7 +29,7 @@ type DocsService interface {
 	DeleteDoc(ctx context.Context, id, userID string) error
 	ListDocs(ctx context.Context, ownerID string, parentID *string, page, pageSize int, search string) (*response.PageResponse, error)
 	GetDocTree(ctx context.Context, ownerID string) ([]dto.DocTreeNode, error)
-	
+
 	// Revision history
 	GetRevisions(ctx context.Context, docID string) ([]dto.DocRevisionDto, error)
 	CreateRevision(ctx context.Context, docID, authorID, summary string, snapshot []byte) (*dto.DocRevisionDto, error)
@@ -113,7 +113,10 @@ func (s *docsServiceImpl) UpdateDoc(ctx context.Context, id, userID string, req 
 
 	if req.Title != nil {
 		doc.Title = *req.Title
-		doc.Slug = generateSlug(doc.Title) + "-" + doc.ID[:8]
+		// Keep existing slug stable (e.g. "doc-180015" or Git-linked slug) so Git/SQLite links never drift on rename.
+		if doc.Slug == "" {
+			doc.Slug = generateSlug(doc.Title) + "-" + doc.ID[:8]
+		}
 	}
 	if req.Content != nil {
 		doc.Content = *req.Content
@@ -251,17 +254,18 @@ func (s *docsServiceImpl) CreateRevision(ctx context.Context, docID, authorID, s
 
 func (s *docsServiceImpl) SyncFromGit(ctx context.Context, ownerID string, req dto.CreateDocFromGitRequest) (*dto.DocDto, bool, error) {
 	if req.GitSlug != "" {
-		// Look up by slug only (slug is globally unique - e.g. "doc-180015").
-		// Using owner-scoped lookup would miss docs registered under a different owner_id,
-		// causing a duplicate-slug constraint error on INSERT.
+		// Look up by slug first, then fallback to FindByID (matches id, trimmed, doc-trimmed, slug).
 		existing, err := s.docRepo.FindBySlug(ctx, req.GitSlug)
+		if err != nil || existing == nil {
+			existing, err = s.docRepo.FindByID(ctx, req.GitSlug)
+		}
 		if err == nil && existing != nil {
 			hasChanges := false
 			if req.Title != "" && existing.Title != req.Title {
 				existing.Title = req.Title
 				hasChanges = true
 			}
-			if req.Content != "" && existing.Content != req.Content {
+			if req.Content != existing.Content && (req.Content != "" || existing.Content == "") {
 				existing.Content = req.Content
 				hasChanges = true
 			}

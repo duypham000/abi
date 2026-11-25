@@ -26,10 +26,10 @@ func (s *gitHubService) syncWorkspaceToDBInternal(ctx context.Context, userID, r
 		return nil // docs service not wired — skip gracefully
 	}
 
-	manifest, err := s.manifestMgr.ReadManifest(repoPath)
+	// Always rebuild manifest from disk so newly pulled docs/canvases are never missed.
+	manifest, err := s.manifestMgr.RebuildManifest(repoPath)
 	if err != nil {
-		// Manifest missing or corrupt — rebuild it first, then re-read
-		manifest, err = s.manifestMgr.RebuildManifest(repoPath)
+		manifest, err = s.manifestMgr.ReadManifest(repoPath)
 		if err != nil {
 			return fmt.Errorf("syncWorkspace: cannot read/rebuild manifest: %w", err)
 		}

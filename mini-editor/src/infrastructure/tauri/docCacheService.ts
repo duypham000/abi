@@ -130,27 +130,69 @@ function computeRowSyncState(row: LocalDoc): {
       : row.backend_uuid && row.is_dirty === 0
         ? remoteHash
         : null;
-  const hasUnsyncedRemoteChanges = !row.backend_uuid || remoteHash !== syncedHash;
+  const hasUnsyncedRemoteChanges = row.is_dirty === 1 && (!row.backend_uuid || remoteHash !== syncedHash);
   return { localHash, remoteHash, syncedHash, hasUnsyncedRemoteChanges };
 }
 
 const DOC_SELECT_COLS =
   "local_id, backend_id, backend_uuid, slug, title, content, metadata, plain_text, yjs_state, series_id, status, last_synced, updated_at, is_dirty, content_hash, synced_hash";
 
+function extractNumericDocId(val: unknown): number | null {
+  if (typeof val === "number" && Number.isFinite(val) && val > 0) return val;
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (/^\d+$/.test(trimmed)) {
+      const n = Number(trimmed);
+      if (n > 0) return n;
+    }
+    const m = trimmed.match(/^doc-(\d+)$/);
+    if (m) {
+      const n = Number(m[1]);
+      if (n > 0) return n;
+    }
+  }
+  return null;
+}
+
 async function findLocalDocRow(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
-  id: number | string
+  id: number | string,
+  slug?: string | null
 ): Promise<LocalDoc | null> {
-  const numId = typeof id === "number" ? id : Number(id);
+  const slugNum = extractNumericDocId(slug);
+  const idNum = extractNumericDocId(id);
+  const numId = idNum ?? slugNum ?? -1;
   const strId = String(id);
+  const slugStr = slug ?? "";
+  const withDocPrefix = strId.startsWith("doc-") ? strId : `doc-${strId}`;
+  const slugWithDocPrefix = slugStr && !slugStr.startsWith("doc-") ? `doc-${slugStr}` : slugStr;
+
   const rows: LocalDoc[] = await db.select(
-    `SELECT ${DOC_SELECT_COLS} FROM docs WHERE backend_id = ? OR backend_uuid = ? OR local_id = ? OR local_id = ? LIMIT 1`,
-    [!isNaN(numId) && numId > 0 ? numId : -1, strId, strId, `doc-${strId}`]
+    `SELECT ${DOC_SELECT_COLS} FROM docs
+     WHERE backend_id = ?
+        OR backend_uuid = ?
+        OR local_id = ?
+        OR local_id = ?
+        OR slug = ?
+        OR (? != '' AND (slug = ? OR slug = ? OR local_id = ? OR local_id = ?))
+     LIMIT 1`,
+    [
+      numId > 0 ? numId : -1,
+      strId,
+      strId,
+      withDocPrefix,
+      strId,
+      slugStr,
+      slugStr,
+      slugWithDocPrefix,
+      slugStr,
+      slugWithDocPrefix,
+    ]
   );
   if (rows.length > 0) return rows[0];
 
   // Backfill legacy rows where UUID backend ids left backend_id = NULL
-  if (!isNaN(numId) && numId > 0) {
+  if (numId > 0) {
     const nullRows: LocalDoc[] = await db.select(
       `SELECT ${DOC_SELECT_COLS} FROM docs WHERE backend_id IS NULL`
     );
@@ -353,30 +395,39 @@ export async function searchDocsInSqlite(q: string): Promise<DocDto[]> {
 
 // ─── Legacy Cache / Draft exports ──────────────────────────────────────────
 
-export async function cacheDoc(doc: DocDto): Promise<void> {
+export async function cacheDoc(doc: DocDto, opts?: { force?: boolean }): Promise<void> {
   const db = await docDb();
   if (!db) return;
+  const rawObj = doc as unknown as Record<string, unknown>;
+  const rawId = rawObj.id;
   const uuid =
     doc.backendUuid ??
-    (typeof (doc as { id: unknown }).id === "string" && String(doc.id).length > 10 ? String(doc.id) : null);
+    (typeof rawId === "string" && rawId.length > 10 ? rawId : null);
+  const slug = doc.slug ?? (typeof rawObj.slug === "string" ? rawObj.slug : null);
+  const slugNumId = extractNumericDocId(slug);
+  const resolvedId: number | string =
+    typeof rawId === "number" && rawId > 0
+      ? rawId
+      : slugNumId ?? (uuid ?? String(rawId ?? Date.now()));
 
-  const existing = await findLocalDocRow(db, doc.id);
-  if (existing) {
+  const existing = await findLocalDocRow(db, resolvedId, slug);
+  if (existing && !opts?.force) {
     const sync = computeRowSyncState(existing);
     if (sync.hasUnsyncedRemoteChanges) {
       // Protect unsaved local edits: only backfill missing remote identity/slug
-      if ((uuid && !existing.backend_uuid) || (doc.slug && !existing.slug)) {
+      if ((uuid && !existing.backend_uuid) || (slug && !existing.slug)) {
         await db.execute(
           "UPDATE docs SET backend_uuid = COALESCE(backend_uuid, ?), slug = COALESCE(slug, ?) WHERE local_id = ?",
-          [uuid, doc.slug ?? null, existing.local_id]
+          [uuid, slug, existing.local_id]
         );
       }
       return;
     }
   }
 
+  const targetKey = existing?.backend_id ?? resolvedId;
   await saveDocLocally(
-    doc.id,
+    targetKey,
     {
       title: doc.title,
       content: doc.content,
@@ -386,9 +437,9 @@ export async function cacheDoc(doc: DocDto): Promise<void> {
       yjsState: doc.yjsState,
       seriesId: doc.seriesId,
       backendUuid: uuid,
-      slug: doc.slug,
+      slug,
     },
-    { markRemoteSynced: Boolean(uuid) }
+    { markRemoteSynced: Boolean(uuid || opts?.force), isDirty: false }
   );
 }
 
@@ -461,14 +512,7 @@ export async function saveDocLocally(
   const normalizedStatus =
     fields.status !== undefined && fields.status !== null ? normalizeDocStatus(fields.status) : null;
 
-  let existing = await findLocalDocRow(db, backendId);
-  if (!existing && slug) {
-    const bySlug: LocalDoc[] = await db.select(
-      `SELECT ${DOC_SELECT_COLS} FROM docs WHERE slug = ? LIMIT 1`,
-      [slug]
-    );
-    if (bySlug.length > 0) existing = bySlug[0];
-  }
+  let existing = await findLocalDocRow(db, backendId, slug);
 
   if (existing) {
     const mergedTitle = fields.title !== undefined ? fields.title : existing.title;
@@ -618,14 +662,7 @@ export async function linkRemoteDocToLocal(
   const content = typeof remoteDoc.content === "string" ? remoteDoc.content : undefined;
   const status = normalizeDocStatus(remoteDoc.status);
 
-  let existing = await findLocalDocRow(db, localId);
-  if (!existing && slug) {
-    const bySlug: LocalDoc[] = await db.select(
-      `SELECT ${DOC_SELECT_COLS} FROM docs WHERE slug = ? LIMIT 1`,
-      [slug]
-    );
-    if (bySlug.length > 0) existing = bySlug[0];
-  }
+  let existing = await findLocalDocRow(db, localId, slug);
 
   if (existing) {
     const existingSync = computeRowSyncState(existing);
@@ -641,8 +678,8 @@ export async function linkRemoteDocToLocal(
     }
 
     const ts = now();
-    const mergedTitle = title ?? existing.title;
-    const mergedContent = content ?? existing.content;
+    const mergedTitle = opts?.confirmedRemoteHash ? existing.title : (title ?? existing.title);
+    const mergedContent = opts?.confirmedRemoteHash ? existing.content : (content ?? existing.content);
     const resolvedUuid = remoteUuid ?? existing.backend_uuid ?? null;
     const localHash = computeDocLocalHashSync({
       title: mergedTitle,

@@ -371,6 +371,21 @@ export function useDocEditor(
           if (!userEditedRef.current) {
             editorSnapshotRef.current = snapshotFromDoc(snap.doc);
             setEditorHashes(snap.localHash, snap.remoteHash);
+            // If backendData just arrived with fresh content and editor is mounted, sync blocks if different
+            const ed = editorRef?.current;
+            if (ed && backendData && !error && backendData.remoteStatus === "online" && snap.doc.content) {
+              try {
+                const currentJson = JSON.stringify(ed.document);
+                if (currentJson !== snap.doc.content) {
+                  const parsed = JSON.parse(snap.doc.content);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    ed.replaceBlocks(ed.document, parsed);
+                  }
+                }
+              } catch {
+                // ignore parse/replace errors
+              }
+            }
           }
           return;
         }
@@ -605,6 +620,7 @@ export function useDocEditor(
 
           const returned = result.data;
           if (returned.remoteStatus === "online") {
+            setUnsyncedLocalDoc(undefined);
             setHasRemoteIdentitySynced(true);
             // Strictly mark the snapshot we ACTUALLY sent as synced — never live editor state
             setRemoteSyncedHashSynced(snapRemoteHash);

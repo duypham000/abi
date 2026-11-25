@@ -8,7 +8,9 @@ import Sidebar from "@/presentation/features/dashboard/components/Sidebar";
 import { AppBar } from "@/presentation/components/AppBar";
 import { type RootState, type AppDispatch } from "@/presentation/store";
 import { setCurrentDocId } from "@/presentation/store/docsSlice";
-import { useDeleteDocMutation, useCreateDocMutation } from "@/infrastructure/api/docsApi";
+import { useDeleteDocMutation, useCreateDocMutation, docsApi } from "@/infrastructure/api/docsApi";
+import { cacheDoc } from "@/infrastructure/tauri/docCacheService";
+import { isTauri } from "@/infrastructure/tauri/sqliteDb";
 import { parseDocMetadata } from "@/core/interfaces/docs";
 import { useDocEditor } from "../../hooks/useDocEditor";
 import { usePersistedState } from "@/presentation/hooks/usePersistedState";
@@ -160,7 +162,6 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   const gitFilePath = useMemo(() => {
     const slugKey = doc?.slug || null;
     const uuidKey = doc?.backendUuid || null;
-    const targetId = slugKey || uuidKey || String(docId);
     const matched = manifest?.items?.find((item) => {
       const candidates = [slugKey, uuidKey, String(docId)].filter(Boolean) as string[];
       for (const c of candidates) {
@@ -181,8 +182,7 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
       );
     });
     if (matched?.path) return matched.path;
-    const fileStem = targetId.startsWith("doc-") ? targetId : `doc-${targetId}`;
-    return `docs/${fileStem}.json`;
+    return `docs/doc-${docId}.json`;
   }, [manifest, doc?.slug, doc?.backendUuid, docId]);
 
   const { data: fileHistory } = useGetFileHistoryQuery(gitFilePath, {
@@ -354,6 +354,21 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
         message.warning("Đã kéo từ Git nhưng có xung đột!");
         setShowConflictModal(true);
       } else {
+        // Sync all pulled docs from backend DB into local SQLite
+        if (isTauri()) {
+          try {
+            const pullRes = await dispatch(
+              docsApi.endpoints.syncPullRemote.initiate(undefined, { forceRefetch: true })
+            ).unwrap();
+            if (pullRes?.items && Array.isArray(pullRes.items)) {
+              for (const item of pullRes.items) {
+                await cacheDoc(item, { force: true });
+              }
+            }
+          } catch (e) {
+            console.warn("[DocEditor] syncPullRemote after git pull failed:", e);
+          }
+        }
         message.success("Đã đồng bộ nội dung mới nhất từ Git!");
         try {
           const fileRes = await dispatch(
@@ -376,6 +391,10 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
   const handleSaveToGit = async () => {
     if (!doc) return;
     try {
+      // Ensure latest editor blocks are flushed into useDocEditor snapshot before saving
+      if (editorRef.current?.document) {
+        baseHandleBlocksChange(editorRef.current.document);
+      }
       await triggerSave();
       const snap = getLatestSnapshot();
       const latestTitle = snap?.title ?? doc.title;
@@ -428,12 +447,17 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
       setShowConflictModal(true);
       return;
     }
+    // Prioritize saving local editor changes instead of overwriting them with a pull
+    if (isDirty || hasGitChanges) {
+      await handleSaveToGit();
+      return;
+    }
     if (remoteUpdated || gitFileStatus === "behind") {
       message.info("Nội dung trên Git đã được cập nhật — Đang kéo (pull) về...");
       await handlePullGit();
       return;
     }
-    if (gitFileStatus === "clean" && !hasGitChanges && !isDirty) {
+    if (gitFileStatus === "clean") {
       message.info("Tài liệu đã được lưu và đồng bộ với Git (không có thay đổi mới).");
       return;
     }
