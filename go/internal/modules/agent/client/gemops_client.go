@@ -392,6 +392,12 @@ func (c *GemOpsClient) StartPrompt(ctx context.Context, req dto.GemOpsPromptRequ
 		}
 		headers["X-Harness-Id"] = hid
 	}
+	if cid := strings.TrimSpace(req.ConversationID); cid != "" {
+		if headers == nil {
+			headers = map[string]string{}
+		}
+		headers["X-Conversation-Id"] = cid
+	}
 	if err := c.doJSON(ctx, http.MethodPost, "/prompt", headers, req, &out); err != nil {
 		return nil, err
 	}
@@ -419,7 +425,7 @@ func (c *GemOpsClient) Cancel(ctx context.Context) (map[string]interface{}, erro
 	return out, nil
 }
 
-func (c *GemOpsClient) Reset(ctx context.Context, compact bool, harnessID string) (map[string]interface{}, error) {
+func (c *GemOpsClient) Reset(ctx context.Context, compact bool, harnessID, conversationID string) (map[string]interface{}, error) {
 	q := url.Values{}
 	if compact {
 		q.Set("compact", "1")
@@ -428,16 +434,46 @@ func (c *GemOpsClient) Reset(ctx context.Context, compact bool, harnessID string
 	if trimmedHarness != "" {
 		q.Set("harnessId", trimmedHarness)
 	}
+	trimmedConv := strings.TrimSpace(conversationID)
+	if trimmedConv != "" {
+		q.Set("conversationId", trimmedConv)
+	}
 	path := "/reset"
 	if encoded := q.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
 	var headers map[string]string
-	if trimmedHarness != "" {
-		headers = map[string]string{"X-Harness-Id": trimmedHarness}
+	if trimmedHarness != "" || trimmedConv != "" {
+		headers = map[string]string{}
+		if trimmedHarness != "" {
+			headers["X-Harness-Id"] = trimmedHarness
+		}
+		if trimmedConv != "" {
+			headers["X-Conversation-Id"] = trimmedConv
+		}
 	}
 	var out map[string]interface{}
 	if err := c.doJSON(ctx, http.MethodPost, path, headers, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) ListSessions(ctx context.Context) (map[string]interface{}, error) {
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodGet, "/sessions", nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *GemOpsClient) DeleteSession(ctx context.Context, conversationID, harnessID string) (map[string]interface{}, error) {
+	path := "/sessions/" + url.PathEscape(strings.TrimSpace(conversationID))
+	if trimmedHarness := strings.TrimSpace(harnessID); trimmedHarness != "" {
+		path += "?harnessId=" + url.QueryEscape(trimmedHarness)
+	}
+	var out map[string]interface{}
+	if err := c.doJSON(ctx, http.MethodDelete, path, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

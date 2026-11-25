@@ -41,6 +41,8 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 		agentGroup.POST("/prompt", m.Handler.Prompt)
 		agentGroup.GET("/events", m.Handler.Events)
 		agentGroup.GET("/status", m.Handler.GetStatus)
+		agentGroup.GET("/sessions", m.Handler.ListSessions)
+		agentGroup.DELETE("/sessions/:id", m.Handler.DeleteSession)
 		agentGroup.GET("/info", m.Handler.GetInfo)
 		agentGroup.GET("/agy/info", m.Handler.GetInfo)
 		agentGroup.GET("/agy/usage", m.Handler.GetUsage)

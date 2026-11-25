@@ -70,16 +70,18 @@ type GemOpsSessionConfig struct {
 
 // GemOpsPromptRequest is sent to gemops POST /prompt.
 type GemOpsPromptRequest struct {
-	Prompt        string               `json:"prompt"`
-	HarnessID     string               `json:"harnessId,omitempty"`
-	SessionConfig *GemOpsSessionConfig `json:"sessionConfig,omitempty"`
+	Prompt         string               `json:"prompt"`
+	HarnessID      string               `json:"harnessId,omitempty"`
+	ConversationID string               `json:"conversationId,omitempty"`
+	SessionConfig  *GemOpsSessionConfig `json:"sessionConfig,omitempty"`
 }
 
 // GemOpsPromptResponse is returned by gemops POST /prompt (202 Accepted).
 type GemOpsPromptResponse struct {
-	Status    string `json:"status"`
-	TurnID    string `json:"turnId"`
-	HarnessID string `json:"harnessId"`
+	Status         string `json:"status"`
+	TurnID         string `json:"turnId"`
+	HarnessID      string `json:"harnessId"`
+	ConversationID string `json:"conversationId,omitempty"`
 }
 
 // GemOpsPendingApproval mirrors gemops session.PendingApproval.
@@ -105,9 +107,11 @@ type GemOpsStatusResponse struct {
 	DefaultHarnessID    string                  `json:"defaultHarnessId"`
 	ActiveHarnessID     string                  `json:"activeHarnessId"`
 	ActiveHarnessName   string                  `json:"activeHarnessName,omitempty"`
-	ActiveHarnessRev    string                  `json:"activeHarnessRevision,omitempty"`
-	ActivePolicyProfile string                  `json:"activePolicyProfile,omitempty"`
-	SessionID           string                  `json:"sessionId,omitempty"`
+	ActiveHarnessRev     string                  `json:"activeHarnessRevision,omitempty"`
+	ActivePolicyProfile  string                  `json:"activePolicyProfile,omitempty"`
+	ActiveConversationID string                  `json:"activeConversationId,omitempty"`
+	SessionID            string                  `json:"sessionId,omitempty"`
+	SessionsCount        int                     `json:"sessionsCount,omitempty"`
 	ActiveTurnID        string                  `json:"activeTurnId,omitempty"`
 	ActiveToolsCount    int                     `json:"activeToolsCount"`
 	GeminiPID           int                     `json:"geminiPid"`

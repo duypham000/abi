@@ -219,14 +219,35 @@ export function cancelAgentTurn(opts?: {
 export function resetAgentSession(
   compact: boolean,
   harnessId?: string,
-  opts?: { apiEndpoint?: string; apiKey?: string }
+  opts?: { apiEndpoint?: string; apiKey?: string; conversationId?: string }
 ): Promise<Record<string, unknown>> {
   const params = new URLSearchParams();
   if (compact) params.set("compact", "1");
   if (harnessId && harnessId.trim()) params.set("harnessId", harnessId.trim());
+  if (opts?.conversationId && opts.conversationId.trim()) {
+    params.set("conversationId", opts.conversationId.trim());
+  }
   const qs = params.toString();
   return requestJson<Record<string, unknown>>(`/reset${qs ? `?${qs}` : ""}`, {
     ...opts,
     method: "POST",
   });
+}
+
+export function deleteAgentBackendSession(
+  conversationId: string,
+  opts?: { apiEndpoint?: string; apiKey?: string; harnessId?: string }
+): Promise<Record<string, unknown>> {
+  const params = new URLSearchParams();
+  if (opts?.harnessId && opts.harnessId.trim()) {
+    params.set("harnessId", opts.harnessId.trim());
+  }
+  const qs = params.toString();
+  return requestJson<Record<string, unknown>>(
+    `/sessions/${encodeURIComponent(conversationId)}${qs ? `?${qs}` : ""}`,
+    {
+      ...opts,
+      method: "DELETE",
+    }
+  );
 }

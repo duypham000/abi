@@ -1,5 +1,9 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { insertMarkdownSnippet } from "@/infrastructure/agent";
+import {
+  deleteAgentBackendSession,
+  insertMarkdownSnippet,
+  resetAgentSession,
+} from "@/infrastructure/agent";
 import { Suspense, lazy, useCallback, useState } from "react";
 import { AgentComposer } from "../components/AgentComposer";
 import { AgentConversationView } from "../components/AgentConversationView";
@@ -172,7 +176,14 @@ export function AgentPanelPage({
               createSession();
               setHistoryOpen(false);
             }}
-            onDeleteSession={deleteSession}
+            onDeleteSession={(sessionId) => {
+              deleteSession(sessionId);
+              void deleteAgentBackendSession(sessionId, {
+                apiEndpoint: config.apiEndpoint,
+                apiKey: config.apiKey,
+                harnessId: config.harnessId,
+              }).catch(() => undefined);
+            }}
             onRenameSession={renameSession}
             onSelectSession={(sessionId) => {
               selectSession(sessionId);
@@ -222,9 +233,14 @@ export function AgentPanelPage({
                   micDeviceId={micDeviceId}
                   mode={activeSession.mode}
                   modelId={activeSession.modelId || config.modelId}
-                  onClearSession={() =>
-                    clearSessionMessages(activeSession.id)
-                  }
+                  onClearSession={() => {
+                    clearSessionMessages(activeSession.id);
+                    void resetAgentSession(false, config.harnessId, {
+                      apiEndpoint: config.apiEndpoint,
+                      apiKey: config.apiKey,
+                      conversationId: activeSession.id,
+                    }).catch(() => undefined);
+                  }}
                   onCompactSession={() => {
                     void resetBackendSession(true);
                   }}

@@ -334,12 +334,40 @@ func (h *AgentHandler) Reset(c *gin.Context) {
 	if harnessID == "" {
 		harnessID = strings.TrimSpace(c.GetHeader("X-Harness-Id"))
 	}
-	res, err := h.svc.Reset(c.Request.Context(), compact, harnessID)
+	conversationID := strings.TrimSpace(c.Query("conversationId"))
+	if conversationID == "" {
+		conversationID = strings.TrimSpace(c.GetHeader("X-Conversation-Id"))
+	}
+	res, err := h.svc.Reset(c.Request.Context(), compact, harnessID, conversationID)
 	if err != nil {
 		h.writeUpstreamError(c, err)
 		return
 	}
 	response.OK(c, "Agent session reset", res)
+}
+
+func (h *AgentHandler) ListSessions(c *gin.Context) {
+	res, err := h.svc.ListSessions(c.Request.Context())
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent sessions fetched", res)
+}
+
+func (h *AgentHandler) DeleteSession(c *gin.Context) {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		response.BadRequest(c, "Missing session id", nil)
+		return
+	}
+	harnessID := strings.TrimSpace(c.Query("harnessId"))
+	res, err := h.svc.DeleteSession(c.Request.Context(), id, harnessID)
+	if err != nil {
+		h.writeUpstreamError(c, err)
+		return
+	}
+	response.OK(c, "Agent session deleted", res)
 }
 
 func (h *AgentHandler) writeUpstreamError(c *gin.Context, err error) {

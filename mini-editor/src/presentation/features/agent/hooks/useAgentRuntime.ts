@@ -971,6 +971,7 @@ export function useAgentRuntime() {
       await resetAgentSession(compact, currentCfg.harnessId, {
         apiEndpoint: currentCfg.apiEndpoint,
         apiKey: currentCfg.apiKey,
+        conversationId: activeSessionIdRef.current,
       });
       await refreshBackendMeta();
     },

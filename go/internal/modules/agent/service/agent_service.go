@@ -33,7 +33,9 @@ type AgentBackend interface {
 	StartPrompt(ctx context.Context, req dto.GemOpsPromptRequest, actor string) (*dto.GemOpsPromptResponse, error)
 	ResolvePermission(ctx context.Context, permID, decision, actor string) (map[string]interface{}, error)
 	Cancel(ctx context.Context) (map[string]interface{}, error)
-	Reset(ctx context.Context, compact bool, harnessID string) (map[string]interface{}, error)
+	Reset(ctx context.Context, compact bool, harnessID, conversationID string) (map[string]interface{}, error)
+	ListSessions(ctx context.Context) (map[string]interface{}, error)
+	DeleteSession(ctx context.Context, conversationID, harnessID string) (map[string]interface{}, error)
 	SubscribeEvents(ctx context.Context, lastEventID string) (*client.EventStream, error)
 	StreamRawEvents(ctx context.Context, lastEventID, rawQuery string) (*http.Response, error)
 }
@@ -135,8 +137,16 @@ func (s *AgentService) Cancel(ctx context.Context) (map[string]interface{}, erro
 	return s.backend.Cancel(ctx)
 }
 
-func (s *AgentService) Reset(ctx context.Context, compact bool, harnessID string) (map[string]interface{}, error) {
-	return s.backend.Reset(ctx, compact, harnessID)
+func (s *AgentService) Reset(ctx context.Context, compact bool, harnessID, conversationID string) (map[string]interface{}, error) {
+	return s.backend.Reset(ctx, compact, harnessID, conversationID)
+}
+
+func (s *AgentService) ListSessions(ctx context.Context) (map[string]interface{}, error) {
+	return s.backend.ListSessions(ctx)
+}
+
+func (s *AgentService) DeleteSession(ctx context.Context, conversationID, harnessID string) (map[string]interface{}, error) {
+	return s.backend.DeleteSession(ctx, conversationID, harnessID)
 }
 
 // StreamChat starts a turn on gemops-agent and translates its SSE stream into AI SDK v6 UIMessageChunk frames.
@@ -241,9 +251,10 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 	}()
 
 	promptResp, err := s.backend.StartPrompt(streamCtx, dto.GemOpsPromptRequest{
-		Prompt:        promptText,
-		HarnessID:     harnessID,
-		SessionConfig: sessionCfg,
+		Prompt:         promptText,
+		HarnessID:      harnessID,
+		ConversationID: strings.TrimSpace(req.ID),
+		SessionConfig:  sessionCfg,
 	}, actor)
 	if err != nil {
 		return err
