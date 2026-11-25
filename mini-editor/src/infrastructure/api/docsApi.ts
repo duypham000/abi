@@ -21,6 +21,8 @@ import {
   clearBackendUuid,
   linkRemoteDocToLocal,
   normalizeDocStatus,
+  deduplicateLocalDocs,
+  saveDocLocally,
 } from "@/infrastructure/tauri/docCacheService";
 
 function extractRemoteSyncError(err: unknown): { message: string; isNetwork: boolean } {
@@ -605,6 +607,133 @@ export const docsApi = baseApi.injectEndpoints({
       },
       providesTags: ["Doc"],
     }),
+    restoreDocsFromServer: builder.mutation<{ restored: DocDto[]; count: number }, { ids?: number[] } | void>({
+      queryFn: async (arg, api, _extraOptions, fetchWithBaseQuery) => {
+        const token = await getAccessToken();
+        if (!token || token === "local-standalone-token") {
+          return {
+            error: {
+              status: 401,
+              statusText: "Unauthorized",
+              data: { message: "Vui lòng đăng nhập để khôi phục dữ liệu từ Server" },
+            },
+          };
+        }
+
+        const ids = arg && Array.isArray(arg.ids) && arg.ids.length > 0 ? arg.ids : null;
+        const restored: DocDto[] = [];
+
+        if (ids) {
+          for (const id of ids) {
+            const existing = isTauri() ? await getDocFromSqlite(id) : null;
+            const remoteId = existing?.backendUuid || existing?.slug || `doc-${id}`;
+            const gitSlug = existing?.slug || `doc-${id}`;
+
+            const res = await fetchWithBaseQuery(`/docs/${remoteId}`);
+            if (res.data) {
+              const linked = isTauri()
+                ? await linkRemoteDocToLocal(id, res.data as Record<string, unknown>, { force: true })
+                : null;
+              if (isTauri()) {
+                await clearQueueForEntity("doc", `doc-${id}`);
+              }
+              const docDto: DocDto = {
+                ...(linked ?? normalizeRemoteDoc(res.data)),
+                remoteStatus: "online",
+                remoteSyncError: null,
+                remoteSyncNetworkError: false,
+              };
+              restored.push(docDto);
+              api.dispatch(docsApi.util.upsertQueryData("getDocById", id, docDto));
+              continue;
+            }
+
+            const gitRes = await fetchWithBaseQuery(
+              `/github/files/get?path=${encodeURIComponent(`docs/${gitSlug}.json`)}`
+            );
+            const rawContent = (gitRes.data as { content?: string } | undefined)?.content;
+            if (rawContent) {
+              try {
+                const parsed = JSON.parse(rawContent) as Record<string, unknown>;
+                const nextTitle = typeof parsed.title === "string" ? parsed.title : existing?.title || "Untitled";
+                const nextContent =
+                  typeof parsed.content === "string"
+                    ? parsed.content
+                    : parsed.content != null
+                      ? JSON.stringify(parsed.content)
+                      : null;
+                const nextMetadata =
+                  typeof parsed.metadata === "string"
+                    ? parsed.metadata
+                    : parsed.metadata != null
+                      ? JSON.stringify(parsed.metadata)
+                      : null;
+                const nextStatus = (parsed.status as number | string | undefined) ?? existing?.status ?? 1;
+                const nextSlug = typeof parsed.slug === "string" && parsed.slug ? parsed.slug : gitSlug;
+                const nextUuid =
+                  typeof parsed.backend_uuid === "string" && parsed.backend_uuid
+                    ? parsed.backend_uuid
+                    : (existing?.backendUuid ?? null);
+
+                if (isTauri()) {
+                  await saveDocLocally(
+                    id,
+                    {
+                      title: nextTitle,
+                      content: nextContent,
+                      metadata: nextMetadata,
+                      status: nextStatus,
+                      slug: nextSlug,
+                      backendUuid: nextUuid,
+                    },
+                    { markRemoteSynced: true, isDirty: false }
+                  );
+                  await clearQueueForEntity("doc", `doc-${id}`);
+                }
+                const fresh = isTauri() ? await getDocFromSqlite(id) : null;
+                if (fresh) {
+                  const docDto: DocDto = {
+                    ...fresh,
+                    remoteStatus: "online",
+                    remoteSyncError: null,
+                    remoteSyncNetworkError: false,
+                  };
+                  restored.push(docDto);
+                  api.dispatch(docsApi.util.upsertQueryData("getDocById", id, docDto));
+                }
+              } catch {
+                // ignore malformed git json
+              }
+            }
+          }
+        } else {
+          const pullRes = await fetchWithBaseQuery("/docs/sync/pull");
+          if (pullRes.error) {
+            return { error: pullRes.error as any };
+          }
+          const pullData = pullRes.data as { items?: unknown[] } | unknown[] | undefined;
+          const rawItems = Array.isArray(pullData)
+            ? pullData
+            : Array.isArray(pullData?.items)
+              ? pullData.items
+              : [];
+
+          for (const raw of rawItems) {
+            const docDto = normalizeRemoteDoc(raw);
+            if (isTauri()) {
+              await cacheDoc(docDto, { force: true });
+            }
+            restored.push(docDto);
+          }
+          if (isTauri()) {
+            await deduplicateLocalDocs();
+          }
+        }
+
+        return { data: { restored, count: restored.length } };
+      },
+      invalidatesTags: ["Doc"],
+    }),
     getYjsToken: builder.query<{ token: string; url: string; expiresIn: number }, number | string>({
       query: (docId) => ({
         url: "/yjs/auth/token",
@@ -640,5 +769,6 @@ export const {
   useSyncPushLocalMutation,
   useSyncPullRemoteQuery,
   useLazySyncPullRemoteQuery,
+  useRestoreDocsFromServerMutation,
   useGetYjsTokenQuery,
 } = docsApi;

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Input, Tooltip, Dropdown, Popover, Radio, Select, Switch } from "antd";
+import { Input, Modal, Tooltip, Dropdown, Popover, Radio, Select, Switch } from "antd";
 import type { DeleteScope } from "@/infrastructure/api/docsApi";
 import { confirmDeleteWithScope } from "@/presentation/components/ui/ConfirmDeleteModal/confirmDeleteModal";
 import type { InputRef, MenuProps } from "antd";
@@ -92,6 +92,8 @@ interface DocEditorToolbarProps {
   onDuplicate: () => void;
   onImport: () => void;
   onExport: () => void;
+  onRestoreFromServer?: () => void;
+  isRestoringFromServer?: boolean;
 }
 
 function formatSyncTime(iso: string | null | undefined): string {
@@ -165,6 +167,8 @@ export function DocEditorToolbar({
   onDuplicate,
   onImport,
   onExport,
+  onRestoreFromServer,
+  isRestoringFromServer = false,
 }: DocEditorToolbarProps) {
   const titleInputRef = useRef<InputRef>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -304,6 +308,20 @@ export function DocEditorToolbar({
       icon: gitIcon,
       disabled: isGitDisabled,
       onClick: handleGitAction,
+    }] : []),
+    ...(onRestoreFromServer ? [{
+      key: "restore-from-server",
+      label: "Khôi phục từ Server",
+      icon: <CloudDownloadOutlined />,
+      disabled: isRestoringFromServer,
+      onClick: () =>
+        Modal.confirm({
+          title: "Khôi phục tài liệu từ Server?",
+          content: "Nội dung trên máy sẽ được ghi đè bằng bản lưu trên Server.",
+          okText: "Khôi phục",
+          cancelText: "Huỷ",
+          onOk: () => onRestoreFromServer(),
+        }),
     }] : []),
     { type: "divider" },
     {
@@ -559,6 +577,30 @@ export function DocEditorToolbar({
         </Tooltip>
 
         <span className="toolbar-divider" />
+
+        {onRestoreFromServer && (
+          <Tooltip title="Khôi phục từ Server">
+            <button
+              className="toolbar-btn"
+              disabled={isRestoringFromServer}
+              onClick={() =>
+                Modal.confirm({
+                  title: "Khôi phục tài liệu từ Server?",
+                  content: "Nội dung trên máy sẽ được ghi đè bằng bản lưu trên Server.",
+                  okText: "Khôi phục",
+                  cancelText: "Huỷ",
+                  onOk: () => onRestoreFromServer(),
+                })
+              }
+            >
+              {isRestoringFromServer ? (
+                <LoadingOutlined className="toolbar-btn-icon" spin />
+              ) : (
+                <CloudDownloadOutlined className="toolbar-btn-icon" />
+              )}
+            </button>
+          </Tooltip>
+        )}
 
         <Tooltip title={starred ? "Remove from favorites" : "Add to favorites"}>
           <button className="toolbar-btn" onClick={onStarToggle}>

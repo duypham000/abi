@@ -1,10 +1,13 @@
 import { baseApi, PageResult, ScrollResult } from "./baseApi";
 import type { DeleteScope } from "./docsApi";
-import type { CanvasDto, CanvasRequest } from "@/core/interfaces/canvas";
+import {
+  parseCanvasMetadata,
+  serializeCanvasMetadata,
+  type CanvasDto,
+  type CanvasRequest,
+} from "@/core/interfaces/canvas";
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
 import { isTauri } from "@/infrastructure/tauri/sqliteDb";
-
-export type DeleteCanvasArg = number | { id: number; scope?: DeleteScope };
 import {
   listCanvasFromSqlite,
   getCanvasFromSqlite,
@@ -12,7 +15,14 @@ import {
   updateCanvasInSqlite,
   deleteCanvasFromSqlite,
   searchCanvasFromSqlite,
+  upsertCanvasFromServerInSqlite,
 } from "@/infrastructure/tauri/canvasCacheService";
+import {
+  generateLowResCanvasThumbnail,
+  setCachedCanvasThumbnail,
+} from "@/presentation/features/canvas/utils/canvasThumbnail";
+
+export type DeleteCanvasArg = number | { id: number; scope?: DeleteScope };
 
 export const canvasApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
@@ -190,6 +200,102 @@ export const canvasApi = baseApi.injectEndpoints({
       },
       providesTags: ["Canvas"],
     }),
+    restoreCanvasesFromServer: builder.mutation<{ restored: CanvasDto[]; count: number }, { ids?: number[] } | void>({
+      queryFn: async (arg, api, _extraOptions, fetchWithBaseQuery) => {
+        const token = await getAccessToken();
+        if (!token || token === "local-standalone-token") {
+          return {
+            error: {
+              status: 401,
+              statusText: "Unauthorized",
+              data: { message: "Vui lòng đăng nhập để khôi phục canvas từ Server" },
+            },
+          };
+        }
+
+        const restoreOneCanvas = async (targetId: number): Promise<CanvasDto | null> => {
+          const gitRes = await fetchWithBaseQuery(
+            `/github/files/get?path=${encodeURIComponent(`canvases/canvas-${targetId}.json`)}`
+          );
+          const rawContent = (gitRes.data as { content?: string } | undefined)?.content;
+          if (rawContent) {
+            try {
+              const parsed = JSON.parse(rawContent) as Record<string, unknown>;
+              const sceneStr =
+                typeof parsed.scene === "string"
+                  ? parsed.scene
+                  : JSON.stringify(parsed.scene ?? { elements: [], appState: {}, files: {} });
+              let rawMeta =
+                typeof parsed.metadata === "string"
+                  ? parsed.metadata
+                  : parsed.metadata != null
+                    ? JSON.stringify(parsed.metadata)
+                    : null;
+              const parsedMeta = parseCanvasMetadata(rawMeta);
+              if (!parsedMeta.thumbnail) {
+                const thumb = await generateLowResCanvasThumbnail(sceneStr);
+                if (thumb) {
+                  setCachedCanvasThumbnail(targetId, thumb);
+                  rawMeta = serializeCanvasMetadata({ ...parsedMeta, thumbnail: thumb });
+                }
+              } else {
+                setCachedCanvasThumbnail(targetId, parsedMeta.thumbnail);
+              }
+              const saved = await upsertCanvasFromServerInSqlite(targetId, {
+                title: typeof parsed.title === "string" && parsed.title ? parsed.title : "Untitled Canvas",
+                scene: sceneStr,
+                metadata: rawMeta,
+                lastSync: new Date().toISOString(),
+                status: (parsed.status as 0 | 1 | undefined) ?? 1,
+              });
+              api.dispatch(canvasApi.util.upsertQueryData("getCanvasById", targetId, saved));
+              return saved;
+            } catch {
+              // ignore malformed json
+            }
+          }
+
+          const remoteRes = await fetchWithBaseQuery(`/canvas/${targetId}`);
+          if (remoteRes.data) {
+            const remote = remoteRes.data as CanvasDto;
+            const saved = await upsertCanvasFromServerInSqlite(targetId, {
+              title: remote.title || "Untitled Canvas",
+              scene: remote.scene ?? null,
+              metadata: remote.metadata ?? null,
+              lastSync: remote.lastSync ?? new Date().toISOString(),
+              status: remote.status ?? 1,
+            });
+            api.dispatch(canvasApi.util.upsertQueryData("getCanvasById", targetId, saved));
+            return saved;
+          }
+          return null;
+        };
+
+        const ids = arg && Array.isArray(arg.ids) && arg.ids.length > 0 ? arg.ids : null;
+        const restored: CanvasDto[] = [];
+
+        if (ids) {
+          for (const id of ids) {
+            const item = await restoreOneCanvas(id);
+            if (item) restored.push(item);
+          }
+        } else {
+          const listRes = await fetchWithBaseQuery("/github/files/list?dir=canvases");
+          const files = Array.isArray(listRes.data) ? (listRes.data as Array<{ path?: string; name?: string }>) : [];
+          for (const file of files) {
+            const pathOrName = file.path || file.name || "";
+            const match = pathOrName.match(/canvas-(\d+)\.json$/);
+            if (match) {
+              const item = await restoreOneCanvas(Number(match[1]));
+              if (item) restored.push(item);
+            }
+          }
+        }
+
+        return { data: { restored, count: restored.length } };
+      },
+      invalidatesTags: ["Canvas"],
+    }),
     getYjsCanvasToken: builder.query<{ token: string; url: string; expiresIn: number }, number>({
       query: (canvasId) => ({
         url: "/yjs/auth/token",
@@ -210,5 +316,6 @@ export const {
   useUpdateCanvasMutation,
   useDeleteCanvasMutation,
   useSearchCanvasQuery,
+  useRestoreCanvasesFromServerMutation,
   useGetYjsCanvasTokenQuery,
 } = canvasApi;

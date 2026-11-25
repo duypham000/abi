@@ -9,6 +9,10 @@ interface DocListProps {
   onDelete: (id: number, scope?: DeleteScope) => void;
   isDeleting?: boolean;
   isLoading?: boolean;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
+  onRestore?: (id: number) => void;
+  restoringId?: number | null;
 }
 
 export default function DocList({
@@ -16,6 +20,10 @@ export default function DocList({
   onDelete,
   isDeleting,
   isLoading,
+  selectedIds,
+  onToggleSelect,
+  onRestore,
+  restoringId,
 }: DocListProps) {
   if (isLoading) {
     return (
@@ -41,6 +49,10 @@ export default function DocList({
           doc={doc}
           onDelete={onDelete}
           isDeleting={isDeleting}
+          selected={selectedIds?.has(doc.id)}
+          onToggleSelect={onToggleSelect}
+          onRestore={onRestore}
+          isRestoring={restoringId === doc.id}
         />
       ))}
     </div>

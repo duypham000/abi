@@ -9,8 +9,9 @@ import { setPageTitle } from "@/presentation/store/appSlice";
 import { useGoldenLayout } from "@/presentation/layout/golden/GoldenLayoutContext";
 import { PANEL_TYPES } from "@/presentation/layout/golden/panelRegistry";
 import { useDocs } from "../../hooks/useDocs";
-import { useSearchDocsQuery, useCreateDocMutation } from "@/infrastructure/api/docsApi";
+import { useSearchDocsQuery, useCreateDocMutation, useRestoreDocsFromServerMutation, type DeleteScope } from "@/infrastructure/api/docsApi";
 import { useListSeriesQuery } from "@/infrastructure/api/seriesApi";
+import { confirmDeleteWithScope } from "@/presentation/components/ui/ConfirmDeleteModal/confirmDeleteModal";
 import { ImportModal, type ImportFormat, type ImportTextFormat } from "../DocEditorPage/components/ImportModal/ImportModal";
 import DocList from "../../components/DocList";
 import { SeriesManagerModal } from "../../components";
@@ -36,7 +37,10 @@ export default function DocsPage({ panelMode }: DocsPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [createDoc] = useCreateDocMutation();
+  const [restoreDocs, { isLoading: isRestoringBulk }] = useRestoreDocsFromServerMutation();
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [restoringId, setRestoringId] = useState<number | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(searchQuery), 300);
@@ -50,6 +54,96 @@ export default function DocsPage({ panelMode }: DocsPageProps) {
 
   const displayDocs = debouncedQuery ? (searchResults ?? []) : docs;
   const isLoadingDisplay = debouncedQuery ? isSearching : isLoading;
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const validIds = new Set(displayDocs.map((d) => d.id));
+      const next = new Set(Array.from(prev).filter((id) => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [displayDocs]);
+
+  const handleToggleSelect = useCallback((id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const allSelected = displayDocs.length > 0 && displayDocs.every((d) => selectedIds.has(d.id));
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(displayDocs.map((d) => d.id)));
+    }
+  }, [allSelected, displayDocs]);
+
+  const handleRestoreOne = useCallback(async (id: number) => {
+    setRestoringId(id);
+    try {
+      const res = await restoreDocs({ ids: [id] }).unwrap();
+      if (res.count > 0) {
+        message.success("Đã khôi phục tài liệu từ Server!");
+      } else {
+        message.warning("Không tìm thấy bản lưu của tài liệu này trên Server.");
+      }
+    } catch (err: any) {
+      message.error(err?.data?.message || "Khôi phục từ Server thất bại");
+    } finally {
+      setRestoringId(null);
+    }
+  }, [restoreDocs]);
+
+  const handleRestoreSelectedOrAll = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    try {
+      const res = await restoreDocs(ids.length > 0 ? { ids } : undefined).unwrap();
+      if (res.count > 0) {
+        message.success(`Đã khôi phục ${res.count} tài liệu từ Server!`);
+      } else {
+        message.warning("Không có tài liệu nào được khôi phục từ Server.");
+      }
+      if (ids.length > 0) setSelectedIds(new Set());
+    } catch (err: any) {
+      message.error(err?.data?.message || "Khôi phục từ Server thất bại");
+    }
+  }, [restoreDocs, selectedIds]);
+
+  const handleDeleteSelected = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    confirmDeleteWithScope({
+      entityLabel: "tài liệu",
+      title: `${ids.length} tài liệu đã chọn`,
+      onConfirm: async (scope: DeleteScope) => {
+        for (const id of ids) {
+          await deleteDoc(id, scope);
+        }
+        setSelectedIds(new Set());
+        message.success(`Đã xoá ${ids.length} tài liệu`);
+      },
+    });
+  }, [selectedIds, deleteDoc]);
+
+  const handleDeleteAll = useCallback(() => {
+    if (displayDocs.length === 0) return;
+    const ids = displayDocs.map((d) => d.id);
+    confirmDeleteWithScope({
+      entityLabel: "tài liệu",
+      title: `toàn bộ ${ids.length} tài liệu`,
+      onConfirm: async (scope: DeleteScope) => {
+        for (const id of ids) {
+          await deleteDoc(id, scope);
+        }
+        setSelectedIds(new Set());
+        message.success(`Đã xoá toàn bộ ${ids.length} tài liệu`);
+      },
+    });
+  }, [displayDocs, deleteDoc]);
 
   useEffect(() => {
     dispatch(setPageTitle("Docs"));
@@ -283,11 +377,63 @@ export default function DocsPage({ panelMode }: DocsPageProps) {
               />
             </div>
 
+            <div className="docs-bulk-bar">
+              <label className="docs-bulk-select-all">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={handleToggleSelectAll}
+                  disabled={displayDocs.length === 0}
+                />
+                <span>
+                  Chọn tất cả ({selectedIds.size}/{displayDocs.length})
+                </span>
+              </label>
+              <div className="docs-bulk-actions">
+                <button
+                  type="button"
+                  className="docs-bulk-btn docs-bulk-btn--restore"
+                  onClick={handleRestoreSelectedOrAll}
+                  disabled={isRestoringBulk}
+                >
+                  {isRestoringBulk
+                    ? "Đang khôi phục…"
+                    : selectedIds.size > 0
+                      ? `Khôi phục đã chọn (${selectedIds.size})`
+                      : "Khôi phục từ Server"}
+                </button>
+                {selectedIds.size > 0 && (
+                  <button
+                    type="button"
+                    className="docs-bulk-btn docs-bulk-btn--danger"
+                    onClick={handleDeleteSelected}
+                    disabled={isDeleting}
+                  >
+                    Xoá đã chọn ({selectedIds.size})
+                  </button>
+                )}
+                {displayDocs.length > 0 && (
+                  <button
+                    type="button"
+                    className="docs-bulk-btn docs-bulk-btn--danger-outline"
+                    onClick={handleDeleteAll}
+                    disabled={isDeleting}
+                  >
+                    Xoá toàn bộ
+                  </button>
+                )}
+              </div>
+            </div>
+
             <DocList
               docs={displayDocs}
               onDelete={deleteDoc}
               isDeleting={isDeleting}
               isLoading={isLoadingDisplay}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onRestore={handleRestoreOne}
+              restoringId={restoringId}
             />
           </section>
     </main>

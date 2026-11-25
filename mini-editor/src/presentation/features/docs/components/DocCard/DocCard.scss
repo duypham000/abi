@@ -16,6 +16,18 @@
   &:hover {
     background: rgba(108, 108, 255, 0.04);
   }
+
+  &.is-selected {
+    background: rgba(108, 108, 255, 0.08);
+  }
+}
+
+.doc-card-checkbox {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: #6c6cff;
+  cursor: pointer;
 }
 
 .doc-card-icon {

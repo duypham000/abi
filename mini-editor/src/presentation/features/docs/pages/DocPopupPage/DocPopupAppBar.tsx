@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Input, Tooltip, Dropdown, Popover, Select, Switch } from "antd";
+import { Input, Modal, Tooltip, Dropdown, Popover, Select, Switch } from "antd";
 import type { DeleteScope } from "@/infrastructure/api/docsApi";
 import { confirmDeleteWithScope } from "@/presentation/components/ui/ConfirmDeleteModal/confirmDeleteModal";
 import type { InputRef, MenuProps } from "antd";
@@ -28,6 +28,7 @@ import {
   RedoOutlined,
   ThunderboltOutlined,
   CloudSyncOutlined,
+  CloudDownloadOutlined,
   DownOutlined,
   UpOutlined,
 } from "@ant-design/icons";
@@ -93,6 +94,8 @@ interface DocPopupAppBarProps {
   onDuplicate: () => void;
   onImport: () => void;
   onExport: () => void;
+  onRestoreFromServer?: () => void;
+  isRestoringFromServer?: boolean;
 }
 
 export function DocPopupAppBar({
@@ -128,6 +131,8 @@ export function DocPopupAppBar({
   onDuplicate,
   onImport,
   onExport,
+  onRestoreFromServer,
+  isRestoringFromServer = false,
 }: DocPopupAppBarProps) {
   const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
@@ -272,6 +277,20 @@ export function DocPopupAppBar({
       icon: <ExportOutlined />,
       onClick: onExport,
     },
+    ...(onRestoreFromServer ? [{
+      key: "restore-from-server",
+      label: "Khôi phục từ Server",
+      icon: <CloudDownloadOutlined />,
+      disabled: isRestoringFromServer,
+      onClick: () =>
+        Modal.confirm({
+          title: "Khôi phục tài liệu từ Server?",
+          content: "Nội dung trên máy sẽ được ghi đè bằng bản lưu trên Server.",
+          okText: "Khôi phục",
+          cancelText: "Huỷ",
+          onOk: () => onRestoreFromServer(),
+        }),
+    }] : []),
     { type: "divider" },
     {
       key: "copy-link",

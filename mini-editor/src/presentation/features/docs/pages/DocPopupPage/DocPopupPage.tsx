@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { message, Drawer } from "antd";
-import { useDeleteDocMutation, useCreateDocMutation, type DeleteScope } from "@/infrastructure/api/docsApi";
+import { useDeleteDocMutation, useCreateDocMutation, useRestoreDocsFromServerMutation, type DeleteScope } from "@/infrastructure/api/docsApi";
 import { openInMainWindow } from "@/presentation/hooks/useOpenInMainWindow";
 import { PANEL_TYPES } from "@/presentation/layout/golden/panelRegistry";
 import { parseDocMetadata } from "@/core/interfaces/docs";
@@ -85,6 +85,7 @@ export default function DocPopupPage() {
 
   const [deleteDoc] = useDeleteDocMutation();
   const [createDoc] = useCreateDocMutation();
+  const [restoreDocsFromServer, { isLoading: isRestoringFromServer }] = useRestoreDocsFromServerMutation();
 
   const docMeta = useMemo(() => parseDocMetadata(doc?.metadata ?? null), [doc?.metadata]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -172,6 +173,32 @@ export default function DocPopupPage() {
     if (isTauri()) {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       await getCurrentWindow().close();
+    }
+  }
+
+  async function handleRestoreFromServer() {
+    try {
+      const res = await restoreDocsFromServer({ ids: [docId] }).unwrap();
+      if (res.restored.length > 0) {
+        const restored = res.restored[0];
+        const blocks = parseInitialBlocks(restored.content);
+        if (editorRef.current) {
+          try {
+            editorRef.current.replaceBlocks(editorRef.current.document, blocks);
+          } catch (e) {
+            console.warn("[DocPopup] replaceBlocks on restore failed:", e);
+          }
+          handleBlocksChange(blocks);
+        }
+        if (restored.title && restored.title !== doc?.title) {
+          handleTitleChange(restored.title);
+        }
+        message.success("Đã khôi phục tài liệu từ Server!");
+      } else {
+        message.warning("Không tìm thấy bản lưu của tài liệu này trên Server.");
+      }
+    } catch (err: any) {
+      message.error(err?.data?.message || "Khôi phục từ Server thất bại");
     }
   }
 
@@ -430,6 +457,8 @@ export default function DocPopupPage() {
         onDuplicate={handleDuplicate}
         onImport={() => setImportModalOpen(true)}
         onExport={() => setExportModalOpen(true)}
+        onRestoreFromServer={handleRestoreFromServer}
+        isRestoringFromServer={isRestoringFromServer}
       />
 
       {!isMini && (

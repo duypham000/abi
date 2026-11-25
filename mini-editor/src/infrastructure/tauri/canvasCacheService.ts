@@ -197,6 +197,64 @@ export async function deleteCanvasFromSqlite(id: number | string): Promise<void>
   );
 }
 
+/**
+ * Restore or upsert a canvas fetched from Server/Git into SQLite (including clearing deleted=1).
+ */
+export async function upsertCanvasFromServerInSqlite(
+  id: number,
+  req: CanvasRequest
+): Promise<CanvasDto> {
+  const db = await canvasDb();
+  const ts = now();
+  const strId = String(id);
+  const localId = `canvas-${id}`;
+  const title = req.title || "Untitled Canvas";
+  const scene = req.scene ?? null;
+  const metadata = req.metadata ?? null;
+  const status = req.status ?? 1;
+  const lastSynced = req.lastSync ?? ts;
+  const hash = await computeCanvasHash({ title, scene, metadata });
+
+  if (db) {
+    const existing: LocalCanvas[] = await db.select(
+      "SELECT * FROM canvas WHERE backend_id = ? OR local_id = ? OR local_id = ? LIMIT 1",
+      [id, strId, localId]
+    );
+    if (existing.length > 0) {
+      await db.execute(
+        `UPDATE canvas SET
+           title = ?,
+           scene = ?,
+           metadata = ?,
+           status = ?,
+           last_synced = ?,
+           updated_at = ?,
+           deleted = 0,
+           is_dirty = 0,
+           content_hash = ?
+         WHERE local_id = ?`,
+        [title, scene, metadata, status, lastSynced, ts, hash, existing[0].local_id]
+      );
+    } else {
+      await db.execute(
+        `INSERT INTO canvas (local_id, backend_id, title, scene, metadata, status, last_synced, updated_at, deleted, is_dirty, content_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)`,
+        [localId, id, title, scene, metadata, status, lastSynced, ts, hash]
+      );
+    }
+  }
+
+  return {
+    id,
+    title,
+    scene,
+    metadata,
+    status: (status as 0 | 1) ?? 1,
+    lastSync: lastSynced,
+    createdBy: null,
+  };
+}
+
 export async function searchCanvasFromSqlite(q: string): Promise<CanvasDto[]> {
   const db = await canvasDb();
   if (!db || !q.trim()) return [];

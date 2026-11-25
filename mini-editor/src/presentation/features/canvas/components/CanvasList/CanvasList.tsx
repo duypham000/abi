@@ -9,6 +9,10 @@ interface CanvasListProps {
   onDelete: (id: number, scope?: DeleteScope) => void;
   isDeleting?: boolean;
   isLoading?: boolean;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
+  onRestore?: (id: number) => void;
+  restoringId?: number | null;
 }
 
 export default function CanvasList({
@@ -16,6 +20,10 @@ export default function CanvasList({
   onDelete,
   isDeleting,
   isLoading,
+  selectedIds,
+  onToggleSelect,
+  onRestore,
+  restoringId,
 }: CanvasListProps) {
   if (isLoading) {
     return (
@@ -41,6 +49,10 @@ export default function CanvasList({
           canvas={canvas}
           onDelete={onDelete}
           isDeleting={isDeleting}
+          selected={selectedIds?.has(canvas.id)}
+          onToggleSelect={onToggleSelect}
+          onRestore={onRestore}
+          isRestoring={restoringId === canvas.id}
         />
       ))}
     </div>

@@ -9,8 +9,9 @@ import {
   FormOutlined,
   SaveOutlined,
   CloudUploadOutlined,
+  CloudDownloadOutlined,
 } from "@ant-design/icons";
-import { Button, Tooltip, message, Empty } from "antd";
+import { Button, Modal, Tooltip, message, Empty } from "antd";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
 import { nanoid } from "nanoid";
@@ -19,6 +20,7 @@ import { AppBar } from "@/presentation/components/AppBar";
 import { Loading } from "@/presentation/components/ui/Loading/Loading";
 import Sidebar from "@/presentation/features/dashboard/components/Sidebar";
 import { useCreateNoteMutation } from "@/infrastructure/api/notesApi";
+import { useRestoreCanvasesFromServerMutation } from "@/infrastructure/api/canvasApi";
 import { useTouchDevice } from "@/presentation/hooks/useTouchDevice";
 import {
   useSaveGitFileMutation,
@@ -97,6 +99,7 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
   const [saveGitFile, { isLoading: isSavingGit }] = useSaveGitFileMutation();
   const [checkFileStatus] = useCheckFileStatusMutation();
   const [pullRepo] = usePullRepoMutation();
+  const [restoreCanvasesFromServer, { isLoading: isRestoringCanvas }] = useRestoreCanvasesFromServerMutation();
 
   const [gitFileStatus, setGitFileStatus] = useState<"clean" | "modified" | "untracked" | "conflict" | "behind">("clean");
   const [hasGitChanges, setHasGitChanges] = useState(false);
@@ -176,6 +179,38 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
     const currentScene = getCurrentScene();
     await triggerSave(currentScene);
   }, [getCurrentScene, triggerSave]);
+
+  const handleRestoreFromServer = useCallback(() => {
+    Modal.confirm({
+      title: "Khôi phục canvas từ Server?",
+      content: "Nội dung canvas trên máy sẽ được ghi đè bằng bản lưu trên Server.",
+      okText: "Khôi phục",
+      cancelText: "Huỷ",
+      onOk: async () => {
+        try {
+          const res = await restoreCanvasesFromServer({ ids: [canvasId] }).unwrap();
+          if (res.restored.length > 0 && res.restored[0].scene) {
+            const parsedScene = JSON.parse(res.restored[0].scene) as CanvasScene;
+            const activeApi = excalidrawAPIRef.current;
+            if (activeApi) {
+              activeApi.updateScene({
+                elements: (parsedScene.elements ?? []) as any,
+                appState: sanitizeAppState(parsedScene.appState) as any,
+              });
+              if (parsedScene.files && Object.keys(parsedScene.files).length > 0) {
+                activeApi.addFiles(Object.values(parsedScene.files) as any);
+              }
+            }
+            message.success("Đã khôi phục canvas từ Server!");
+          } else {
+            message.warning("Không tìm thấy bản lưu của canvas này trên Server.");
+          }
+        } catch (err: any) {
+          message.error(err?.data?.message || "Khôi phục canvas từ Server thất bại");
+        }
+      },
+    });
+  }, [canvasId, restoreCanvasesFromServer]);
 
   const handlePullGit = useCallback(async () => {
     try {
@@ -809,6 +844,15 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
                 {saveStatus === "success" && "Saved"}
                 {saveStatus === "error" && "Save failed"}
               </span>
+              <Tooltip title="Khôi phục từ Server">
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<CloudDownloadOutlined />}
+                  loading={isRestoringCanvas}
+                  onClick={handleRestoreFromServer}
+                />
+              </Tooltip>
               <Tooltip title="Lưu (Ctrl+S)">
                 <Button
                   size="small"

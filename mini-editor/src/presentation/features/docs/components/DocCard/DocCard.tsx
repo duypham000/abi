@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { FileText } from "lucide-react";
+import { CloudDownload, FileText } from "lucide-react";
 import type { DocDto } from "@/core/interfaces/docs";
 import type { DeleteScope } from "@/infrastructure/api/docsApi";
 import { confirmDeleteWithScope } from "@/presentation/components/ui/ConfirmDeleteModal/confirmDeleteModal";
@@ -15,9 +15,21 @@ interface DocCardProps {
   doc: DocDto;
   onDelete: (id: number, scope?: DeleteScope) => void;
   isDeleting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: number) => void;
+  onRestore?: (id: number) => void;
+  isRestoring?: boolean;
 }
 
-export default function DocCard({ doc, onDelete, isDeleting }: DocCardProps) {
+export default function DocCard({
+  doc,
+  onDelete,
+  isDeleting,
+  selected,
+  onToggleSelect,
+  onRestore,
+  isRestoring,
+}: DocCardProps) {
   const navigate = useNavigate();
   const { openDocPopup } = useDocPopup();
   const { layout, openPanel } = useGoldenLayout();
@@ -32,10 +44,23 @@ export default function DocCard({ doc, onDelete, isDeleting }: DocCardProps) {
     : "No changes yet";
 
   return (
-    <div className="doc-card" onClick={() => layout
-      ? openPanel(PANEL_TYPES.DOC_EDITOR, { id: doc.id }, { title: doc.title || "Document" })
-      : navigate(`/docs/${doc.id}`)
-    }>
+    <div
+      className={`doc-card${selected ? " is-selected" : ""}`}
+      onClick={() => layout
+        ? openPanel(PANEL_TYPES.DOC_EDITOR, { id: doc.id }, { title: doc.title || "Document" })
+        : navigate(`/docs/${doc.id}`)
+      }
+    >
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          className="doc-card-checkbox"
+          checked={Boolean(selected)}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => onToggleSelect(doc.id)}
+          aria-label="Select document"
+        />
+      )}
       <div className="doc-card-icon">
         <FileText size={16} />
       </div>
@@ -58,6 +83,20 @@ export default function DocCard({ doc, onDelete, isDeleting }: DocCardProps) {
         </div>
       </div>
       <div className="doc-card-actions">
+        {onRestore && (
+          <button
+            className="doc-card-action"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRestore(doc.id);
+            }}
+            disabled={isRestoring}
+            aria-label="Restore from server"
+            title="Khôi phục từ Server"
+          >
+            <CloudDownload size={15} />
+          </button>
+        )}
         <button
           className="doc-card-action"
           onClick={(e) => {

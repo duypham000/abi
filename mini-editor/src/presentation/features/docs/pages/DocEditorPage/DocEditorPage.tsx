@@ -8,7 +8,7 @@ import Sidebar from "@/presentation/features/dashboard/components/Sidebar";
 import { AppBar } from "@/presentation/components/AppBar";
 import { type RootState, type AppDispatch } from "@/presentation/store";
 import { setCurrentDocId } from "@/presentation/store/docsSlice";
-import { useDeleteDocMutation, useCreateDocMutation, docsApi, type DeleteScope } from "@/infrastructure/api/docsApi";
+import { useDeleteDocMutation, useCreateDocMutation, useRestoreDocsFromServerMutation, docsApi, type DeleteScope } from "@/infrastructure/api/docsApi";
 import { cacheDoc } from "@/infrastructure/tauri/docCacheService";
 import { isTauri } from "@/infrastructure/tauri/sqliteDb";
 import { parseDocMetadata } from "@/core/interfaces/docs";
@@ -566,6 +566,34 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
     navigate("/docs");
   }
 
+  const [restoreDocsFromServer, { isLoading: isRestoringFromServer }] = useRestoreDocsFromServerMutation();
+
+  async function handleRestoreFromServer() {
+    try {
+      const res = await restoreDocsFromServer({ ids: [docId] }).unwrap();
+      if (res.restored.length > 0) {
+        const restored = res.restored[0];
+        const blocks = parseInitialBlocks(restored.content);
+        if (editorRef.current) {
+          try {
+            editorRef.current.replaceBlocks(editorRef.current.document, blocks);
+          } catch (e) {
+            console.warn("[DocEditor] replaceBlocks on restore failed:", e);
+          }
+          baseHandleBlocksChange(blocks);
+        }
+        if (restored.title && restored.title !== doc?.title) {
+          baseHandleTitleChange(restored.title);
+        }
+        message.success("Đã khôi phục tài liệu từ Server!");
+      } else {
+        message.warning("Không tìm thấy bản lưu của tài liệu này trên Server.");
+      }
+    } catch (err: any) {
+      message.error(err?.data?.message || "Khôi phục từ Server thất bại");
+    }
+  }
+
   function handleCopyLink() {
     navigator.clipboard.writeText(window.location.href);
   }
@@ -826,6 +854,8 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
           onDuplicate={handleDuplicate}
           onImport={() => setImportModalOpen(true)}
           onExport={() => setExportModalOpen(true)}
+          onRestoreFromServer={handleRestoreFromServer}
+          isRestoringFromServer={isRestoringFromServer}
         />
       )}
 

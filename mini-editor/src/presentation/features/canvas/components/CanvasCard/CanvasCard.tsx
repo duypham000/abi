@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CloudDownload } from "lucide-react";
 import { parseCanvasMetadata, type CanvasDto } from "@/core/interfaces/canvas";
 import type { DeleteScope } from "@/infrastructure/api/docsApi";
 import { confirmDeleteWithScope } from "@/presentation/components/ui/ConfirmDeleteModal/confirmDeleteModal";
@@ -16,9 +17,21 @@ interface CanvasCardProps {
   canvas: CanvasDto;
   onDelete: (id: number, scope?: DeleteScope) => void;
   isDeleting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: number) => void;
+  onRestore?: (id: number) => void;
+  isRestoring?: boolean;
 }
 
-export default function CanvasCard({ canvas, onDelete, isDeleting }: CanvasCardProps) {
+export default function CanvasCard({
+  canvas,
+  onDelete,
+  isDeleting,
+  selected,
+  onToggleSelect,
+  onRestore,
+  isRestoring,
+}: CanvasCardProps) {
   const navigate = useNavigate();
   const { layout, openPanel } = useGoldenLayout();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -79,7 +92,7 @@ export default function CanvasCard({ canvas, onDelete, isDeleting }: CanvasCardP
   return (
     <div
       ref={cardRef}
-      className="canvas-card"
+      className={`canvas-card${selected ? " is-selected" : ""}`}
       onClick={() =>
         layout
           ? openPanel(PANEL_TYPES.CANVAS_EDITOR, { id: canvas.id }, { title: canvas.title || "Canvas" })
@@ -87,6 +100,22 @@ export default function CanvasCard({ canvas, onDelete, isDeleting }: CanvasCardP
       }
     >
       <div className="canvas-card-preview">
+        {onToggleSelect && (
+          <label
+            className="canvas-card-select"
+            onClick={(e) => e.stopPropagation()}
+            title="Chọn canvas"
+          >
+            <input
+              type="checkbox"
+              className="canvas-card-checkbox"
+              checked={Boolean(selected)}
+              onChange={() => onToggleSelect(canvas.id)}
+              aria-label="Select canvas"
+            />
+          </label>
+        )}
+
         {isVisible && thumbnailUrl ? (
           <img
             src={thumbnailUrl}
@@ -106,22 +135,38 @@ export default function CanvasCard({ canvas, onDelete, isDeleting }: CanvasCardP
           </div>
         )}
 
-        <button
-          className="canvas-card-delete"
-          onClick={(e) => {
-            e.stopPropagation();
-            confirmDeleteWithScope({
-              entityLabel: "canvas",
-              title: canvas.title || "Untitled Canvas",
-              onConfirm: (scope) => onDelete(canvas.id, scope),
-            });
-          }}
-          disabled={isDeleting}
-          aria-label="Delete canvas"
-          title="Xoá canvas"
-        >
-          ×
-        </button>
+        <div className="canvas-card-overlay-actions">
+          {onRestore && (
+            <button
+              className="canvas-card-action"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRestore(canvas.id);
+              }}
+              disabled={isRestoring}
+              aria-label="Restore from server"
+              title="Khôi phục từ Server"
+            >
+              <CloudDownload size={15} />
+            </button>
+          )}
+          <button
+            className="canvas-card-delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              confirmDeleteWithScope({
+                entityLabel: "canvas",
+                title: canvas.title || "Untitled Canvas",
+                onConfirm: (scope) => onDelete(canvas.id, scope),
+              });
+            }}
+            disabled={isDeleting}
+            aria-label="Delete canvas"
+            title="Xoá canvas"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       <div className="canvas-card-footer">
