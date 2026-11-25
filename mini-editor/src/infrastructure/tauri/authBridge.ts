@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getGoApiBaseUrl } from "@/infrastructure/api/apiConfig";
+import { getGoAbsoluteApiBaseUrl, getGoApiBaseUrl } from "@/infrastructure/api/apiConfig";
 
 const isTauri = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -31,12 +31,12 @@ export async function peekAccessToken(): Promise<string | null> {
 }
 
 export async function login(identifier: string, password: string): Promise<string> {
-  const apiBase = getGoApiBaseUrl();
   if (isTauri()) {
+    const apiBase = getGoAbsoluteApiBaseUrl();
     return await invoke<string>("auth_login", { identifier, password, apiBase });
   }
 
-  const res = await fetch(`${apiBase}/auth/login`, {
+  const res = await fetch(`${getGoApiBaseUrl()}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

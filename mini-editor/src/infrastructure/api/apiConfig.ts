@@ -127,6 +127,26 @@ function resolveConfiguredServerUrl(): string | null {
 }
 
 /**
+ * Resolves an absolute Go API base URL (with `http://` or `https://`),
+ * bypassing dev proxy detection. Required for native Rust `reqwest` calls.
+ */
+export function getGoAbsoluteApiBaseUrl(): string {
+  const apiPath = getConfiguredApiBasePath();
+  const configured = resolveConfiguredServerUrl();
+  if (configured) {
+    return buildApiBaseUrl(configured, apiPath);
+  }
+  if (
+    typeof window !== "undefined" &&
+    /^https?:$/i.test(window.location.protocol) &&
+    window.location.hostname !== "tauri.localhost"
+  ) {
+    return buildApiBaseUrl(window.location.origin, apiPath);
+  }
+  return buildApiBaseUrl("http://127.0.0.1:8080", apiPath);
+}
+
+/**
  * Resolves the Go API base URL dynamically at call-time.
  */
 export function getGoApiBaseUrl(): string {

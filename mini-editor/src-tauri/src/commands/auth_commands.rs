@@ -302,7 +302,7 @@ pub async fn auth_login(
 ) -> Result<String, String> {
     if let Some(base) = api_base {
         let trimmed = base.trim();
-        if !trimmed.is_empty() {
+        if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
             core.set_api_base(trimmed.to_string());
         }
     }
