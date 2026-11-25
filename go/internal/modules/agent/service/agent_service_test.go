@@ -402,3 +402,173 @@ func TestStreamChat_UpstreamConflictReturnsError(t *testing.T) {
 		t.Fatal("expected emit not to be called when POST /prompt failed")
 	}
 }
+
+func TestStreamChat_ReconnectsOnUnexpectedEOFWithLastEventID(t *testing.T) {
+	var mu sync.Mutex
+	var eventsConnCount int
+	var seenLastEventID string
+	statusState := "BUSY"
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
+		flusher, _ := w.(http.Flusher)
+		mu.Lock()
+		eventsConnCount++
+		connNum := eventsConnCount
+		if lid := r.Header.Get("Last-Event-ID"); lid != "" {
+			seenLastEventID = lid
+		} else if lid := r.URL.Query().Get("lastEventId"); lid != "" {
+			seenLastEventID = lid
+		}
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, ": connected\n\n")
+		if flusher != nil {
+			flusher.Flush()
+		}
+
+		if connNum == 1 {
+			ev1, _ := json.Marshal(map[string]interface{}{
+				"id":   "1",
+				"type": "message_chunk",
+				"data": map[string]string{"text": "Part 1 "},
+			})
+			_, _ = fmt.Fprintf(w, "id: 1\nevent: message_chunk\ndata: %s\n\n", ev1)
+			if flusher != nil {
+				flusher.Flush()
+			}
+			// Simulate abrupt stream drop (EOF) before turn_complete
+			time.Sleep(25 * time.Millisecond)
+			return
+		}
+
+		ev2, _ := json.Marshal(map[string]interface{}{
+			"id":   "2",
+			"type": "message_chunk",
+			"data": map[string]string{"text": "Part 2"},
+		})
+		ev3, _ := json.Marshal(map[string]interface{}{
+			"id":   "3",
+			"type": "turn_complete",
+			"data": map[string]string{"turnId": "turn_rec_1", "stopReason": "end_turn"},
+		})
+		_, _ = fmt.Fprintf(w, "id: 2\nevent: message_chunk\ndata: %s\n\n", ev2)
+		_, _ = fmt.Fprintf(w, "id: 3\nevent: turn_complete\ndata: %s\n\n", ev3)
+		if flusher != nil {
+			flusher.Flush()
+		}
+	})
+	mux.HandleFunc("POST /prompt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(dto.GemOpsPromptResponse{
+			Status:    "accepted",
+			TurnID:    "turn_rec_1",
+			HarnessID: "common",
+		})
+	})
+	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		st := statusState
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(dto.GemOpsStatusResponse{
+			InstanceID:   "inst-1",
+			State:        st,
+			ActiveTurnID: "turn_rec_1",
+		})
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	gemClient := client.NewGemOpsClient(srv.URL, "")
+	svc := service.NewAgentService(gemClient, "common", 10*time.Second)
+
+	var textBuf strings.Builder
+	var sawFinish bool
+	err := svc.StreamChat(context.Background(), dto.ChatRequest{
+		ID:       "s-rec",
+		Messages: []dto.UIMessage{{ID: "u1", Role: "user", Parts: []dto.UIMessagePart{{Type: "text", Text: "reconnect test"}}}},
+	}, "alice", func(chunk map[string]interface{}) error {
+		if chunk["type"] == "text-delta" {
+			if delta, ok := chunk["delta"].(string); ok {
+				textBuf.WriteString(delta)
+			}
+		}
+		if chunk["type"] == "finish" {
+			sawFinish = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected StreamChat to recover from mid-turn EOF, got: %v", err)
+	}
+
+	mu.Lock()
+	conns := eventsConnCount
+	lid := seenLastEventID
+	mu.Unlock()
+
+	if conns < 2 || lid != "1" {
+		t.Fatalf("expected reconnect with lastEventId='1', got conns=%d lastEventId=%q", conns, lid)
+	}
+	if textBuf.String() != "Part 1 Part 2" || !sawFinish {
+		t.Fatalf("unexpected text/finish after reconnect: text=%q sawFinish=%v", textBuf.String(), sawFinish)
+	}
+}
+
+func TestStreamChat_ReportsClearErrorWhenDaemonStopsMidTurn(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
+		flusher, _ := w.(http.Flusher)
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, ": connected\n\n")
+		if flusher != nil {
+			flusher.Flush()
+		}
+		time.Sleep(15 * time.Millisecond)
+	})
+	mux.HandleFunc("POST /prompt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(dto.GemOpsPromptResponse{
+			Status:    "accepted",
+			TurnID:    "turn_oom_1",
+			HarnessID: "common",
+		})
+	})
+	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(dto.GemOpsStatusResponse{
+			InstanceID: "inst-restarted",
+			State:      "STOPPED",
+		})
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	gemClient := client.NewGemOpsClient(srv.URL, "")
+	svc := service.NewAgentService(gemClient, "common", 10*time.Second)
+
+	var errText string
+	err := svc.StreamChat(context.Background(), dto.ChatRequest{
+		ID:       "s-oom",
+		Messages: []dto.UIMessage{{ID: "u1", Role: "user", Parts: []dto.UIMessagePart{{Type: "text", Text: "oom test"}}}},
+	}, "alice", func(chunk map[string]interface{}) error {
+		if chunk["type"] == "error" {
+			errText, _ = chunk["errorText"].(string)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected StreamChat to emit error chunk cleanly, got err: %v", err)
+	}
+	if !strings.Contains(errText, "terminated or restarted mid-turn") {
+		t.Fatalf("expected clear mid-turn termination error, got %q", errText)
+	}
+}

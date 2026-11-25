@@ -440,18 +440,21 @@ function ComposerInner({
 
   const availableModels = useMemo(() => {
     const raw = backendInfo?.models?.length ? backendInfo.models : FALLBACK_MODELS;
-    return raw.map((m) => ({
-      id: m.id,
-      name: m.label || m.id,
-      provider: inferProvider(m.id),
-    }));
+    return [
+      { id: "", name: "Default (Server)", provider: "google" },
+      ...raw.map((m) => ({
+        id: m.id,
+        name: m.label || m.id,
+        provider: inferProvider(m.id),
+      })),
+    ];
   }, [backendInfo?.models]);
 
   const activeModel = useMemo(
     () =>
       availableModels.find((m) => m.id === modelId) ?? {
         id: modelId,
-        name: modelId,
+        name: modelId || "Default (Server)",
         provider: inferProvider(modelId),
       },
     [availableModels, modelId]

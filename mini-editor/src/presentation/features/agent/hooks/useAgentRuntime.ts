@@ -269,6 +269,16 @@ export function useAgentRuntime() {
       }
       if (infoRes.status === "fulfilled") {
         setBackendInfo(infoRes.value);
+        const liveModels = infoRes.value.models ?? [];
+        if (
+          liveModels.length > 0 &&
+          currentCfg.modelId &&
+          !liveModels.some((m) => m.id === currentCfg.modelId)
+        ) {
+          const store = useAgentStore.getState();
+          store.updateConfig({ modelId: "" });
+          store.setSessionModel(activeSessionIdRef.current, "");
+        }
       } else if (!firstErr) {
         firstErr = infoRes.reason instanceof Error ? infoRes.reason.message : "Info unavailable";
       }

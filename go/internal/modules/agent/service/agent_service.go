@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -157,7 +157,7 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 	var sessionCfg *dto.GemOpsSessionConfig
 	var requestedModelID string
 	if req.AgentConfig != nil {
-		requestedModelID = strings.TrimSpace(req.AgentConfig.ModelID)
+		requestedModelID = normalizeGemOpsModel(req.AgentConfig.ModelID)
 		mapped := dto.GemOpsSessionConfig{
 			Model:              requestedModelID,
 			Effort:             normalizeGemOpsEffort(req.AgentConfig.ReasoningEffort),
@@ -173,16 +173,35 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 	defer cancelStream()
 
 	// Subscribe to SSE before POST /prompt so no early turn events are missed.
-	stream, err := s.backend.SubscribeEvents(streamCtx, "")
+	initialStream, err := s.backend.SubscribeEvents(streamCtx, "")
 	if err != nil {
 		return err
 	}
-	defer stream.Close()
+
+	var streamMu sync.Mutex
+	activeStream := initialStream
+	setActiveStream := func(next *client.EventStream) {
+		streamMu.Lock()
+		prev := activeStream
+		activeStream = next
+		streamMu.Unlock()
+		if prev != nil && prev != next {
+			_ = prev.Close()
+		}
+	}
+	closeActiveStream := func() {
+		streamMu.Lock()
+		cur := activeStream
+		activeStream = nil
+		streamMu.Unlock()
+		if cur != nil {
+			_ = cur.Close()
+		}
+	}
+	defer closeActiveStream()
 
 	// Close the SSE response body promptly on context cancellation so blocked reads unblock immediately.
-	stopWatch := context.AfterFunc(streamCtx, func() {
-		_ = stream.Close()
-	})
+	stopWatch := context.AfterFunc(streamCtx, closeActiveStream)
 	defer stopWatch()
 
 	inactivityLimit := s.turnTimeout + 30*time.Second
@@ -261,14 +280,35 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 		toolNamesByCall: make(map[string]string),
 	}
 
+	var lastEventID string
+	var knownInstanceID string
+	var idleSettleTriggered atomic.Bool
+
 	for {
-		ev, err := stream.Next()
+		streamMu.Lock()
+		curStream := activeStream
+		streamMu.Unlock()
+		if curStream == nil {
+			_ = state.finishWithError("gemops event stream closed")
+			return nil
+		}
+
+		ev, err := curStream.Next()
 		if err != nil {
 			if ctx.Err() != nil {
 				cancelCtx, cancelTimeout := context.WithTimeout(context.Background(), 5*time.Second)
 				_, _ = s.backend.Cancel(cancelCtx)
 				cancelTimeout()
 				return ctx.Err()
+			}
+			if idleSettleTriggered.Load() {
+				if err := state.closeOpenTextAndReasoning(); err != nil {
+					return err
+				}
+				if err := state.emit(map[string]interface{}{"type": "finish-step"}); err != nil {
+					return err
+				}
+				return state.emit(state.buildFinishChunk("stop", "end_turn"))
 			}
 			if timedOut.Load() && streamCtx.Err() != nil {
 				cancelCtx, cancelTimeout := context.WithTimeout(context.Background(), 5*time.Second)
@@ -277,12 +317,30 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 				_ = state.finishWithError("gemops turn timed out due to inactivity")
 				return nil
 			}
-			if errors.Is(err, io.EOF) {
-				_ = state.finishWithError("gemops event stream closed unexpectedly")
+
+			reconnected, recheckErr := s.reconnectEventStream(streamCtx, lastEventID, knownInstanceID, acceptedTurnID, &idleSettleTriggered, cancelStream)
+			if reconnected != nil {
+				setActiveStream(reconnected)
+				continue
+			}
+			if recheckErr != nil {
+				_ = state.finishWithError(recheckErr.Error())
 				return nil
 			}
-			_ = state.finishWithError("gemops event stream error: " + err.Error())
+			_ = state.finishWithError(fmt.Sprintf("lost connection to gemops-agent mid-turn (%v); check gemops-agent service and host RAM", err))
 			return nil
+		}
+
+		if ev.ID != "" {
+			lastEventID = ev.ID
+		}
+		if ev.Type == "session_state" && len(ev.Data) > 0 {
+			var statePayload map[string]interface{}
+			if json.Unmarshal(ev.Data, &statePayload) == nil {
+				if inst, ok := statePayload["instanceId"].(string); ok && strings.TrimSpace(inst) != "" {
+					knownInstanceID = strings.TrimSpace(inst)
+				}
+			}
 		}
 
 		select {
@@ -306,6 +364,63 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 			return nil
 		}
 	}
+}
+
+func (s *AgentService) reconnectEventStream(
+	streamCtx context.Context,
+	lastEventID string,
+	knownInstanceID string,
+	acceptedTurnID string,
+	idleSettleTriggered *atomic.Bool,
+	cancelStream context.CancelFunc,
+) (*client.EventStream, error) {
+	backoffs := []time.Duration{200 * time.Millisecond, 500 * time.Millisecond, 1000 * time.Millisecond}
+	var lastErr error
+	for _, wait := range backoffs {
+		timer := time.NewTimer(wait)
+		select {
+		case <-streamCtx.Done():
+			timer.Stop()
+			return nil, streamCtx.Err()
+		case <-timer.C:
+		}
+
+		nextStream, err := s.backend.SubscribeEvents(streamCtx, lastEventID)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		statusCtx, cancelStatus := context.WithTimeout(streamCtx, 3*time.Second)
+		st, stErr := s.backend.GetStatus(statusCtx)
+		cancelStatus()
+
+		if stErr == nil && st != nil {
+			if (knownInstanceID != "" && st.InstanceID != "" && st.InstanceID != knownInstanceID) ||
+				strings.EqualFold(st.State, "STOPPED") {
+				_ = nextStream.Close()
+				return nil, errors.New("gemops-agent terminated or restarted mid-turn (likely host RAM/OOM limit); please retry")
+			}
+			if strings.EqualFold(st.State, "IDLE") && strings.TrimSpace(st.ActiveTurnID) == "" {
+				time.AfterFunc(500*time.Millisecond, func() {
+					idleSettleTriggered.Store(true)
+					cancelStream()
+				})
+			}
+		}
+		return nextStream, nil
+	}
+
+	statusCtx, cancelStatus := context.WithTimeout(context.Background(), 2*time.Second)
+	st, stErr := s.backend.GetStatus(statusCtx)
+	cancelStatus()
+	if stErr == nil && st != nil && strings.EqualFold(st.State, "STOPPED") {
+		return nil, errors.New("gemops-agent terminated or restarted mid-turn (likely host RAM/OOM limit); please retry")
+	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("lost connection to gemops-agent mid-turn (%v); check gemops-agent service and host RAM", lastErr)
+	}
+	return nil, nil
 }
 
 type streamTranslator struct {
@@ -717,6 +832,17 @@ func buildPromptText(req dto.ChatRequest) string {
 	ctxBuf.WriteString("\n[User Request]\n")
 	ctxBuf.WriteString(userText)
 	return ctxBuf.String()
+}
+
+func normalizeGemOpsModel(model string) string {
+	trimmed := strings.TrimSpace(model)
+	switch strings.ToLower(trimmed) {
+	case "", "default", "auto", "server-default",
+		"gpt-4o", "claude-sonnet-4-5", "gemini-2.5-pro", "o3-mini", "deepseek-r1", "qwen-2.5-coder":
+		return ""
+	default:
+		return trimmed
+	}
 }
 
 func normalizeGemOpsMode(mode string) string {

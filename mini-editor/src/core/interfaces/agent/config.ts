@@ -324,7 +324,7 @@ export const DEFAULT_AGENT_PROFILE: AgentProfile = {
   systemInstructions:
     "Respect TypeScript strict mode, ProseMirror single-instance pins, local-first SQLite caching, and verify changes with tsc before committing.",
   defaultMode: "agent",
-  defaultModelId: "claude-sonnet-4-5",
+  defaultModelId: "",
   personaVariant: "obsidian",
   voiceId: "nova",
   enabledTools: DEFAULT_AGENT_TOOLS.filter((tool) => tool.enabled).map(
@@ -346,7 +346,7 @@ export const DEFAULT_RUNTIME_CONFIG: AgentRuntimeConfig = {
   apiKey: "",
   harnessId: "",
   systemPromptAppend: "",
-  modelId: "gemini-4-neon-medium",
+  modelId: "",
   mode: "agent",
   approvalPolicy: "ask",
   reasoningEffort: "medium",
