@@ -8,6 +8,9 @@ import {
 import { setOnline, connectionLost } from "@/presentation/store/appSlice";
 import { setUser } from "@/presentation/store/authSlice";
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
+import { getGoApiBaseUrl, getGoRootUrl } from "./apiConfig";
+
+export { getGoApiBaseUrl as resolveGoApiBaseUrl, getGoRootUrl as resolveGoRootUrl };
 
 export interface PageResult<T> {
   items: T[];
@@ -22,13 +25,11 @@ export interface ScrollResult<T> {
   nextCursor: number | null;
 }
 
-const BASE_URL = "/api/v1";
-
 // The Rust auth core (via authBridge) is the single source of truth for tokens
 // and performs refresh transparently + single-flight. Each request just asks it
 // for a currently-valid access token.
 const rawBaseQuery = fetchBaseQuery({
-  baseUrl: BASE_URL,
+  baseUrl: "",
   prepareHeaders: async (headers) => {
     const token = await getAccessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -36,12 +37,29 @@ const rawBaseQuery = fetchBaseQuery({
   },
 });
 
+const dynamicBaseQuery: BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError
+> = async (args, api, extraOptions) => {
+  const baseUrl = getGoApiBaseUrl();
+  const adjustedArgs =
+    typeof args === "string"
+      ? /^https?:\/\//i.test(args)
+        ? args
+        : `${baseUrl}${args.startsWith("/") ? args : `/${args}`}`
+      : /^https?:\/\//i.test(args.url)
+        ? args
+        : { ...args, url: `${baseUrl}${args.url.startsWith("/") ? args.url : `/${args.url}`}` };
+  return rawBaseQuery(adjustedArgs, api, extraOptions);
+};
+
 const baseQueryWithReauth: BaseQueryFn<
   string | FetchArgs,
   unknown,
   FetchBaseQueryError
 > = async (args, api, extraOptions) => {
-  let result = await rawBaseQuery(args, api, extraOptions);
+  let result = await dynamicBaseQuery(args, api, extraOptions);
 
   // A 401 should be rare (Rust refreshes proactively). If it happens, force a
   // token refresh once and retry; if still unauthorized, the session is gone.
@@ -49,7 +67,7 @@ const baseQueryWithReauth: BaseQueryFn<
     try {
       const token = await getAccessToken();
       if (token) {
-        result = await rawBaseQuery(args, api, extraOptions);
+        result = await dynamicBaseQuery(args, api, extraOptions);
       }
       if (result.error?.status === 401) {
         api.dispatch(setUser(null));

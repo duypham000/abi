@@ -5,8 +5,8 @@ import path from "path";
 export default defineConfig(function (_a) {
     var mode = _a.mode;
     var env = loadEnv(mode, process.cwd(), "");
-    var goApiTarget = env.VITE_GO_API_URL || env.VITE_PROXY_TARGET || "http://api.tomoo.uk/go";
-    var nodeApiTarget = env.VITE_NODE_API_URL || "http://api.tomoo.uk/node";
+    var goApiTarget = env.VITE_GO_API_URL || env.VITE_PROXY_TARGET || "https://api.tomoo.uk/go";
+    var nodeApiTarget = env.VITE_NODE_API_URL || "https://api.tomoo.uk/node";
     var wsTarget = (env.VITE_NODE_WS_URL || "wss://ws.tomoo.uk").replace(/\/ws\/yjs\/?$/, "").replace(/\/+$/, "");
     var parseTarget = function (urlStr) {
         try {

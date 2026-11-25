@@ -27,7 +27,7 @@ export const notesApi = baseApi.injectEndpoints({
         }
         const { page = 0, size = 20, sortBy = "id", sortDirection = "ASC" } = args || {};
         const result = await fetchWithBaseQuery({
-          url: "/base/notes/list",
+          url: "/notes/list",
           params: { page, size, sortBy, sortDirection },
         });
         return result.data
@@ -50,7 +50,7 @@ export const notesApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery({ url: "/base/notes/lazy" });
+        const result = await fetchWithBaseQuery({ url: "/notes/lazy" });
         return result.data
           ? { data: result.data as ScrollResult<NoteDto> }
           : { error: result.error as any };
@@ -68,7 +68,7 @@ export const notesApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery(`/base/notes/${id}`);
+        const result = await fetchWithBaseQuery(`/notes/${id}`);
         return result.data
           ? { data: result.data as NoteDto }
           : { error: result.error as any };
@@ -86,7 +86,7 @@ export const notesApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery({ url: "/base/notes", method: "POST", body });
+        const result = await fetchWithBaseQuery({ url: "/notes", method: "POST", body });
         return result.data
           ? { data: result.data as NoteDto }
           : { error: result.error as any };
@@ -105,7 +105,7 @@ export const notesApi = baseApi.injectEndpoints({
           }
         }
         const result = await fetchWithBaseQuery({
-          url: `/base/notes/${id}`,
+          url: `/notes/${id}`,
           method: "PUT",
           body,
         });
@@ -129,7 +129,7 @@ export const notesApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery({ url: `/base/notes/${id}`, method: "DELETE" });
+        const result = await fetchWithBaseQuery({ url: `/notes/${id}`, method: "DELETE" });
         return result.data
           ? { data: undefined }
           : { error: result.error as any };
@@ -147,7 +147,7 @@ export const notesApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery({ url: "/base/notes/search", params: { q } });
+        const result = await fetchWithBaseQuery({ url: "/notes/search", params: { q } });
         return result.data
           ? { data: result.data as NoteDto[] }
           : { error: result.error as any };

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getGoApiBaseUrl } from "@/infrastructure/api/apiConfig";
 
 const isTauri = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -30,19 +31,12 @@ export async function peekAccessToken(): Promise<string | null> {
 }
 
 export async function login(identifier: string, password: string): Promise<string> {
+  const apiBase = getGoApiBaseUrl();
   if (isTauri()) {
-    const goUrl = (import.meta.env.VITE_GO_API_URL as string | undefined)?.replace(/\/+$/, "");
-    const apiBase =
-      (import.meta.env.TOMO_API_BASE as string | undefined) ||
-      (goUrl
-        ? goUrl.endsWith("/go")
-          ? `${goUrl}/v1`
-          : `${goUrl}/api/v1`
-        : undefined);
     return await invoke<string>("auth_login", { identifier, password, apiBase });
   }
 
-  const res = await fetch("/api/v1/auth/login", {
+  const res = await fetch(`${apiBase}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -90,7 +84,7 @@ export async function logout(): Promise<void> {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       try {
-        await fetch("/api/v1/auth/logout", {
+        await fetch(`${getGoApiBaseUrl()}/auth/logout`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

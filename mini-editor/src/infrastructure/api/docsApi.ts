@@ -89,7 +89,7 @@ export const docsApi = baseApi.injectEndpoints({
                 if (token && token !== "local-standalone-token") {
                   const { seriesId, page = 0, size = 20, sortBy = "id", sortDirection = "ASC" } = args || {};
                   const res = await fetchWithBaseQuery({
-                    url: "/base/docs/list",
+                    url: "/docs/list",
                     params: { seriesId, page: page + 1, page_size: size, size, sortBy, sortDirection },
                   });
                   if (res.data && typeof res.data === "object" && "items" in (res.data as Record<string, unknown>)) {
@@ -117,7 +117,7 @@ export const docsApi = baseApi.injectEndpoints({
         }
         const { seriesId, page = 0, size = 20, sortBy = "id", sortDirection = "ASC" } = args || {};
         const result = await fetchWithBaseQuery({
-          url: "/base/docs/list",
+          url: "/docs/list",
           params: { seriesId, page: page + 1, page_size: size, size, sortBy, sortDirection },
         });
         return result.data
@@ -142,7 +142,7 @@ export const docsApi = baseApi.injectEndpoints({
         }
         const { seriesId, lastId, size = 20 } = args || {};
         const result = await fetchWithBaseQuery({
-          url: "/base/docs/lazy",
+          url: "/docs/lazy",
           params: { seriesId, lastId, size },
         });
         return result.data
@@ -170,7 +170,7 @@ export const docsApi = baseApi.injectEndpoints({
               const remoteUuid = local.backendUuid;
               const syncSingle = async () => {
                 try {
-                  const res = await fetchWithBaseQuery(`/base/docs/${remoteUuid}`);
+                  const res = await fetchWithBaseQuery(`/docs/${remoteUuid}`);
                   if (res.data) {
                     const preSnap = await getDocSyncSnapshot(id);
                     const canOverwriteLocal = !preSnap || !preSnap.hasUnsyncedRemoteChanges;
@@ -221,7 +221,7 @@ export const docsApi = baseApi.injectEndpoints({
             // fallback sang backend fetch
           }
         }
-        const result = await fetchWithBaseQuery(`/base/docs/${id}`);
+        const result = await fetchWithBaseQuery(`/docs/${id}`);
         if (result.data) {
           const normalized = normalizeRemoteDoc(result.data);
           if (isTauri()) {
@@ -249,7 +249,7 @@ export const docsApi = baseApi.injectEndpoints({
         try {
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
-            const result = await fetchWithBaseQuery({ url: "/base/docs", method: "POST", body: goPayload });
+            const result = await fetchWithBaseQuery({ url: "/docs", method: "POST", body: goPayload });
             if (result.data) {
               if (isTauri() && localDoc) {
                 const linked = await linkRemoteDocToLocal(localDoc.id, result.data as Record<string, unknown>, { force: true });
@@ -274,7 +274,7 @@ export const docsApi = baseApi.injectEndpoints({
           return { data: { ...localDoc, remoteStatus: "local-only" } };
         }
 
-        const result = await fetchWithBaseQuery({ url: "/base/docs", method: "POST", body: goPayload });
+        const result = await fetchWithBaseQuery({ url: "/docs", method: "POST", body: goPayload });
         return result.data
           ? { data: normalizeRemoteDoc(result.data) }
           : { error: result.error as any };
@@ -309,7 +309,7 @@ export const docsApi = baseApi.injectEndpoints({
 
             if (localDoc?.backendUuid) {
               const result = await fetchWithBaseQuery({
-                url: `/base/docs/${localDoc.backendUuid}`,
+                url: `/docs/${localDoc.backendUuid}`,
                 method: "PUT",
                 body: goPayload,
               });
@@ -342,7 +342,7 @@ export const docsApi = baseApi.injectEndpoints({
             if (shouldCreateRemote) {
               // No backendUuid yet, or remote PUT returned 404/500 (missing in active DB) -> register via POST
               const createRes = await fetchWithBaseQuery({
-                url: "/base/docs",
+                url: "/docs",
                 method: "POST",
                 body: goPayload,
               });
@@ -395,7 +395,7 @@ export const docsApi = baseApi.injectEndpoints({
           return { data: offlineDoc };
         }
 
-        const result = await fetchWithBaseQuery({ url: `/base/docs/${id}`, method: "PUT", body: goPayload });
+        const result = await fetchWithBaseQuery({ url: `/docs/${id}`, method: "PUT", body: goPayload });
         return result.data
           ? { data: normalizeRemoteDoc(result.data) }
           : { error: result.error as any };
@@ -419,7 +419,7 @@ export const docsApi = baseApi.injectEndpoints({
         try {
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
-            await fetchWithBaseQuery({ url: `/base/docs/${remoteId}`, method: "DELETE" });
+            await fetchWithBaseQuery({ url: `/docs/${remoteId}`, method: "DELETE" });
             return { data: undefined };
           }
         } catch {
@@ -450,7 +450,7 @@ export const docsApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery({ url: "/base/docs/search", params: { q } });
+        const result = await fetchWithBaseQuery({ url: "/docs/search", params: { q } });
         return result.data
           ? { data: result.data as DocDto[] }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -464,17 +464,17 @@ export const docsApi = baseApi.injectEndpoints({
       { docId: number; page?: number; size?: number }
     >({
       query: ({ docId, page = 0, size = 20 }) => ({
-        url: `/base/docs/${docId}/revisions`,
+        url: `/docs/${docId}/revisions`,
         params: { page, size },
       }),
       providesTags: (_res, _err, { docId }) => [{ type: "Doc" as const, id: `revisions-${docId}` }],
     }),
     getDocRevision: builder.query<DocRevisionDto, { docId: number; revisionId: number }>({
-      query: ({ docId, revisionId }) => `/base/docs/${docId}/revisions/${revisionId}`,
+      query: ({ docId, revisionId }) => `/docs/${docId}/revisions/${revisionId}`,
     }),
     restoreDocRevision: builder.mutation<DocDto, { docId: number; revisionId: number }>({
       query: ({ docId, revisionId }) => ({
-        url: `/base/docs/${docId}/revisions/${revisionId}/restore`,
+        url: `/docs/${docId}/revisions/${revisionId}/restore`,
         method: "POST",
       }),
       invalidatesTags: (_res, _err, { docId }) => [
@@ -488,7 +488,7 @@ export const docsApi = baseApi.injectEndpoints({
         const formData = new FormData();
         formData.append("file", file);
         return {
-          url: `/base/docs/${docId}/bin-revisions/analyze`,
+          url: `/docs/${docId}/bin-revisions/analyze`,
           method: "POST",
           body: formData,
         };
@@ -499,7 +499,7 @@ export const docsApi = baseApi.injectEndpoints({
         const formData = new FormData();
         formData.append("file", file);
         return {
-          url: `/base/docs/${docId}/bin-revisions/restore`,
+          url: `/docs/${docId}/bin-revisions/restore`,
           method: "POST",
           body: formData,
         };
@@ -532,7 +532,7 @@ export const docsApi = baseApi.injectEndpoints({
     }),
     syncDocFromGit: builder.mutation<DocDto, { title: string; content: string; gitSlug: string; status?: string }>({
       query: (body) => ({
-        url: "/base/docs/sync-from-git",
+        url: "/docs/sync-from-git",
         method: "POST",
         body: {
           title: body.title,
@@ -560,7 +560,7 @@ export const docsApi = baseApi.injectEndpoints({
       { items: any[] }
     >({
       query: (body) => ({
-        url: "/base/docs/sync/push",
+        url: "/docs/sync/push",
         method: "POST",
         body,
       }),
@@ -568,7 +568,7 @@ export const docsApi = baseApi.injectEndpoints({
     }),
     syncPullRemote: builder.query<{ items: DocDto[]; total: number }, { since?: string } | void>({
       query: (args) => ({
-        url: "/base/docs/sync/pull",
+        url: "/docs/sync/pull",
         params: args?.since ? { since: args.since } : undefined,
       }),
       transformResponse: (res: { items?: unknown[]; total?: number }) => {
@@ -579,7 +579,7 @@ export const docsApi = baseApi.injectEndpoints({
     }),
     getYjsToken: builder.query<{ token: string; url: string; expiresIn: number }, number | string>({
       query: (docId) => ({
-        url: "/base/yjs/auth/token",
+        url: "/yjs/auth/token",
         method: "POST",
         body: { doc_id: String(docId), access_mode: "write" },
       }),

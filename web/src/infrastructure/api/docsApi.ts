@@ -15,7 +15,7 @@ export const docsApi = baseApi.injectEndpoints({
         sortBy = "id",
         sortDirection = "ASC",
       } = {}) => ({
-        url: "/base/docs/list",
+        url: "/docs/list",
         params: { seriesId, page, size, sortBy, sortDirection },
       }),
       providesTags: ["Doc"],
@@ -25,21 +25,21 @@ export const docsApi = baseApi.injectEndpoints({
       { seriesId?: number; lastId?: number; size?: number }
     >({
       query: ({ seriesId, lastId, size = 20 } = {}) => ({
-        url: "/base/docs/lazy",
+        url: "/docs/lazy",
         params: { seriesId, lastId, size },
       }),
     }),
     getDocById: builder.query<DocDto, number>({
-      query: (id) => `/base/docs/${id}`,
+      query: (id) => `/docs/${id}`,
       providesTags: (_res, _err, id) => [{ type: "Doc" as const, id }],
     }),
     createDoc: builder.mutation<DocDto, DocRequest>({
-      query: (body) => ({ url: "/base/docs", method: "POST", body }),
+      query: (body) => ({ url: "/docs", method: "POST", body }),
       invalidatesTags: ["Doc"],
     }),
     updateDoc: builder.mutation<DocDto, { id: number; body: DocRequest }>({
       query: ({ id, body }) => ({
-        url: `/base/docs/${id}`,
+        url: `/docs/${id}`,
         method: "PUT",
         body,
       }),
@@ -49,11 +49,11 @@ export const docsApi = baseApi.injectEndpoints({
       ],
     }),
     deleteDoc: builder.mutation<void, number>({
-      query: (id) => ({ url: `/base/docs/${id}`, method: "DELETE" }),
+      query: (id) => ({ url: `/docs/${id}`, method: "DELETE" }),
       invalidatesTags: ["Doc"],
     }),
     searchDocs: builder.query<DocDto[], string>({
-      query: (q) => ({ url: "/base/docs/search", params: { q } }),
+      query: (q) => ({ url: "/docs/search", params: { q } }),
       providesTags: ["Doc"],
     }),
 
@@ -61,7 +61,7 @@ export const docsApi = baseApi.injectEndpoints({
     // useYjsCollaboration via endpoints.getYjsToken.initiate(docId, { forceRefetch: true }).
     getYjsToken: builder.query<{ token: string; url: string; expiresIn: number }, number | string>({
       query: (docId) => ({
-        url: "/base/yjs/auth/token",
+        url: "/yjs/auth/token",
         method: "POST",
         body: { doc_id: String(docId), access_mode: "write" },
       }),
@@ -74,17 +74,17 @@ export const docsApi = baseApi.injectEndpoints({
       { docId: number; page?: number; size?: number }
     >({
       query: ({ docId, page = 0, size = 20 }) => ({
-        url: `/base/docs/${docId}/revisions`,
+        url: `/docs/${docId}/revisions`,
         params: { page, size },
       }),
       providesTags: (_res, _err, { docId }) => [{ type: "Doc" as const, id: `revisions-${docId}` }],
     }),
     getDocRevision: builder.query<DocRevisionDto, { docId: number; revisionId: number }>({
-      query: ({ docId, revisionId }) => `/base/docs/${docId}/revisions/${revisionId}`,
+      query: ({ docId, revisionId }) => `/docs/${docId}/revisions/${revisionId}`,
     }),
     restoreDocRevision: builder.mutation<DocDto, { docId: number; revisionId: number }>({
       query: ({ docId, revisionId }) => ({
-        url: `/base/docs/${docId}/revisions/${revisionId}/restore`,
+        url: `/docs/${docId}/revisions/${revisionId}/restore`,
         method: "POST",
       }),
       invalidatesTags: (_res, _err, { docId }) => [
@@ -98,7 +98,7 @@ export const docsApi = baseApi.injectEndpoints({
         const formData = new FormData();
         formData.append("file", file);
         return {
-          url: `/base/docs/${docId}/bin-revisions/analyze`,
+          url: `/docs/${docId}/bin-revisions/analyze`,
           method: "POST",
           body: formData,
         };
@@ -109,7 +109,7 @@ export const docsApi = baseApi.injectEndpoints({
         const formData = new FormData();
         formData.append("file", file);
         return {
-          url: `/base/docs/${docId}/bin-revisions/restore`,
+          url: `/docs/${docId}/bin-revisions/restore`,
           method: "POST",
           body: formData,
         };

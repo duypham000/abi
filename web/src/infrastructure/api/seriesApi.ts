@@ -13,22 +13,22 @@ export const seriesApi = baseApi.injectEndpoints({
         sortBy = "id",
         sortDirection = "ASC",
       } = {}) => ({
-        url: "/base/series/list",
+        url: "/series/list",
         params: { page, size, sortBy, sortDirection },
       }),
       providesTags: ["Series"],
     }),
     getSeriesById: builder.query<SeriesDto, number>({
-      query: (id) => `/base/series/${id}`,
+      query: (id) => `/series/${id}`,
       providesTags: (_res, _err, id) => [{ type: "Series" as const, id }],
     }),
     createSeries: builder.mutation<SeriesDto, SeriesRequest>({
-      query: (body) => ({ url: "/base/series", method: "POST", body }),
+      query: (body) => ({ url: "/series", method: "POST", body }),
       invalidatesTags: ["Series"],
     }),
     updateSeries: builder.mutation<SeriesDto, { id: number; body: SeriesRequest }>({
       query: ({ id, body }) => ({
-        url: `/base/series/${id}`,
+        url: `/series/${id}`,
         method: "PUT",
         body,
       }),
@@ -39,11 +39,11 @@ export const seriesApi = baseApi.injectEndpoints({
       ],
     }),
     deleteSeries: builder.mutation<void, number>({
-      query: (id) => ({ url: `/base/series/${id}`, method: "DELETE" }),
+      query: (id) => ({ url: `/series/${id}`, method: "DELETE" }),
       invalidatesTags: ["Series", "Doc"],
     }),
     searchSeries: builder.query<SeriesDto[], string>({
-      query: (q) => ({ url: "/base/series/search", params: { q } }),
+      query: (q) => ({ url: "/series/search", params: { q } }),
       providesTags: ["Series"],
     }),
   }),

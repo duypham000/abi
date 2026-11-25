@@ -27,7 +27,7 @@ export const canvasApi = baseApi.injectEndpoints({
         }
         const { page = 0, size = 20, sortBy = "id", sortDirection = "ASC" } = args || {};
         const result = await fetchWithBaseQuery({
-          url: "/base/canvas/list",
+          url: "/canvas/list",
           params: { page, size, sortBy, sortDirection },
         });
         return result.data
@@ -53,7 +53,7 @@ export const canvasApi = baseApi.injectEndpoints({
         }
         const { lastId, size = 20 } = args || {};
         const result = await fetchWithBaseQuery({
-          url: "/base/canvas/lazy",
+          url: "/canvas/lazy",
           params: { lastId, size },
         });
         return result.data
@@ -74,7 +74,7 @@ export const canvasApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery(`/base/canvas/${id}`);
+        const result = await fetchWithBaseQuery(`/canvas/${id}`);
         return result.data
           ? { data: result.data as CanvasDto }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,7 +93,7 @@ export const canvasApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery({ url: "/base/canvas", method: "POST", body });
+        const result = await fetchWithBaseQuery({ url: "/canvas", method: "POST", body });
         return result.data
           ? { data: result.data as CanvasDto }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -113,7 +113,7 @@ export const canvasApi = baseApi.injectEndpoints({
           }
         }
         const result = await fetchWithBaseQuery({
-          url: `/base/canvas/${id}`,
+          url: `/canvas/${id}`,
           method: "PUT",
           body,
         });
@@ -138,7 +138,7 @@ export const canvasApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery({ url: `/base/canvas/${id}`, method: "DELETE" });
+        const result = await fetchWithBaseQuery({ url: `/canvas/${id}`, method: "DELETE" });
         return result.data
           ? { data: undefined }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -157,7 +157,7 @@ export const canvasApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery({ url: "/base/canvas/search", params: { q } });
+        const result = await fetchWithBaseQuery({ url: "/canvas/search", params: { q } });
         return result.data
           ? { data: result.data as CanvasDto[] }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -167,7 +167,7 @@ export const canvasApi = baseApi.injectEndpoints({
     }),
     getYjsCanvasToken: builder.query<{ token: string; url: string; expiresIn: number }, number>({
       query: (canvasId) => ({
-        url: "/base/yjs/auth/token",
+        url: "/yjs/auth/token",
         method: "POST",
         body: { canvas_id: String(canvasId), access_mode: "write" },
       }),

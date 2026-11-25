@@ -83,19 +83,29 @@ impl AuthCore {
         #[cfg(feature = "local")]
         let default_base = "http://127.0.0.1:8080/api/v1";
         #[cfg(not(feature = "local"))]
-        let default_base = "http://api.tomoo.uk/go/v1";
+        let default_base = option_env!("TOMO_API_BASE")
+            .unwrap_or("http://api.tomoo.uk/go/api/v1");
         let api_base = std::env::var("TOMO_API_BASE")
             .or_else(|_| {
                 std::env::var("VITE_GO_API_URL").map(|u| {
                     let trimmed = u.trim_end_matches('/');
-                    if trimmed.ends_with("/go") {
-                        format!("{trimmed}/v1")
+                    if trimmed.ends_with("/api/v1") {
+                        trimmed.to_string()
                     } else {
                         format!("{trimmed}/api/v1")
                     }
                 })
             })
-            .unwrap_or_else(|_| default_base.to_string());
+            .unwrap_or_else(|_| {
+                if let Some(vite_go) = option_env!("VITE_GO_API_URL") {
+                    let trimmed = vite_go.trim_end_matches('/');
+                    if trimmed.ends_with("/api/v1") {
+                        return trimmed.to_string();
+                    }
+                    return format!("{trimmed}/api/v1");
+                }
+                default_base.to_string()
+            });
         // Always bound network calls so a slow/unreachable backend can never hang
         // a window's bootstrap indefinitely.
         let mut builder = reqwest::Client::builder()

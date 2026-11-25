@@ -139,24 +139,12 @@ func main() {
 	// Root /mcp endpoint (Streamable HTTP)
 	mcpModule.RegisterRoutes(router.Group(""), jwtManager)
 
-	// API v1 Routing Groups (standard, /go/api/v1, and /go/v1)
+	// Unified API v1 Routing Groups (/api/v1 for direct/stripped proxy, /go/api/v1 for subpath proxy)
 	v1 := router.Group("/api/v1")
 	registerApiRoutes(v1)
 
 	goApiV1 := router.Group("/go/api/v1")
 	registerApiRoutes(goApiV1)
-
-	goV1 := router.Group("/go/v1")
-	registerApiRoutes(goV1)
-
-	// Legacy endpoint compatibility (/api/v1/base/docs... and /go/api/v1/base/docs...)
-	baseV1 := router.Group("/api/v1/base")
-	docsModule.RegisterRoutes(baseV1, jwtManager)
-	agentModule.RegisterRoutes(baseV1)
-
-	goBaseV1 := router.Group("/go/api/v1/base")
-	docsModule.RegisterRoutes(goBaseV1, jwtManager)
-	agentModule.RegisterRoutes(goBaseV1)
 
 	// 7. Start HTTP Server with Graceful Shutdown
 	srv := &http.Server{

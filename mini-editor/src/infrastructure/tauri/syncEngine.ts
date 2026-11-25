@@ -16,9 +16,9 @@ import {
 } from "./outboxService";
 import { cacheDoc } from "./docCacheService";
 import { getAccessToken } from "./authBridge";
+import { getGoApiBaseUrl } from "@/infrastructure/api/apiConfig";
 
 const MAX_RETRIES = 5;
-const API_BASE = "/api/v1";
 
 export interface SyncResult {
   synced: number;
@@ -40,7 +40,7 @@ async function authFetch(
   if (token && token !== "local-standalone-token") {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  return fetch(`${API_BASE}${path}`, { ...options, headers });
+  return fetch(`${getGoApiBaseUrl()}${path}`, { ...options, headers });
 }
 
 // ─── Per-entity sync handlers ──────────────────────────────────────────────
@@ -60,7 +60,7 @@ async function syncDocItem(item: OutboxItem): Promise<void> {
   };
 
   if (item.op === "create") {
-    const res = await authFetch("/base/docs", {
+    const res = await authFetch("/docs", {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -83,7 +83,7 @@ async function syncDocItem(item: OutboxItem): Promise<void> {
   }
 
   if (item.op === "update") {
-    const res = await authFetch(`/base/docs/${backendId}`, {
+    const res = await authFetch(`/docs/${backendId}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     });
@@ -97,7 +97,7 @@ async function syncDocItem(item: OutboxItem): Promise<void> {
   }
 
   if (item.op === "delete") {
-    const res = await authFetch(`/base/docs/${backendId}`, {
+    const res = await authFetch(`/docs/${backendId}`, {
       method: "DELETE",
     });
     // 404 is fine — already deleted on backend

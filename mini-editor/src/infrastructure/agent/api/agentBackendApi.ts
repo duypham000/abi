@@ -1,4 +1,5 @@
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
+import { getGoRootUrl, isProxiedDevEnvironment } from "@/infrastructure/api/apiConfig";
 
 export interface AgentBackendPendingApproval {
   id: string;
@@ -103,20 +104,16 @@ export interface AgentHarnessesResponse {
 
 export function resolveAgentApiEndpoint(endpoint?: string): string {
   const trimmed = (endpoint ?? "").trim() || "/api/v1/agent/chat";
-  if (
-    import.meta.env.PROD &&
-    (trimmed.startsWith("/api/") || trimmed.startsWith("/go/"))
-  ) {
-    const goApiUrl = (
-      (import.meta.env.VITE_GO_API_URL as string | undefined) ?? ""
-    )
-      .trim()
-      .replace(/\/+$/, "");
-    if (/^https?:\/\//i.test(goApiUrl)) {
-      if (goApiUrl.endsWith("/go") && trimmed.startsWith("/go/")) {
-        return `${goApiUrl}${trimmed.slice(3)}`;
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  if (!isProxiedDevEnvironment() && (trimmed.startsWith("/api/") || trimmed.startsWith("/go/"))) {
+    const root = getGoRootUrl();
+    if (root) {
+      if (root.endsWith("/go") && trimmed.startsWith("/go/")) {
+        return `${root}${trimmed.slice(3)}`;
       }
-      return `${goApiUrl}${trimmed}`;
+      return `${root}${trimmed}`;
     }
   }
   return trimmed;

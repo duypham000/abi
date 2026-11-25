@@ -20,8 +20,7 @@ import {
 } from "@/presentation/store/conflictsSlice";
 import { markEntityClean } from "@/infrastructure/tauri/entityCacheService";
 import { dequeue } from "@/infrastructure/tauri/outboxService";
-
-const BASE_URL = "/api/v1";
+import { getGoApiBaseUrl } from "@/infrastructure/api/apiConfig";
 
 const ENTITY_PATH: Record<string, string> = {
   canvas: "canvas",
@@ -48,7 +47,7 @@ async function putEntity(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}/base/${path}/${conflict.backendId}`, {
+  const res = await fetch(`${getGoApiBaseUrl()}/${path}/${conflict.backendId}`, {
     method: "PUT",
     headers,
     body: payloadJson,

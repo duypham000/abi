@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { RefreshCwIcon } from "lucide-react";
-
-const API_BASE = "/api/v1";
+import { getGoRootUrl } from "@/infrastructure/api/apiConfig";
 
 function healthUrl(): string {
-  const base = API_BASE.replace(/\/api\/v1\/?$/, "");
-  return `${base}/actuator/health`;
+  const root = getGoRootUrl();
+  return `${root}/actuator/health`;
 }
 
 type HealthStatus = "UP" | "DOWN" | "UNKNOWN" | "checking";

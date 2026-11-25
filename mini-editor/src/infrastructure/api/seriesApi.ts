@@ -29,7 +29,7 @@ export const seriesApi = baseApi.injectEndpoints({
                 if (token && token !== "local-standalone-token") {
                   const { page = 0, size = 20, sortBy = "id", sortDirection = "ASC" } = args || {};
                   const res = await fetchWithBaseQuery({
-                    url: "/base/series/list",
+                    url: "/series/list",
                     params: { page, size, sortBy, sortDirection },
                   });
                   if (res.data && typeof res.data === "object" && "items" in (res.data as Record<string, unknown>)) {
@@ -53,7 +53,7 @@ export const seriesApi = baseApi.injectEndpoints({
         }
         const { page = 0, size = 20, sortBy = "id", sortDirection = "ASC" } = args || {};
         const result = await fetchWithBaseQuery({
-          url: "/base/series/list",
+          url: "/series/list",
           params: { page, size, sortBy, sortDirection },
         });
         return result.data
@@ -73,7 +73,7 @@ export const seriesApi = baseApi.injectEndpoints({
                 try {
                   const token = await getAccessToken();
                   if (token && token !== "local-standalone-token") {
-                    const res = await fetchWithBaseQuery(`/base/series/${id}`);
+                    const res = await fetchWithBaseQuery(`/series/${id}`);
                     if (res.data) await cacheSeries(res.data as SeriesDto);
                   }
                 } catch {
@@ -87,7 +87,7 @@ export const seriesApi = baseApi.injectEndpoints({
             // fallback
           }
         }
-        const result = await fetchWithBaseQuery(`/base/series/${id}`);
+        const result = await fetchWithBaseQuery(`/series/${id}`);
         if (result.data && isTauri()) {
           cacheSeries(result.data as SeriesDto);
         }
@@ -112,7 +112,7 @@ export const seriesApi = baseApi.injectEndpoints({
         try {
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
-            const result = await fetchWithBaseQuery({ url: "/base/series", method: "POST", body });
+            const result = await fetchWithBaseQuery({ url: "/series", method: "POST", body });
             if (result.data) {
               const remoteSeries = result.data as SeriesDto;
               if (isTauri()) await cacheSeries(remoteSeries);
@@ -127,7 +127,7 @@ export const seriesApi = baseApi.injectEndpoints({
           return { data: localSeries };
         }
 
-        const result = await fetchWithBaseQuery({ url: "/base/series", method: "POST", body });
+        const result = await fetchWithBaseQuery({ url: "/series", method: "POST", body });
         return result.data
           ? { data: result.data as SeriesDto }
           : { error: result.error as any };
@@ -150,7 +150,7 @@ export const seriesApi = baseApi.injectEndpoints({
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
             const result = await fetchWithBaseQuery({
-              url: `/base/series/${id}`,
+              url: `/series/${id}`,
               method: "PUT",
               body,
             });
@@ -169,7 +169,7 @@ export const seriesApi = baseApi.injectEndpoints({
         }
 
         const result = await fetchWithBaseQuery({
-          url: `/base/series/${id}`,
+          url: `/series/${id}`,
           method: "PUT",
           body,
         });
@@ -197,7 +197,7 @@ export const seriesApi = baseApi.injectEndpoints({
         try {
           const token = await getAccessToken();
           if (token && token !== "local-standalone-token") {
-            await fetchWithBaseQuery({ url: `/base/series/${id}`, method: "DELETE" });
+            await fetchWithBaseQuery({ url: `/series/${id}`, method: "DELETE" });
           }
         } catch {
           // offline
@@ -218,7 +218,7 @@ export const seriesApi = baseApi.injectEndpoints({
             return { error: { status: 500, statusText: String(err), data: String(err) } };
           }
         }
-        const result = await fetchWithBaseQuery({ url: "/base/series/search", params: { q } });
+        const result = await fetchWithBaseQuery({ url: "/series/search", params: { q } });
         return result.data
           ? { data: result.data as SeriesDto[] }
           : { error: result.error as any };

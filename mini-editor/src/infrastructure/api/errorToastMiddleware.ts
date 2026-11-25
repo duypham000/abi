@@ -33,6 +33,11 @@ function extractMessage(payload: unknown): string | null {
         ? (err as { originalStatus?: number }).originalStatus
         : undefined;
 
+  if (status === "PARSING_ERROR") {
+    const orig = (err as { originalStatus?: number }).originalStatus;
+    if (orig === 200) return "Phản hồi không đúng định dạng JSON từ máy chủ.";
+  }
+
   if (typeof httpStatus === "number") {
     if (httpStatus === 401) return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
     if (httpStatus === 403) return "Bạn không có quyền truy cập (CORS/gateway từ chối).";
