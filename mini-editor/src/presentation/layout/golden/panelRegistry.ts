@@ -9,6 +9,7 @@ export const PANEL_TYPES = {
   SEARCH: "search",
   TRANSLATE: "translate",
   AGENT: "agent",
+  AGENT_PLAN: "agent-plan",
   WORKFLOW: "workflow",
 } as const;
 
@@ -29,5 +30,6 @@ export const PANEL_TITLES: Record<PanelType, string> = {
   search: "Search",
   translate: "Translate",
   agent: "Agent",
+  "agent-plan": "Plan",
   workflow: "Workflow",
 };

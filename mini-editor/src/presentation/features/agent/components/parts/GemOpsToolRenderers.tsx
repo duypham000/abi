@@ -1,4 +1,3 @@
-import { MessageResponse } from "@/components/ai-elements/message";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
   Terminal,
@@ -17,34 +16,32 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Textarea } from "@/components/ui/textarea";
 import type { AgentToolPart } from "@/core/interfaces/agent";
 import { cn } from "@/lib/utils";
+import { useGoldenLayout } from "@/presentation/layout/golden/GoldenLayoutContext";
+import { PANEL_TYPES } from "@/presentation/layout/golden/panelRegistry";
 import { getToolName, type DynamicToolUIPart } from "ai";
 import {
   AlertCircleIcon,
+  ArrowUpRightIcon,
   CheckCircle2Icon,
-  CheckIcon,
   ChevronDownIcon,
   CircleDashedIcon,
   ClipboardListIcon,
-  CopyIcon,
   FileCheck2Icon,
   FileCode2Icon,
-  FilePlus2Icon,
   FileTextIcon,
   HelpCircleIcon,
   ListChecksIcon,
   Loader2Icon,
-  Maximize2Icon,
-  Minimize2Icon,
   MinusCircleIcon,
   PlayIcon,
-  SendIcon,
+  RefreshCwIcon,
   SparklesIcon,
   TerminalIcon,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
+import { useAgentStore } from "../../store/agentStore";
 import { AgentCodeBlock, CommandSnippetCard } from "./DevOpsPartsRenderer";
 
 export type GemOpsSupportedToolPart = AgentToolPart | DynamicToolUIPart;
@@ -195,14 +192,14 @@ export function cleanCommandOutput(raw: string): string {
 // 1. AskQuestionCard (ask_question & ask_user)
 // ---------------------------------------------------------------------------
 
-interface NormalizedOption {
+export interface NormalizedOption {
   value: string;
   label: string;
   description?: string;
   recommended: boolean;
 }
 
-interface NormalizedQuestion {
+export interface NormalizedQuestion {
   prompt: string;
   description?: string;
   multiSelect: boolean;
@@ -217,7 +214,7 @@ function parseRecommendedOption(raw: string): { label: string; recommended: bool
   return { label: raw.trim(), recommended: false };
 }
 
-function normalizeQuestionList(input: unknown): NormalizedQuestion[] {
+export function normalizeQuestionList(input: unknown): NormalizedQuestion[] {
   const rec = asRecord(input);
   if (!rec) return [];
 
@@ -315,22 +312,16 @@ function normalizeQuestionList(input: unknown): NormalizedQuestion[] {
 export function AskQuestionCard({
   part,
   hasFollowingUserMessage,
-  onSendFollowUp,
 }: {
   part: GemOpsSupportedToolPart;
   hasFollowingUserMessage?: boolean;
-  onSendFollowUp?: (prompt: string) => void;
 }) {
   const questions = useMemo(() => normalizeQuestionList(part.input), [part.input]);
-  const [selections, setSelections] = useState<Record<number, string[]>>({});
-  const [customNote, setCustomNote] = useState("");
-  const [locallySubmitted, setLocallySubmitted] = useState(false);
 
   const isAnswered =
     part.state === "output-available" ||
     part.state === "output-denied" ||
-    Boolean(hasFollowingUserMessage) ||
-    locallySubmitted;
+    Boolean(hasFollowingUserMessage);
 
   if (questions.length === 0) {
     return (
@@ -343,55 +334,6 @@ export function AskQuestionCard({
     );
   }
 
-  const toggleOption = (qIdx: number, value: string, multiSelect: boolean) => {
-    if (isAnswered) return;
-    setSelections((prev) => {
-      const current = prev[qIdx] ?? [];
-      if (!multiSelect) {
-        return {
-          ...prev,
-          [qIdx]: current.includes(value) ? [] : [value],
-        };
-      }
-      const next = current.includes(value)
-        ? current.filter((v) => v !== value)
-        : [...current, value];
-      return { ...prev, [qIdx]: next };
-    });
-  };
-
-  const hasAnySelection = Object.values(selections).some((arr) => arr.length > 0);
-  const canSubmit =
-    !isAnswered &&
-    Boolean(onSendFollowUp) &&
-    (hasAnySelection || customNote.trim().length > 0);
-
-  const handleSubmit = () => {
-    if (!canSubmit || !onSendFollowUp) return;
-    const lines: string[] = [];
-    if (questions.length === 1) {
-      const picked = selections[0] ?? [];
-      if (picked.length > 0) {
-        lines.push(picked.join(", "));
-      }
-    } else {
-      questions.forEach((_q, idx) => {
-        const picked = selections[idx] ?? [];
-        if (picked.length > 0) {
-          lines.push(`${idx + 1}. ${picked.join(", ")}`);
-        } else {
-          lines.push(`${idx + 1}. (Bỏ qua)`);
-        }
-      });
-    }
-    const trimmedNote = customNote.trim();
-    if (trimmedNote) {
-      lines.push(trimmedNote);
-    }
-    setLocallySubmitted(true);
-    onSendFollowUp(lines.join("\n"));
-  };
-
   const headerTitle =
     questions.length === 1
       ? questions[0].prompt
@@ -401,9 +343,9 @@ export function AskQuestionCard({
     <Collapsible
       className={cn(
         "group min-w-0 overflow-hidden rounded-lg border bg-card/60",
-        !isAnswered && "border-primary/40 shadow-xs"
+        !isAnswered && "border-primary/40"
       )}
-      defaultOpen={!isAnswered}
+      defaultOpen={false}
     >
       <CollapsibleTrigger className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/30">
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -424,108 +366,42 @@ export function AskQuestionCard({
             )}
             variant="secondary"
           >
-            {isAnswered ? "Answered" : "Needs Input"}
+            {isAnswered ? "Answered" : "Answer below ↓"}
           </Badge>
         </div>
         <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
       </CollapsibleTrigger>
 
-      <CollapsibleContent className="space-y-3 border-t px-3 py-3">
-        {questions.map((q, qIdx) => {
-          const picked = selections[qIdx] ?? [];
-          return (
-            <div className="space-y-2" key={`${qIdx}-${q.prompt}`}>
-              <div className="space-y-0.5">
-                <p className="text-xs font-medium leading-snug text-foreground">
-                  {questions.length > 1 ? `${qIdx + 1}. ` : ""}
-                  {q.prompt}
-                </p>
-                {q.description && (
-                  <p className="text-[11px] text-muted-foreground">
-                    {q.description}
-                  </p>
-                )}
-              </div>
-
-              {q.options.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  {q.options.map((opt) => {
-                    const selected = picked.includes(opt.value);
-                    return (
-                      <Button
-                        className={cn(
-                          "h-auto min-w-0 justify-start gap-2 px-2.5 py-2 text-left text-xs font-normal whitespace-normal",
-                          selected && "border-primary bg-primary/10 text-foreground"
-                        )}
-                        disabled={isAnswered}
-                        key={opt.value}
-                        onClick={() =>
-                          toggleOption(qIdx, opt.value, q.multiSelect)
-                        }
-                        type="button"
-                        variant={selected ? "secondary" : "outline"}
-                      >
-                        <span
-                          className={cn(
-                            "mt-0.5 flex size-3.5 shrink-0 items-center justify-center border",
-                            q.multiSelect ? "rounded-xs" : "rounded-full",
-                            selected
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-muted-foreground/40"
-                          )}
-                        >
-                          {selected && <CheckIcon className="size-2.5" />}
-                        </span>
-                        <span className="min-w-0 flex-1 space-y-0.5">
-                          <span className="flex flex-wrap items-center gap-1.5 leading-snug">
-                            <span className="break-words">{opt.label}</span>
-                            {opt.recommended && (
-                              <Badge
-                                className="px-1 py-0 text-[9px]"
-                                variant="secondary"
-                              >
-                                Recommended
-                              </Badge>
-                            )}
-                          </span>
-                          {opt.description && (
-                            <span className="block text-[11px] text-muted-foreground">
-                              {opt.description}
-                            </span>
-                          )}
-                        </span>
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {!isAnswered && (
-          <div className="space-y-2 pt-1">
-            <Textarea
-              aria-label="Custom answer"
-              className="min-h-14 resize-y bg-background text-xs"
-              onChange={(e) => setCustomNote(e.target.value)}
-              placeholder="Hoặc nhập câu trả lời / ghi chú thêm..."
-              value={customNote}
-            />
-            <div className="flex justify-end">
-              <Button
-                className="h-7 gap-1.5 px-3 text-xs"
-                disabled={!canSubmit}
-                onClick={handleSubmit}
-                size="sm"
-                type="button"
-              >
-                <SendIcon className="size-3" />
-                Gửi câu trả lời
-              </Button>
-            </div>
+      <CollapsibleContent className="max-h-64 space-y-3 overflow-y-auto border-t px-3 py-3">
+        {questions.map((q, qIdx) => (
+          <div className="space-y-1.5" key={`${qIdx}-${q.prompt}`}>
+            <p className="text-xs font-medium leading-snug text-foreground">
+              {questions.length > 1 ? `${qIdx + 1}. ` : ""}
+              {q.prompt}
+            </p>
+            {q.description && (
+              <p className="text-[11px] text-muted-foreground">
+                {q.description}
+              </p>
+            )}
+            {q.options.length > 0 && (
+              <ul className="space-y-1 pl-1">
+                {q.options.map((opt) => (
+                  <li
+                    className="flex items-start gap-1.5 text-[11px] text-muted-foreground"
+                    key={opt.value}
+                  >
+                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+                    <span className="min-w-0 flex-1 break-words">
+                      {opt.label}
+                      {opt.recommended ? " (Recommended)" : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        )}
+        ))}
       </CollapsibleContent>
     </Collapsible>
   );
@@ -666,12 +542,33 @@ export function StepsChecklistCard({
 // 3. ArtifactPlanCard (write_file with ArtifactMetadata / plan / walkthrough & exit_plan_mode)
 // ---------------------------------------------------------------------------
 
+export function extractFirstPlanLine(markdown?: string): string | null {
+  if (!markdown || typeof markdown !== "string") return null;
+  const rawLines = markdown.split(/\r?\n/);
+  let skippedFirstHeading = false;
+  for (const rawLine of rawLines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    if (!skippedFirstHeading && /^#{1,3}\s+/.test(trimmed)) {
+      skippedFirstHeading = true;
+      continue;
+    }
+    if (/^---+$/.test(trimmed)) continue;
+    const cleaned = trimmed
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/^[-*>]\s+/, "")
+      .replace(/[*_`]/g, "")
+      .trim();
+    if (cleaned) return cleaned;
+  }
+  return null;
+}
+
 export function ArtifactPlanCard({
   part,
   hasFollowingUserMessage,
   approvalNode,
   onSendFollowUp,
-  onInsertToDoc,
 }: {
   part: GemOpsSupportedToolPart;
   isStreaming?: boolean;
@@ -680,9 +577,9 @@ export function ArtifactPlanCard({
   onSendFollowUp?: (prompt: string) => void;
   onInsertToDoc?: (markdown: string) => void;
 }) {
-  const [expandedHeight, setExpandedHeight] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [inserted, setInserted] = useState(false);
+  const { openPanel } = useGoldenLayout();
+  const activeSessionId = useAgentStore((s) => s.activeSessionId);
+  const upsertPlanDocument = useAgentStore((s) => s.upsertPlanDocument);
 
   const toolName = getToolName(part);
   const rec = asRecord(part.input);
@@ -727,6 +624,8 @@ export function ArtifactPlanCard({
         ? "Walkthrough"
         : basename || "Artifact");
 
+  const firstLine = extractFirstPlanLine(content) ?? summary;
+
   const Icon =
     kind === "plan"
       ? ClipboardListIcon
@@ -737,160 +636,131 @@ export function ArtifactPlanCard({
   const badgeLabel =
     kind === "plan" ? "Plan" : kind === "walkthrough" ? "Walkthrough" : "Artifact";
 
-  const isLong = content.length > 1200;
-
-  const handleCopy = async () => {
-    if (!content || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      // ignore clipboard errors
-    }
+  const openPlanInTab = (openEdit = false) => {
+    upsertPlanDocument({
+      id: part.toolCallId,
+      sessionId: activeSessionId,
+      title,
+      kind,
+      path: rawPath || undefined,
+      summary: summary ?? undefined,
+      content,
+      requestFeedback: requestFeedback || toolName === "exit_plan_mode",
+      hasFollowingUserMessage,
+      updatedAt: new Date().toISOString(),
+    });
+    openPanel(
+      PANEL_TYPES.AGENT_PLAN,
+      { id: part.toolCallId, openEdit },
+      { title, singleton: true }
+    );
   };
 
-  const handleInsert = () => {
-    if (!content || !onInsertToDoc) return;
-    onInsertToDoc(content);
-    setInserted(true);
-    window.setTimeout(() => setInserted(false), 1600);
-  };
+  const isActionablePlan =
+    kind === "plan" && (requestFeedback || toolName === "exit_plan_mode");
 
   return (
-    <Collapsible
-      className="group min-w-0 overflow-hidden rounded-lg border bg-card/60"
-      defaultOpen={kind === "plan" || kind === "walkthrough"}
-    >
-      <CollapsibleTrigger className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/30">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-          <Icon className="size-4 shrink-0 text-primary" />
-          <span className="min-w-0 truncate text-xs font-semibold text-foreground">
-            {title}
-          </span>
-          <Badge className="shrink-0 px-1.5 py-0 text-[10px]" variant="secondary">
-            {badgeLabel}
-          </Badge>
-          {basename && (
-            <Badge
-              className="agent-sm-only max-w-[140px] shrink-0 truncate font-mono text-[10px]"
-              title={rawPath}
-              variant="outline"
-            >
-              {basename}
+    <div className="min-w-0 overflow-hidden rounded-lg border bg-card/60 transition-colors hover:border-primary/40">
+      <div
+        className="cursor-pointer px-3 py-2.5 transition-colors hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        onClick={() => openPlanInTab(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openPlanInTab(false);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+      >
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <Icon className="size-4 shrink-0 text-primary" />
+            <span className="min-w-0 truncate text-xs font-semibold text-foreground">
+              {title}
+            </span>
+            <Badge className="shrink-0 px-1.5 py-0 text-[10px]" variant="secondary">
+              {badgeLabel}
             </Badge>
-          )}
+          </div>
+          <ArrowUpRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
         </div>
-        <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-      </CollapsibleTrigger>
 
-      <CollapsibleContent className="border-t">
-        {approvalNode && <div className="px-3 pt-2.5">{approvalNode}</div>}
-
-        {summary && (
-          <div className="border-b bg-muted/25 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-            {summary}
-          </div>
-        )}
-
-        {content ? (
-          <div
-            className={cn(
-              "overflow-y-auto px-3.5 py-3",
-              !expandedHeight && "max-h-[420px]"
-            )}
-          >
-            <MessageResponse className="text-xs leading-relaxed">
-              {content}
-            </MessageResponse>
-          </div>
-        ) : (
-          <div className="px-3 py-2 text-xs text-muted-foreground">
-            <Shimmer as="span" duration={1.3}>
+        <div className="mt-1 pl-5.5">
+          {firstLine ? (
+            <p className="line-clamp-1 text-[11px] text-muted-foreground">
+              {firstLine}
+            </p>
+          ) : (
+            <Shimmer as="span" className="text-[11px]" duration={1.3}>
               {`Generating ${badgeLabel.toLowerCase()}...`}
             </Shimmer>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/20 px-3 py-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {content && (
-              <Button
-                className="h-6 gap-1 px-2 text-[11px]"
-                onClick={() => void handleCopy()}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                {copied ? (
-                  <CheckIcon className="size-3 text-emerald-500" />
-                ) : (
-                  <CopyIcon className="size-3" />
-                )}
-                {copied ? "Copied" : "Copy"}
-              </Button>
-            )}
-            {content && onInsertToDoc && (
-              <Button
-                className="h-6 gap-1 px-2 text-[11px]"
-                onClick={handleInsert}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                {inserted ? (
-                  <CheckIcon className="size-3 text-emerald-500" />
-                ) : (
-                  <FilePlus2Icon className="size-3" />
-                )}
-                {inserted ? "Inserted" : "Insert Doc"}
-              </Button>
-            )}
-            {isLong && (
-              <Button
-                className="h-6 gap-1 px-2 text-[11px]"
-                onClick={() => setExpandedHeight((v) => !v)}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                {expandedHeight ? (
-                  <>
-                    <Minimize2Icon className="size-3" />
-                    Collapse
-                  </>
-                ) : (
-                  <>
-                    <Maximize2Icon className="size-3" />
-                    Expand
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-
-          {kind === "plan" && (requestFeedback || toolName === "exit_plan_mode") && (
-            hasFollowingUserMessage ? (
-              <Badge className="px-2 py-0.5 text-[10px]" variant="secondary">
-                Responded
-              </Badge>
-            ) : onSendFollowUp ? (
-              <Button
-                className="h-7 gap-1.5 px-2.5 text-xs"
-                onClick={() => onSendFollowUp("Triển khai theo kế hoạch trên.")}
-                size="sm"
-                type="button"
-              >
-                <PlayIcon className="size-3" />
-                Triển khai
-              </Button>
-            ) : null
           )}
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+      </div>
+
+      {approvalNode && <div className="border-t px-3 py-2">{approvalNode}</div>}
+
+      <div className="flex flex-wrap items-center justify-between gap-1.5 border-t bg-muted/20 px-3 py-1.5">
+        <Button
+          className="h-6 gap-1 px-2 text-[11px] text-muted-foreground"
+          onClick={() => openPlanInTab(false)}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <ArrowUpRightIcon className="size-3" />
+          Mở tab
+        </Button>
+
+        {isActionablePlan && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {hasFollowingUserMessage ? (
+              <>
+                <Badge className="px-1.5 py-0 text-[10px]" variant="secondary">
+                  Responded
+                </Badge>
+                <Button
+                  className="h-6 gap-1 px-2 text-[11px]"
+                  onClick={() => openPlanInTab(true)}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <RefreshCwIcon className="size-3" />
+                  Replan
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  className="h-6 gap-1 px-2 text-[11px]"
+                  onClick={() => openPlanInTab(true)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <RefreshCwIcon className="size-3" />
+                  Replan
+                </Button>
+                {onSendFollowUp && (
+                  <Button
+                    className="h-6 gap-1 px-2.5 text-[11px]"
+                    onClick={() => onSendFollowUp("Triển khai theo kế hoạch trên.")}
+                    size="sm"
+                    type="button"
+                    variant="default"
+                  >
+                    <PlayIcon className="size-3" />
+                    Process
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -967,21 +837,25 @@ export function FileWriteCard({
           </div>
         )}
         {isEdit && diffPreview ? (
-          <AgentCodeBlock
-            allowLanguageSwitch={false}
-            code={diffPreview}
-            filename={basename}
-            language="diff"
-            showLineNumbers={false}
-          />
+          <div className="max-h-72 overflow-auto rounded-md">
+            <AgentCodeBlock
+              allowLanguageSwitch={false}
+              code={diffPreview}
+              filename={basename}
+              language="diff"
+              showLineNumbers={false}
+            />
+          </div>
         ) : content ? (
-          <AgentCodeBlock
-            allowLanguageSwitch={false}
-            code={content}
-            filename={basename}
-            language={inferLanguageFromPath(rawPath)}
-            showLineNumbers
-          />
+          <div className="max-h-72 overflow-auto rounded-md">
+            <AgentCodeBlock
+              allowLanguageSwitch={false}
+              code={content}
+              filename={basename}
+              language={inferLanguageFromPath(rawPath)}
+              showLineNumbers
+            />
+          </div>
         ) : null}
         {part.state === "output-error" && part.errorText && (
           <div className="rounded-md bg-destructive/10 px-2.5 py-2 text-xs text-destructive">

@@ -15,6 +15,7 @@ const SettingsPage     = lazy(() => import("@/presentation/features/settings/pag
 const SearchOverlayPage = lazy(() => import("@/presentation/features/search/pages/SearchOverlayPage"));
 const TranslatePage     = lazy(() => import("@/presentation/features/translate/pages/TranslatePage"));
 const AgentPanelPage    = lazy(() => import("@/presentation/features/agent/pages/AgentPanelPage"));
+const AgentPlanPage     = lazy(() => import("@/presentation/features/agent/pages/AgentPlanPage"));
 const WorkflowPanelPage = lazy(() => import("@/presentation/features/agent/pages/WorkflowPanelPage"));
 
 function PanelSuspense({ children }: { children: React.ReactNode }) {
@@ -80,6 +81,16 @@ export default function PanelPopupPage() {
         return <PanelSuspense><TranslatePage panelMode /></PanelSuspense>;
       case PANEL_TYPES.AGENT:
         return <PanelSuspense><AgentPanelPage panelMode presentationMode="popup" /></PanelSuspense>;
+      case PANEL_TYPES.AGENT_PLAN:
+        return (
+          <PanelSuspense>
+            <AgentPlanPage
+              panelMode
+              planIdProp={state.id as string | undefined}
+              initialEditOpen={Boolean(state.openEdit)}
+            />
+          </PanelSuspense>
+        );
       case PANEL_TYPES.WORKFLOW:
         return <PanelSuspense><WorkflowPanelPage panelMode /></PanelSuspense>;
       default:

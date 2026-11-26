@@ -23,6 +23,7 @@ const SettingsPage     = lazy(() => import("@/presentation/features/settings/pag
 const SearchOverlayPage = lazy(() => import("@/presentation/features/search/pages/SearchOverlayPage"));
 const TranslatePage     = lazy(() => import("@/presentation/features/translate/pages/TranslatePage"));
 const AgentPanelPage    = lazy(() => import("@/presentation/features/agent/pages/AgentPanelPage"));
+const AgentPlanPage     = lazy(() => import("@/presentation/features/agent/pages/AgentPlanPage"));
 const WorkflowPanelPage = lazy(() => import("@/presentation/features/agent/pages/WorkflowPanelPage"));
 const SeriesDetailPanel = lazy(() =>
   import("@/presentation/features/series/pages/SeriesDetailPanel").then((m) => ({ default: m.SeriesDetailPanel }))
@@ -52,6 +53,15 @@ export const componentMap: ComponentMap = {
         panelMode
         presentationMode="tab"
         onDockRight={() => useAgentStore.getState().setDockOpen(true)}
+      />
+    </PanelSuspense>
+  ),
+  [PANEL_TYPES.AGENT_PLAN]: (state) => (
+    <PanelSuspense>
+      <AgentPlanPage
+        panelMode
+        planIdProp={state.id as string | undefined}
+        initialEditOpen={Boolean(state.openEdit)}
       />
     </PanelSuspense>
   ),

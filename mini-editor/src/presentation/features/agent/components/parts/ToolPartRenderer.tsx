@@ -1,10 +1,7 @@
 import {
   Confirmation,
   ConfirmationAccepted,
-  ConfirmationAction,
-  ConfirmationActions,
   ConfirmationRejected,
-  ConfirmationRequest,
   ConfirmationTitle,
 } from "@/components/ai-elements/confirmation";
 import {
@@ -17,7 +14,6 @@ import {
 import type { AgentToolPart } from "@/core/interfaces/agent";
 import { getToolName, type DynamicToolUIPart } from "ai";
 import { ShieldAlertIcon, ShieldCheckIcon, ShieldXIcon } from "lucide-react";
-import { useEffect, useState } from "react";
 import {
   ArtifactPlanCard,
   AskQuestionCard,
@@ -42,89 +38,41 @@ export interface ToolPartRendererProps {
   onInsertToDoc?: (markdown: string) => void;
 }
 
-function summarizeApprovalTarget(input: unknown): string | null {
-  if (!input || typeof input !== "object") return null;
-  const record = input as Record<string, unknown>;
-  if (typeof record.command === "string" && record.command.trim()) {
-    return record.command;
-  }
-  if (Array.isArray(record.paths) && record.paths.length > 0) {
-    return record.paths.map(String).join(", ");
-  }
-  if (typeof record.title === "string" && record.title.trim()) {
-    return record.title;
-  }
-  return null;
-}
-
 export function ToolApprovalCard({
   part,
   toolName,
-  onApproveTool,
-  onDenyTool,
 }: {
   part: SupportedToolPart;
   toolName: string;
-  onApproveTool: (approvalId: string, reason?: string) => void | Promise<void>;
-  onDenyTool: (approvalId: string, reason?: string) => void | Promise<void>;
+  onApproveTool?: (approvalId: string, reason?: string) => void | Promise<void>;
+  onDenyTool?: (approvalId: string, reason?: string) => void | Promise<void>;
 }) {
-  const [submittingDecision, setSubmittingDecision] = useState<
-    "allow" | "deny" | null
-  >(null);
-  const approvalId =
-    "approval" in part && part.approval ? part.approval.id : undefined;
-
-  useEffect(() => {
-    if (part.state !== "approval-requested") {
-      setSubmittingDecision(null);
-    }
-  }, [part.state, approvalId]);
-
   if (!("approval" in part) || !part.approval) {
     return null;
   }
 
   const approval = part.approval;
-  const targetSummary = summarizeApprovalTarget(part.input);
 
-  const handleDecision = async (decision: "allow" | "deny") => {
-    if (submittingDecision !== null) return;
-    setSubmittingDecision(decision);
-    try {
-      if (decision === "allow") {
-        await onApproveTool(approval.id, "Approved by user");
-      } else {
-        await onDenyTool(approval.id, "Denied by user");
-      }
-    } catch {
-      setSubmittingDecision(null);
-    }
-  };
+  if (part.state === "approval-requested") {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300">
+        <ShieldAlertIcon className="size-3.5 shrink-0 text-amber-500" />
+        <span className="min-w-0 flex-1 truncate">
+          Awaiting approval in action bar below
+        </span>
+      </div>
+    );
+  }
 
   return (
     <Confirmation approval={approval} state={part.state}>
       <div className="flex items-start gap-2">
-        {part.state === "approval-requested" ? (
-          <ShieldAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-500" />
-        ) : approval.approved ? (
+        {approval.approved ? (
           <ShieldCheckIcon className="mt-0.5 size-4 shrink-0 text-emerald-500" />
         ) : (
           <ShieldXIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
         )}
         <ConfirmationTitle className="text-xs leading-relaxed">
-          <ConfirmationRequest>
-            Allow <span className="font-mono font-semibold">{toolName}</span>
-            {targetSummary ? (
-              <>
-                {" "}
-                on{" "}
-                <span className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
-                  {targetSummary}
-                </span>
-              </>
-            ) : null}
-            ?
-          </ConfirmationRequest>
           <ConfirmationAccepted>
             Approved{" "}
             <span className="font-mono font-medium">{toolName}</span>
@@ -137,23 +85,6 @@ export function ToolApprovalCard({
           </ConfirmationRejected>
         </ConfirmationTitle>
       </div>
-
-      <ConfirmationActions>
-        <ConfirmationAction
-          disabled={submittingDecision !== null}
-          onClick={() => void handleDecision("deny")}
-          variant="outline"
-        >
-          {submittingDecision === "deny" ? "Denying…" : "Deny"}
-        </ConfirmationAction>
-        <ConfirmationAction
-          disabled={submittingDecision !== null}
-          onClick={() => void handleDecision("allow")}
-          variant="default"
-        >
-          {submittingDecision === "allow" ? "Approving…" : "Approve & Execute"}
-        </ConfirmationAction>
-      </ConfirmationActions>
     </Confirmation>
   );
 }
@@ -185,7 +116,6 @@ export function ToolPartRenderer({
     return (
       <AskQuestionCard
         hasFollowingUserMessage={hasFollowingUserMessage}
-        onSendFollowUp={onSendFollowUp}
         part={part}
       />
     );
@@ -230,7 +160,6 @@ export function ToolPartRenderer({
   }
 
   const shouldDefaultOpen =
-    part.state === "approval-requested" ||
     part.state === "input-available" ||
     part.state === "input-streaming" ||
     part.state === "output-error";

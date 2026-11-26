@@ -5,6 +5,7 @@ import {
   resetAgentSession,
 } from "@/infrastructure/agent";
 import { Suspense, lazy, useCallback, useState } from "react";
+import { AgentActionDock } from "../components/AgentActionDock";
 import { AgentComposer } from "../components/AgentComposer";
 import { AgentConversationView } from "../components/AgentConversationView";
 import { AgentErrorBoundary } from "../components/AgentErrorBoundary";
@@ -226,6 +227,17 @@ export function AgentPanelPage({
                     status={status}
                   />
                 </AgentErrorBoundary>
+
+                <AgentActionDock
+                  messages={messages}
+                  onApproveTool={approveTool}
+                  onDenyTool={denyTool}
+                  onSendFollowUp={(text) => {
+                    void sendPrompt({ text });
+                  }}
+                  pendingBackendApprovals={backendStatus?.pendingApprovals}
+                  sessionId={activeSession.id}
+                />
 
                 <AgentComposer
                   backendInfo={backendInfo}

@@ -32,6 +32,19 @@ export interface CreateSessionOptions {
   modelId?: string;
 }
 
+export interface AgentPlanDocument {
+  id: string;
+  sessionId: string;
+  title: string;
+  kind: "plan" | "walkthrough" | "artifact";
+  path?: string;
+  summary?: string;
+  content: string;
+  requestFeedback: boolean;
+  hasFollowingUserMessage?: boolean;
+  updatedAt: string;
+}
+
 export interface AgentStoreState {
   hydrated: boolean;
   isHydrating: boolean;
@@ -55,6 +68,7 @@ export interface AgentStoreState {
   isAudioSpeaking: boolean;
   suggestionsBySession: Record<string, string[]>;
   pendingAskAI: AskAIRequest | null;
+  planDocuments: Record<string, AgentPlanDocument>;
 
   hydrate: () => Promise<void>;
   createSession: (opts?: CreateSessionOptions) => AgentSession;
@@ -117,6 +131,7 @@ export interface AgentStoreState {
   setSessionSuggestions: (sessionId: string, items: string[]) => void;
   requestAskAI: (req: AskAIRequest) => void;
   consumeAskAI: () => AskAIRequest | null;
+  upsertPlanDocument: (doc: AgentPlanDocument) => void;
   resetAllToDemo: () => Promise<void>;
 }
 
@@ -348,6 +363,7 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
   activeArtifactId: null,
   checkpoints: [],
   lastRestoreUndo: null,
+  planDocuments: {},
   branchesByAnchor: {},
   activeBranchIndex: {},
   webSearchEnabled: true,
@@ -1325,6 +1341,15 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
     if (!current) return null;
     set({ pendingAskAI: null });
     return current;
+  },
+
+  upsertPlanDocument: (doc) => {
+    set((state) => ({
+      planDocuments: {
+        ...state.planDocuments,
+        [doc.id]: doc,
+      },
+    }));
   },
 
   resetAllToDemo: async () => {

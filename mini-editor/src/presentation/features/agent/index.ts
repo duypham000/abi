@@ -3,6 +3,10 @@ export {
   type AgentPanelPageProps,
 } from "./pages/AgentPanelPage";
 export {
+  AgentPlanPage,
+  type AgentPlanPageProps,
+} from "./pages/AgentPlanPage";
+export {
   WorkflowPanelPage,
   type WorkflowPanelPageProps,
 } from "./pages/WorkflowPanelPage";

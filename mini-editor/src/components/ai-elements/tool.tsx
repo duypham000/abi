@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
@@ -17,7 +18,7 @@ import {
   XCircleIcon,
 } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
-import { isValidElement } from "react";
+import { isValidElement, useState } from "react";
 
 import { CodeBlock } from "./code-block";
 
@@ -118,16 +119,44 @@ export type ToolInputProps = ComponentProps<"div"> & {
   input: ToolPart["input"];
 };
 
-export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
-  <div className={cn("space-y-2 overflow-hidden", className)} {...props}>
-    <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-      Parameters
-    </h4>
-    <div className="rounded-md bg-muted/50">
-      <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
+export const ToolInput = ({ className, input, ...props }: ToolInputProps) => {
+  const [expanded, setExpanded] = useState(false);
+  const formatted = JSON.stringify(input, null, 2) ?? "";
+  const isLong = formatted.split("\n").length > 14 || formatted.length > 600;
+
+  return (
+    <div className={cn("space-y-2 overflow-hidden", className)} {...props}>
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          Parameters
+        </h4>
+        {isLong && (
+          <Button
+            className="h-5 px-1.5 text-[11px] text-muted-foreground"
+            onClick={() => setExpanded((prev) => !prev)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {expanded ? "Collapse" : "Expand"}
+          </Button>
+        )}
+      </div>
+      <div
+        className={cn(
+          "overflow-auto rounded-md bg-muted/50",
+          !expanded && "max-h-60"
+        )}
+      >
+        <CodeBlock
+          className="overflow-visible border-0"
+          code={formatted}
+          language="json"
+        />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export type ToolOutputProps = ComponentProps<"div"> & {
   output: ToolPart["output"];
@@ -148,10 +177,20 @@ export const ToolOutput = ({
 
   if (typeof output === "object" && !isValidElement(output)) {
     Output = (
-      <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
+      <CodeBlock
+        className="overflow-visible border-0"
+        code={JSON.stringify(output, null, 2)}
+        language="json"
+      />
     );
   } else if (typeof output === "string") {
-    Output = <CodeBlock code={output} language="json" />;
+    Output = (
+      <CodeBlock
+        className="overflow-visible border-0"
+        code={output}
+        language="json"
+      />
+    );
   }
 
   return (
@@ -161,13 +200,13 @@ export const ToolOutput = ({
       </h4>
       <div
         className={cn(
-          "overflow-x-auto rounded-md text-xs [&_table]:w-full",
+          "max-h-72 overflow-auto rounded-md text-xs [&_table]:w-full",
           errorText
             ? "bg-destructive/10 text-destructive"
             : "bg-muted/50 text-foreground"
         )}
       >
-        {errorText && <div>{errorText}</div>}
+        {errorText && <div className="p-2">{errorText}</div>}
         {Output}
       </div>
     </div>
