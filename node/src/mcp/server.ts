@@ -794,6 +794,47 @@ export function createTomoMcpServer(goClient: GoClient): McpServer {
     },
   );
 
+  server.registerTool(
+    'fe_sync_from_backend',
+    {
+      description:
+        'Trigger the Tomo frontend (mini-editor) to pull the latest Docs and/or Canvases from the Go backend into local SQLite and refresh UI caches. Call this after creating, deleting, moving, or updating metadata of Docs/Canvases, or with reload_open_editor=true after any direct Go backend content save when live Yjs was not used.',
+      inputSchema: {
+        scope: z
+          .enum(['all', 'docs', 'canvases'])
+          .default('all')
+          .describe('Which entity types to sync from backend to FE'),
+        doc_ids: z
+          .array(z.string())
+          .optional()
+          .describe('Optional backend Doc IDs/slugs that were modified'),
+        canvas_ids: z
+          .array(z.string())
+          .optional()
+          .describe('Optional backend Canvas IDs that were modified'),
+        reload_open_editor: z
+          .boolean()
+          .default(false)
+          .describe(
+            'Set true only after direct Go backend content/scene save (non-Yjs) so open FE editors replace their in-memory content with the backend copy',
+          ),
+        reason: z.string().optional().describe('Short human-readable reason for the sync'),
+      },
+      annotations: { readOnlyHint: true, idempotentHint: true },
+    },
+    async ({ scope, doc_ids, canvas_ids, reload_open_editor, reason }) => {
+      return jsonToolResponse({
+        action: 'fe_sync_from_backend',
+        scope: scope ?? 'all',
+        doc_ids: doc_ids ?? [],
+        canvas_ids: canvas_ids ?? [],
+        reload_open_editor: Boolean(reload_open_editor),
+        reason: reason ?? 'Sync backend changes to frontend',
+        triggered_at: new Date().toISOString(),
+      });
+    },
+  );
+
   // =========================================================================
   // Canvas CRUD & Live Excalidraw Yjs Tools
   // =========================================================================

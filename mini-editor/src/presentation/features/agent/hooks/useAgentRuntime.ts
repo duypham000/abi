@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import {
+  getToolName,
   isTextUIPart,
+  type DynamicToolUIPart,
   type FileUIPart,
   type LanguageModelUsage,
 } from "ai";
+import { syncBackendToFrontend } from "@/infrastructure/agent/workspace/miniEditorWorkspaceBridge";
 import {
   DEFAULT_MODELS,
   type AgentPersonaState,
@@ -86,6 +89,61 @@ function extractMessageText(message: AgentUIMessage | undefined): string {
     .map((part) => part.text)
     .join("\n")
     .trim();
+}
+
+function isFeSyncToolName(name: string): boolean {
+  return (
+    name === "fe_sync_from_backend" ||
+    name.endsWith("_fe_sync_from_backend") ||
+    name.endsWith(":fe_sync_from_backend")
+  );
+}
+
+function isToolPart(
+  part: AgentUIMessage["parts"][number]
+): part is DynamicToolUIPart {
+  return part.type === "dynamic-tool" || part.type.startsWith("tool-");
+}
+
+function parseSyncArgsFromPart(part: DynamicToolUIPart): {
+  scope: "all" | "docs" | "canvases";
+  docIds: string[];
+  canvasIds: string[];
+  reloadOpenEditor: boolean;
+  reason?: string;
+} {
+  let raw: Record<string, unknown> = {};
+  if (part.input && typeof part.input === "object" && !Array.isArray(part.input)) {
+    raw = part.input as Record<string, unknown>;
+  }
+  if (Object.keys(raw).length === 0 && part.output) {
+    if (typeof part.output === "string") {
+      try {
+        const parsed = JSON.parse(part.output);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          raw = parsed as Record<string, unknown>;
+        }
+      } catch {
+        // ignore non-JSON output
+      }
+    } else if (typeof part.output === "object" && !Array.isArray(part.output)) {
+      raw = part.output as Record<string, unknown>;
+    }
+  }
+
+  const scopeVal = raw.scope;
+  const scope: "all" | "docs" | "canvases" =
+    scopeVal === "docs" || scopeVal === "canvases" ? scopeVal : "all";
+  const docIds = Array.isArray(raw.doc_ids)
+    ? raw.doc_ids.map((v) => String(v))
+    : [];
+  const canvasIds = Array.isArray(raw.canvas_ids)
+    ? raw.canvas_ids.map((v) => String(v))
+    : [];
+  const reloadOpenEditor = Boolean(raw.reload_open_editor);
+  const reason = typeof raw.reason === "string" ? raw.reason : undefined;
+
+  return { scope, docIds, canvasIds, reloadOpenEditor, reason };
 }
 
 function mergeContextItems(
@@ -250,6 +308,40 @@ export function useAgentRuntime() {
   const pendingCheckpointIdsRef = useRef<string[]>([]);
   const isDrainingQueueRef = useRef(false);
   const lastSyncedToStoreRef = useRef<AgentUIMessage[] | null>(null);
+  const handledSyncToolCallIdsRef = useRef<Set<string>>(new Set());
+
+  const seedHandledSyncToolCalls = useCallback((msgs: AgentUIMessage[]) => {
+    for (const msg of msgs) {
+      if (msg.role !== "assistant") continue;
+      for (const part of msg.parts) {
+        if (!isToolPart(part)) continue;
+        if (
+          part.state === "output-available" &&
+          isFeSyncToolName(getToolName(part))
+        ) {
+          handledSyncToolCallIdsRef.current.add(part.toolCallId);
+        }
+      }
+    }
+  }, []);
+
+  const processFeSyncToolParts = useCallback((msgs: AgentUIMessage[]) => {
+    for (const msg of msgs) {
+      if (msg.role !== "assistant") continue;
+      for (const part of msg.parts) {
+        if (!isToolPart(part)) continue;
+        if (
+          part.state === "output-available" &&
+          isFeSyncToolName(getToolName(part)) &&
+          !handledSyncToolCallIdsRef.current.has(part.toolCallId)
+        ) {
+          handledSyncToolCallIdsRef.current.add(part.toolCallId);
+          const args = parseSyncArgsFromPart(part);
+          void syncBackendToFrontend(args);
+        }
+      }
+    }
+  }, []);
   const setMessagesRef = useRef<
     | ((
       messages:
@@ -402,6 +494,9 @@ export function useAgentRuntime() {
         lastSyncedToStoreRef.current = syncedMessages;
       }
       store.syncSessionMessages(originSessionId, syncedMessages);
+      if (!isAbort && !isError) {
+        processFeSyncToolParts(syncedMessages);
+      }
       void refreshBackendMeta();
 
       if (
@@ -453,6 +548,7 @@ export function useAgentRuntime() {
       prevSessionIdRef.current = activeSessionId;
       pendingBranchRecordRef.current = null;
       pendingCheckpointIdsRef.current = [];
+      seedHandledSyncToolCalls(activeSession.messages);
       lastSyncedToStoreRef.current = activeSession.messages;
       setMessages(activeSession.messages);
       return;
@@ -460,6 +556,7 @@ export function useAgentRuntime() {
 
     if (justHydrated) {
       prevHydratedRef.current = true;
+      seedHandledSyncToolCalls(activeSession.messages);
       if (
         status === "ready" &&
         activeSession.messages !== lastSyncedToStoreRef.current
@@ -478,7 +575,13 @@ export function useAgentRuntime() {
       lastSyncedToStoreRef.current = activeSession.messages;
       setMessages(activeSession.messages);
     }
-  }, [activeSessionId, hydrated, activeSession.messages, status, setMessages]);
+  }, [activeSessionId, hydrated, activeSession.messages, status, setMessages, seedHandledSyncToolCalls]);
+
+  useEffect(() => {
+    if (status === "streaming" || status === "submitted") {
+      processFeSyncToolParts(messages);
+    }
+  }, [status, messages, processFeSyncToolParts]);
 
   // Auto-drain prompt queue when chat returns to ready
   useEffect(() => {

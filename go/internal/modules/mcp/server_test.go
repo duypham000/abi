@@ -169,8 +169,8 @@ func TestMCP_AuthAndLifecycle(t *testing.T) {
 	})
 	var listRes mcp.ListToolsResult
 	_ = json.Unmarshal(envList.Result, &listRes)
-	if len(listRes.Tools) != 26 {
-		t.Fatalf("expected 26 tools, got %d", len(listRes.Tools))
+	if len(listRes.Tools) != 27 {
+		t.Fatalf("expected 27 tools, got %d", len(listRes.Tools))
 	}
 }
 
@@ -505,5 +505,25 @@ func TestMCP_AdminAPIKeyAuthAndManagement(t *testing.T) {
 	router.ServeHTTP(wDel, reqDel)
 	if wDel.Code != http.StatusOK {
 		t.Fatalf("expected 200 deleting api key, got %d (%s)", wDel.Code, wDel.Body.String())
+	}
+}
+
+func TestMCP_FeSyncFromBackend(t *testing.T) {
+	router, token := setupMCPTestRouter(t)
+
+	res := callTool(t, router, token, "fe_sync_from_backend", map[string]interface{}{
+		"scope":              "docs",
+		"doc_ids":            []string{"doc-42"},
+		"reload_open_editor": true,
+		"reason":             "Direct Go fallback save",
+	})
+	if res["action"] != "fe_sync_from_backend" {
+		t.Fatalf("expected action fe_sync_from_backend, got %v", res["action"])
+	}
+	if res["scope"] != "docs" {
+		t.Fatalf("expected scope docs, got %v", res["scope"])
+	}
+	if res["reload_open_editor"] != true {
+		t.Fatalf("expected reload_open_editor true, got %v", res["reload_open_editor"])
 	}
 }

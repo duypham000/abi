@@ -38,6 +38,10 @@ import { EmbeddedDocFrame } from "./components/EmbeddedDocFrame";
 import { EmbeddedNoteFrame } from "./components/EmbeddedNoteFrame";
 import { DocsSidebarPanel, DOC_DRAG_TYPE } from "./components/DocsSidebarPanel";
 import { ShapeActionToolbar } from "./components/ShapeActionToolbar";
+import {
+  AGENT_BACKEND_SYNCED_EVENT,
+  type AgentBackendSyncedDetail,
+} from "@/infrastructure/agent/workspace/miniEditorWorkspaceBridge";
 import "./CanvasEditorPage.scss";
 
 const TOMO_DOC_PREFIX = "tomo://doc/";
@@ -211,6 +215,48 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
       },
     });
   }, [canvasId, restoreCanvasesFromServer]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onBackendSynced = (event: Event) => {
+      const detail = (event as CustomEvent<AgentBackendSyncedDetail>).detail;
+      if (
+        !detail ||
+        !Array.isArray(detail.restoredCanvases) ||
+        detail.restoredCanvases.length === 0
+      ) {
+        return;
+      }
+      const matched = detail.restoredCanvases.find(
+        (r) =>
+          r.id === canvasId ||
+          (canvas?.backendUuid && r.backendUuid === canvas.backendUuid) ||
+          (canvas?.slug && r.slug === canvas.slug)
+      );
+      if (!matched) return;
+
+      if ((detail.reloadOpenEditor || !collaboration) && matched.scene && excalidrawAPIRef.current) {
+        try {
+          const parsedScene = JSON.parse(matched.scene) as CanvasScene;
+          const activeApi = excalidrawAPIRef.current;
+          activeApi.updateScene({
+            elements: (parsedScene.elements ?? []) as any,
+            appState: sanitizeAppState(parsedScene.appState) as any,
+          });
+          if (parsedScene.files && Object.keys(parsedScene.files).length > 0) {
+            activeApi.addFiles(Object.values(parsedScene.files) as any);
+          }
+        } catch (err) {
+          console.warn("[CanvasEditor] updateScene on agent backend sync failed:", err);
+        }
+      }
+    };
+
+    window.addEventListener(AGENT_BACKEND_SYNCED_EVENT, onBackendSynced);
+    return () => {
+      window.removeEventListener(AGENT_BACKEND_SYNCED_EVENT, onBackendSynced);
+    };
+  }, [canvasId, canvas?.backendUuid, canvas?.slug, collaboration]);
 
   const handlePullGit = useCallback(async () => {
     try {

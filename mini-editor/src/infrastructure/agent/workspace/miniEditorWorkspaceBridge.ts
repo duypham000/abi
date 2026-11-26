@@ -2,6 +2,10 @@ import type {
   IWorkspaceBridgePort,
   WorkspaceContextItem,
 } from "@/core/interfaces/agent";
+import type { CanvasDto } from "@/core/interfaces/canvas";
+import type { DocDto } from "@/core/interfaces/docs";
+import { canvasApi } from "@/infrastructure/api/canvasApi";
+import { docsApi } from "@/infrastructure/api/docsApi";
 import {
   getCanvasFromSqlite,
   listCanvasFromSqlite,
@@ -10,9 +14,29 @@ import {
   getDocFromSqlite,
   listDocsFromSqlite,
 } from "@/infrastructure/tauri/docCacheService";
+import { store } from "@/presentation/store";
 
 export const AGENT_OPEN_ITEM_EVENT = "tomo:agent-open-item";
 export const AGENT_INSERT_CONTENT_EVENT = "tomo:agent-insert-content";
+export const AGENT_BACKEND_SYNCED_EVENT = "tomo:agent-backend-synced";
+
+export interface AgentBackendSyncRequest {
+  scope?: "all" | "docs" | "canvases";
+  docIds?: string[];
+  canvasIds?: string[];
+  reloadOpenEditor?: boolean;
+  reason?: string;
+}
+
+export interface AgentBackendSyncedDetail {
+  scope: "all" | "docs" | "canvases";
+  docIds: string[];
+  canvasIds: string[];
+  reloadOpenEditor: boolean;
+  reason: string;
+  restoredDocs: DocDto[];
+  restoredCanvases: CanvasDto[];
+}
 
 const MOCK_WORKSPACE_DOCS_AND_CANVASES: WorkspaceContextItem[] = [
   {
@@ -310,6 +334,74 @@ export async function insertMarkdownSnippet(
   }
 
   return dispatched;
+}
+
+export async function syncBackendToFrontend(
+  req?: AgentBackendSyncRequest
+): Promise<{
+  syncedDocsCount: number;
+  syncedCanvasesCount: number;
+  errors: string[];
+}> {
+  const scope = req?.scope ?? "all";
+  const docIds = req?.docIds ?? [];
+  const canvasIds = req?.canvasIds ?? [];
+  const reloadOpenEditor = Boolean(req?.reloadOpenEditor);
+  const reason = req?.reason ?? "Sync backend changes to frontend";
+
+  const restoredDocs: DocDto[] = [];
+  const restoredCanvases: CanvasDto[] = [];
+  const errors: string[] = [];
+
+  if (scope === "all" || scope === "docs") {
+    try {
+      const res = await store
+        .dispatch(docsApi.endpoints.restoreDocsFromServer.initiate(undefined))
+        .unwrap();
+      if (Array.isArray(res?.restored)) {
+        restoredDocs.push(...res.restored);
+      }
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  if (scope === "all" || scope === "canvases") {
+    try {
+      const res = await store
+        .dispatch(
+          canvasApi.endpoints.restoreCanvasesFromServer.initiate(undefined)
+        )
+        .unwrap();
+      if (Array.isArray(res?.restored)) {
+        restoredCanvases.push(...res.restored);
+      }
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent<AgentBackendSyncedDetail>(AGENT_BACKEND_SYNCED_EVENT, {
+        detail: {
+          scope,
+          docIds,
+          canvasIds,
+          reloadOpenEditor,
+          reason,
+          restoredDocs,
+          restoredCanvases,
+        },
+      })
+    );
+  }
+
+  return {
+    syncedDocsCount: restoredDocs.length,
+    syncedCanvasesCount: restoredCanvases.length,
+    errors,
+  };
 }
 
 export const miniEditorWorkspaceBridge: IWorkspaceBridgePort = {

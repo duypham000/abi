@@ -40,6 +40,10 @@ import {
   usePullRepoMutation,
   githubApi,
 } from "@/infrastructure/api/githubApi";
+import {
+  AGENT_BACKEND_SYNCED_EVENT,
+  type AgentBackendSyncedDetail,
+} from "@/infrastructure/agent/workspace/miniEditorWorkspaceBridge";
 import "./DocEditorPage.scss";
 
 export interface EditorSettings {
@@ -593,6 +597,44 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
       message.error(err?.data?.message || "Khôi phục từ Server thất bại");
     }
   }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onBackendSynced = (event: Event) => {
+      const detail = (event as CustomEvent<AgentBackendSyncedDetail>).detail;
+      if (!detail || !Array.isArray(detail.restoredDocs) || detail.restoredDocs.length === 0) {
+        return;
+      }
+      const matched = detail.restoredDocs.find(
+        (r) =>
+          r.id === docId ||
+          (doc?.backendUuid && r.backendUuid === doc.backendUuid) ||
+          (doc?.slug && r.slug === doc.slug)
+      );
+      if (!matched) return;
+
+      if (matched.title && matched.title !== doc?.title) {
+        baseHandleTitleChange(matched.title);
+      }
+
+      if ((detail.reloadOpenEditor || !collaboration) && editorRef.current && matched.content) {
+        const blocks = parseInitialBlocks(matched.content);
+        if (blocks.length > 0) {
+          try {
+            editorRef.current.replaceBlocks(editorRef.current.document, blocks);
+            baseHandleBlocksChange(blocks);
+          } catch (err) {
+            console.warn("[DocEditor] replaceBlocks on agent backend sync failed:", err);
+          }
+        }
+      }
+    };
+
+    window.addEventListener(AGENT_BACKEND_SYNCED_EVENT, onBackendSynced);
+    return () => {
+      window.removeEventListener(AGENT_BACKEND_SYNCED_EVENT, onBackendSynced);
+    };
+  }, [docId, doc?.backendUuid, doc?.slug, doc?.title, collaboration, baseHandleTitleChange, baseHandleBlocksChange]);
 
   function handleCopyLink() {
     navigator.clipboard.writeText(window.location.href);

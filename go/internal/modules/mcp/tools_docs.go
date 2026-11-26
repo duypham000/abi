@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"tomo-backend/internal/modules/docs/domain"
 	"tomo-backend/internal/modules/docs/dto"
@@ -267,6 +268,40 @@ func (s *Server) registerDocsTools() {
 		},
 		Annotations: &ToolAnnotations{Title: "Delete Series", DestructiveHint: boolPtr(true)},
 	}, s.handleSeriesDelete)
+
+	s.registerTool(Tool{
+		Name:        "fe_sync_from_backend",
+		Description: "Trigger the Tomo frontend (mini-editor) to pull the latest Docs and/or Canvases from the Go backend into local SQLite and refresh UI caches. Call this after creating, deleting, moving, or updating metadata of Docs/Canvases, or with reload_open_editor=true after any direct Go backend content save when live Yjs was not used.",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"scope": map[string]interface{}{
+					"type":        "string",
+					"enum":        []string{"all", "docs", "canvases"},
+					"description": "Which entity types to sync from backend to FE (default: all)",
+				},
+				"doc_ids": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]interface{}{"type": "string"},
+					"description": "Optional backend Doc IDs/slugs that were modified",
+				},
+				"canvas_ids": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]interface{}{"type": "string"},
+					"description": "Optional backend Canvas IDs that were modified",
+				},
+				"reload_open_editor": map[string]interface{}{
+					"type":        "boolean",
+					"description": "Set true only after direct Go backend content/scene save (non-Yjs) so open FE editors replace their in-memory content with the backend copy",
+				},
+				"reason": map[string]interface{}{
+					"type":        "string",
+					"description": "Short human-readable reason for the sync",
+				},
+			},
+		},
+		Annotations: &ToolAnnotations{Title: "Sync Backend to Frontend", ReadOnlyHint: boolPtr(true)},
+	}, s.handleFeSyncFromBackend)
 }
 
 func (s *Server) handleDocsList(ctx context.Context, userID string, raw json.RawMessage) (*CallToolResult, error) {
@@ -811,4 +846,45 @@ func (s *Server) handleSeriesDelete(ctx context.Context, _ string, raw json.RawM
 		return textResult("series not found", true), nil
 	}
 	return jsonResult(map[string]interface{}{"deleted": true, "id": args.ID})
+}
+
+func (s *Server) handleFeSyncFromBackend(_ context.Context, _ string, raw json.RawMessage) (*CallToolResult, error) {
+	var args struct {
+		Scope            string   `json:"scope"`
+		DocIDs           []string `json:"doc_ids"`
+		CanvasIDs        []string `json:"canvas_ids"`
+		ReloadOpenEditor bool     `json:"reload_open_editor"`
+		Reason           string   `json:"reason"`
+	}
+	if err := decodeArgs(raw, &args); err != nil {
+		return textResult("invalid arguments: "+err.Error(), true), nil
+	}
+	scope := strings.TrimSpace(args.Scope)
+	if scope == "" {
+		scope = "all"
+	}
+	if scope != "all" && scope != "docs" && scope != "canvases" {
+		return textResult("invalid scope: must be all, docs, or canvases", true), nil
+	}
+	docIDs := args.DocIDs
+	if docIDs == nil {
+		docIDs = []string{}
+	}
+	canvasIDs := args.CanvasIDs
+	if canvasIDs == nil {
+		canvasIDs = []string{}
+	}
+	reason := strings.TrimSpace(args.Reason)
+	if reason == "" {
+		reason = "Sync backend changes to frontend"
+	}
+	return jsonResult(map[string]interface{}{
+		"action":             "fe_sync_from_backend",
+		"scope":              scope,
+		"doc_ids":            docIDs,
+		"canvas_ids":         canvasIDs,
+		"reload_open_editor": args.ReloadOpenEditor,
+		"reason":             reason,
+		"triggered_at":       time.Now().UTC().Format(time.RFC3339),
+	})
 }

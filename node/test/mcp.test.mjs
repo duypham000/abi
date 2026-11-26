@@ -443,3 +443,34 @@ test('extractAuthCredentials and GoClient support X-Api-Key and TOMO_API_KEY', a
     globalThis.fetch = origFetch;
   }
 });
+
+test('fe_sync_from_backend tool returns structured FE sync directive', async () => {
+  const gc = new GoClient({ apiBase: 'http://127.0.0.1:8080/api/v1' });
+  const mcpServer = createTomoMcpServer(gc);
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'test-client', version: '1.0.0' });
+  await Promise.all([mcpServer.connect(serverTransport), client.connect(clientTransport)]);
+
+  const toolsRes = await client.listTools();
+  assert.ok(toolsRes.tools.some((t) => t.name === 'fe_sync_from_backend'));
+
+  const res = await client.callTool({
+    name: 'fe_sync_from_backend',
+    arguments: {
+      scope: 'docs',
+      doc_ids: ['doc-1'],
+      reload_open_editor: true,
+      reason: 'Fallback Go save',
+    },
+  });
+  assert.ok(!res.isError);
+  const parsed = JSON.parse(res.content[0].text);
+  assert.equal(parsed.action, 'fe_sync_from_backend');
+  assert.equal(parsed.scope, 'docs');
+  assert.deepEqual(parsed.doc_ids, ['doc-1']);
+  assert.equal(parsed.reload_open_editor, true);
+  assert.equal(parsed.reason, 'Fallback Go save');
+  assert.ok(parsed.triggered_at);
+
+  await Promise.all([client.close(), mcpServer.close()]);
+});
