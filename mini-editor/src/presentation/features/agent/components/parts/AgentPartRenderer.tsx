@@ -8,7 +8,21 @@ import {
 import { MessageResponse } from "@/components/ai-elements/message";
 import type { AgentUIMessagePart } from "@/core/interfaces/agent";
 import { isToolUIPart } from "ai";
-import { ReasoningBlock } from "./ReasoningAndPlanRenderer";
+import {
+  CommitCard,
+  EnvVarsCard,
+  FileTreeCard,
+  SchemaDisplayCard,
+  StackTraceCard,
+  TerminalCard,
+  TestResultsCard,
+} from "./DevOpsPartsRenderer";
+import {
+  ChainOfThoughtCard,
+  PlanCard,
+  ReasoningBlock,
+  TaskGroupCard,
+} from "./ReasoningAndPlanRenderer";
 import { MessageSourcesBlock } from "./RichMediaPartsRenderer";
 import { ToolPartRenderer } from "./ToolPartRenderer";
 
@@ -17,10 +31,13 @@ export interface AgentPartRendererProps {
   partIndex: number;
   messageId: string;
   isStreaming: boolean;
+  hasFollowingUserMessage?: boolean;
   suppressSources?: boolean;
   suppressFiles?: boolean;
   onApproveTool: (approvalId: string, reason?: string) => void;
   onDenyTool: (approvalId: string, reason?: string) => void;
+  onSendFollowUp?: (prompt: string) => void;
+  onInsertToDoc?: (markdown: string) => void;
 }
 
 /**
@@ -32,16 +49,23 @@ export function AgentPartRenderer({
   partIndex,
   messageId,
   isStreaming,
+  hasFollowingUserMessage,
   suppressSources = true,
   suppressFiles = false,
   onApproveTool,
   onDenyTool,
+  onSendFollowUp,
+  onInsertToDoc,
 }: AgentPartRendererProps) {
   if (isToolUIPart(part)) {
     return (
       <ToolPartRenderer
+        hasFollowingUserMessage={hasFollowingUserMessage}
+        isStreaming={isStreaming}
         onApproveTool={onApproveTool}
         onDenyTool={onDenyTool}
+        onInsertToDoc={onInsertToDoc}
+        onSendFollowUp={onSendFollowUp}
         part={part}
       />
     );
@@ -86,6 +110,36 @@ export function AgentPartRenderer({
           </Attachment>
         </Attachments>
       );
+
+    case "data-plan":
+      return <PlanCard data={part.data} onSendFollowUp={onSendFollowUp} />;
+
+    case "data-task-group":
+      return <TaskGroupCard data={part.data} />;
+
+    case "data-chain-of-thought":
+      return <ChainOfThoughtCard data={part.data} />;
+
+    case "data-terminal":
+      return <TerminalCard data={part.data} />;
+
+    case "data-test-results":
+      return <TestResultsCard data={part.data} />;
+
+    case "data-stack-trace":
+      return <StackTraceCard data={part.data} onSendFollowUp={onSendFollowUp} />;
+
+    case "data-file-tree":
+      return <FileTreeCard data={part.data} />;
+
+    case "data-commit":
+      return <CommitCard data={part.data} />;
+
+    case "data-schema-display":
+      return <SchemaDisplayCard data={part.data} />;
+
+    case "data-env-vars":
+      return <EnvVarsCard data={part.data} />;
 
     default:
       return null;

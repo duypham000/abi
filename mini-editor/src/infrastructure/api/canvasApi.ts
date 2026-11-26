@@ -8,6 +8,7 @@ import {
 } from "@/core/interfaces/canvas";
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
 import { isTauri } from "@/infrastructure/tauri/sqliteDb";
+import { parseOrHashId } from "@/core/utils/idUtils";
 import {
   listCanvasFromSqlite,
   getCanvasFromSqlite,
@@ -213,62 +214,78 @@ export const canvasApi = baseApi.injectEndpoints({
           };
         }
 
-        const restoreOneCanvas = async (targetId: number): Promise<CanvasDto | null> => {
-          const gitRes = await fetchWithBaseQuery(
-            `/github/files/get?path=${encodeURIComponent(`canvases/canvas-${targetId}.json`)}`
-          );
-          const rawContent = (gitRes.data as { content?: string } | undefined)?.content;
-          if (rawContent) {
-            try {
-              const parsed = JSON.parse(rawContent) as Record<string, unknown>;
-              const sceneStr =
-                typeof parsed.scene === "string"
-                  ? parsed.scene
-                  : JSON.stringify(parsed.scene ?? { elements: [], appState: {}, files: {} });
-              let rawMeta =
-                typeof parsed.metadata === "string"
-                  ? parsed.metadata
-                  : parsed.metadata != null
-                    ? JSON.stringify(parsed.metadata)
-                    : null;
-              const parsedMeta = parseCanvasMetadata(rawMeta);
-              if (!parsedMeta.thumbnail) {
-                const thumb = await generateLowResCanvasThumbnail(sceneStr);
-                if (thumb) {
-                  setCachedCanvasThumbnail(targetId, thumb);
-                  rawMeta = serializeCanvasMetadata({ ...parsedMeta, thumbnail: thumb });
-                }
-              } else {
-                setCachedCanvasThumbnail(targetId, parsedMeta.thumbnail);
-              }
-              const saved = await upsertCanvasFromServerInSqlite(targetId, {
-                title: typeof parsed.title === "string" && parsed.title ? parsed.title : "Untitled Canvas",
-                scene: sceneStr,
-                metadata: rawMeta,
-                lastSync: new Date().toISOString(),
-                status: (parsed.status as 0 | 1 | undefined) ?? 1,
-              });
-              api.dispatch(canvasApi.util.upsertQueryData("getCanvasById", targetId, saved));
-              return saved;
-            } catch {
-              // ignore malformed json
+        const saveRemoteCanvas = async (
+          remote: Record<string, unknown>,
+          preferredLocalId?: number
+        ): Promise<CanvasDto> => {
+          const remoteId = String(remote.id ?? "").trim();
+          const backendUuid =
+            remoteId && !/^\d+$/.test(remoteId)
+              ? remoteId
+              : typeof remote.backend_uuid === "string" && remote.backend_uuid
+                ? remote.backend_uuid
+                : null;
+          const slug = typeof remote.slug === "string" && remote.slug ? remote.slug : null;
+          const targetId =
+            preferredLocalId ?? parseOrHashId(remoteId || slug || String(Date.now()), "canvas-");
+          const title =
+            typeof remote.title === "string" && remote.title ? remote.title : "Untitled Canvas";
+          const sceneStr =
+            typeof remote.scene === "string"
+              ? remote.scene
+              : JSON.stringify(remote.scene ?? { elements: [], appState: {}, files: {} });
+          let rawMeta =
+            typeof remote.metadata === "string"
+              ? remote.metadata
+              : remote.metadata != null
+                ? JSON.stringify(remote.metadata)
+                : null;
+          const parsedMeta = parseCanvasMetadata(rawMeta);
+          if (!parsedMeta.thumbnail) {
+            const thumb = await generateLowResCanvasThumbnail(sceneStr);
+            if (thumb) {
+              setCachedCanvasThumbnail(targetId, thumb);
+              rawMeta = serializeCanvasMetadata({ ...parsedMeta, thumbnail: thumb });
             }
+          } else {
+            setCachedCanvasThumbnail(targetId, parsedMeta.thumbnail);
           }
 
-          const remoteRes = await fetchWithBaseQuery(`/canvas/${targetId}`);
-          if (remoteRes.data) {
-            const remote = remoteRes.data as CanvasDto;
+          const status: 0 | 1 = remote.status === 0 || remote.status === 1 ? remote.status : 1;
+          const lastSync =
+            typeof remote.updated_at === "string"
+              ? remote.updated_at
+              : typeof remote.lastSync === "string"
+                ? remote.lastSync
+                : new Date().toISOString();
+
+          if (isTauri()) {
             const saved = await upsertCanvasFromServerInSqlite(targetId, {
-              title: remote.title || "Untitled Canvas",
-              scene: remote.scene ?? null,
-              metadata: remote.metadata ?? null,
-              lastSync: remote.lastSync ?? new Date().toISOString(),
-              status: remote.status ?? 1,
+              title,
+              scene: sceneStr,
+              metadata: rawMeta,
+              lastSync,
+              status,
+              backendUuid,
+              slug,
             });
-            api.dispatch(canvasApi.util.upsertQueryData("getCanvasById", targetId, saved));
+            api.dispatch(canvasApi.util.upsertQueryData("getCanvasById", saved.id, saved));
             return saved;
           }
-          return null;
+
+          const dto: CanvasDto = {
+            id: targetId,
+            title,
+            scene: sceneStr,
+            metadata: rawMeta,
+            lastSync,
+            status,
+            createdBy: null,
+            backendUuid,
+            slug,
+          };
+          api.dispatch(canvasApi.util.upsertQueryData("getCanvasById", dto.id, dto));
+          return dto;
         };
 
         const ids = arg && Array.isArray(arg.ids) && arg.ids.length > 0 ? arg.ids : null;
@@ -276,19 +293,57 @@ export const canvasApi = baseApi.injectEndpoints({
 
         if (ids) {
           for (const id of ids) {
-            const item = await restoreOneCanvas(id);
-            if (item) restored.push(item);
+            const existing = isTauri() ? await getCanvasFromSqlite(id) : null;
+            const remoteId = existing?.backendUuid || existing?.slug || String(id);
+            const remoteRes = await fetchWithBaseQuery(
+              `/canvas/${encodeURIComponent(remoteId)}`
+            );
+            if (remoteRes.data && typeof remoteRes.data === "object") {
+              const saved = await saveRemoteCanvas(
+                remoteRes.data as Record<string, unknown>,
+                id
+              );
+              restored.push(saved);
+            }
           }
         } else {
-          const listRes = await fetchWithBaseQuery("/github/files/list?dir=canvases");
-          const files = Array.isArray(listRes.data) ? (listRes.data as Array<{ path?: string; name?: string }>) : [];
-          for (const file of files) {
-            const pathOrName = file.path || file.name || "";
-            const match = pathOrName.match(/canvas-(\d+)\.json$/);
-            if (match) {
-              const item = await restoreOneCanvas(Number(match[1]));
-              if (item) restored.push(item);
+          const allRemote: Record<string, unknown>[] = [];
+          const pageSize = 100;
+          for (let page = 1; page <= 100; page++) {
+            const listRes = await fetchWithBaseQuery({
+              url: "/canvas",
+              params: { page, page_size: pageSize },
+            });
+            if (listRes.error) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              return { error: listRes.error as any };
             }
+            const rawData = listRes.data as
+              | { items?: unknown[]; total?: number }
+              | unknown[]
+              | undefined;
+            const items = Array.isArray(rawData)
+              ? rawData
+              : Array.isArray(rawData?.items)
+                ? rawData.items
+                : [];
+            const total = Array.isArray(rawData)
+              ? items.length
+              : Number(rawData?.total ?? items.length);
+
+            for (const item of items) {
+              if (item && typeof item === "object") {
+                allRemote.push(item as Record<string, unknown>);
+              }
+            }
+            if (items.length < pageSize || allRemote.length >= total) {
+              break;
+            }
+          }
+
+          for (const remote of allRemote) {
+            const saved = await saveRemoteCanvas(remote);
+            restored.push(saved);
           }
         }
 

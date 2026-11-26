@@ -18,13 +18,28 @@ import type { AgentToolPart } from "@/core/interfaces/agent";
 import { getToolName, type DynamicToolUIPart } from "ai";
 import { ShieldAlertIcon, ShieldCheckIcon, ShieldXIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+  ArtifactPlanCard,
+  AskQuestionCard,
+  CommandToolCard,
+  FileWriteCard,
+  FocusStatusPill,
+  StepsChecklistCard,
+  formatToolDisplayInfo,
+  hasMeaningfulOutput,
+  isArtifactWriteFile,
+} from "./GemOpsToolRenderers";
 
 export type SupportedToolPart = AgentToolPart | DynamicToolUIPart;
 
 export interface ToolPartRendererProps {
   part: SupportedToolPart;
+  isStreaming?: boolean;
+  hasFollowingUserMessage?: boolean;
   onApproveTool: (approvalId: string, reason?: string) => void | Promise<void>;
   onDenyTool: (approvalId: string, reason?: string) => void | Promise<void>;
+  onSendFollowUp?: (prompt: string) => void;
+  onInsertToDoc?: (markdown: string) => void;
 }
 
 function summarizeApprovalTarget(input: unknown): string | null {
@@ -42,7 +57,7 @@ function summarizeApprovalTarget(input: unknown): string | null {
   return null;
 }
 
-function ToolApprovalCard({
+export function ToolApprovalCard({
   part,
   toolName,
   onApproveTool,
@@ -148,44 +163,117 @@ function ToolApprovalCard({
  */
 export function ToolPartRenderer({
   part,
+  isStreaming,
+  hasFollowingUserMessage,
   onApproveTool,
   onDenyTool,
+  onSendFollowUp,
+  onInsertToDoc,
 }: ToolPartRendererProps) {
   const toolName = getToolName(part);
+  const hasApproval = "approval" in part && Boolean(part.approval);
+  const approvalNode = hasApproval ? (
+    <ToolApprovalCard
+      onApproveTool={onApproveTool}
+      onDenyTool={onDenyTool}
+      part={part}
+      toolName={toolName}
+    />
+  ) : null;
+
+  if (toolName === "ask_question" || toolName === "ask_user") {
+    return (
+      <AskQuestionCard
+        hasFollowingUserMessage={hasFollowingUserMessage}
+        onSendFollowUp={onSendFollowUp}
+        part={part}
+      />
+    );
+  }
+
+  if (toolName === "update_steps") {
+    return <StepsChecklistCard isStreaming={isStreaming} part={part} />;
+  }
+
+  if (toolName === "run_command") {
+    return (
+      <CommandToolCard
+        approvalNode={approvalNode}
+        isStreaming={isStreaming}
+        part={part}
+      />
+    );
+  }
+
+  if (
+    toolName === "exit_plan_mode" ||
+    (toolName === "write_file" && isArtifactWriteFile(part.input))
+  ) {
+    return (
+      <ArtifactPlanCard
+        approvalNode={approvalNode}
+        hasFollowingUserMessage={hasFollowingUserMessage}
+        isStreaming={isStreaming}
+        onInsertToDoc={onInsertToDoc}
+        onSendFollowUp={onSendFollowUp}
+        part={part}
+      />
+    );
+  }
+
+  if (toolName === "write_file" || toolName === "edit_file") {
+    return <FileWriteCard approvalNode={approvalNode} part={part} />;
+  }
+
+  if (toolName === "update_focus") {
+    return <FocusStatusPill part={part} />;
+  }
+
   const shouldDefaultOpen =
     part.state === "approval-requested" ||
     part.state === "input-available" ||
     part.state === "input-streaming" ||
     part.state === "output-error";
 
-  const hasApproval = "approval" in part && Boolean(part.approval);
+  const { title: displayTitle, badge: toolBadge } = formatToolDisplayInfo(
+    toolName,
+    part.input,
+    part.title
+  );
+  const resolvedHeaderTitle =
+    toolBadge && displayTitle !== toolBadge
+      ? `${displayTitle} · ${toolBadge}`
+      : displayTitle;
+
+  const showOutput =
+    part.state === "output-error" ||
+    (part.state === "output-available" && hasMeaningfulOutput(part.output));
 
   return (
     <Tool className="mb-2" defaultOpen={shouldDefaultOpen}>
       {part.type === "dynamic-tool" ? (
         <ToolHeader
           state={part.state}
-          title={part.title}
+          title={resolvedHeaderTitle}
           toolName={part.toolName}
           type={part.type}
         />
       ) : (
-        <ToolHeader state={part.state} title={part.title} type={part.type} />
+        <ToolHeader
+          state={part.state}
+          title={resolvedHeaderTitle}
+          type={part.type}
+        />
       )}
       <ToolContent className="space-y-3 pt-0">
-        {hasApproval && (
-          <ToolApprovalCard
-            onApproveTool={onApproveTool}
-            onDenyTool={onDenyTool}
-            part={part}
-            toolName={toolName}
+        {approvalNode}
+        {part.input !== undefined && <ToolInput input={part.input} />}
+        {showOutput && (
+          <ToolOutput
+            errorText={part.state === "output-error" ? part.errorText : undefined}
+            output={part.state === "output-available" ? part.output : undefined}
           />
         )}
-        {part.input !== undefined && <ToolInput input={part.input} />}
-        <ToolOutput
-          errorText={part.state === "output-error" ? part.errorText : undefined}
-          output={part.state === "output-available" ? part.output : undefined}
-        />
       </ToolContent>
     </Tool>
   );

@@ -16,6 +16,8 @@ export interface CanvasDto {
   createdBy: { id: number; username: string; email: string } | null;
   preview?: string | null;
   highlights?: Record<string, string[]> | null;
+  backendUuid?: string | null;
+  slug?: string | null;
 }
 
 export interface CanvasRequest {
@@ -24,6 +26,8 @@ export interface CanvasRequest {
   metadata: string | null;
   lastSync: string | null;
   status: CanvasStatus;
+  backendUuid?: string | null;
+  slug?: string | null;
 }
 
 export interface CanvasMetadata {

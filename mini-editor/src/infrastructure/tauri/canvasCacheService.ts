@@ -24,6 +24,8 @@ import { computeCanvasHash } from "@/core/utils/contentHash";
 export interface LocalCanvas {
   local_id: string;
   backend_id: number | null;
+  backend_uuid?: string | null;
+  slug?: string | null;
   title: string;
   scene: string | null;
   metadata: string | null;
@@ -57,6 +59,8 @@ async function ensureCanvasSchema() {
   `);
   try { await db.execute(`ALTER TABLE canvas ADD COLUMN is_dirty INTEGER NOT NULL DEFAULT 0`); } catch { /* already exists */ }
   try { await db.execute(`ALTER TABLE canvas ADD COLUMN content_hash TEXT`); } catch { /* already exists */ }
+  try { await db.execute(`ALTER TABLE canvas ADD COLUMN backend_uuid TEXT`); } catch { /* already exists */ }
+  try { await db.execute(`ALTER TABLE canvas ADD COLUMN slug TEXT`); } catch { /* already exists */ }
 }
 
 async function canvasDb() {
@@ -78,6 +82,8 @@ function rowToCanvasDto(r: LocalCanvas): CanvasDto {
     status: (r.status as 0 | 1) ?? 0,
     lastSync: r.last_synced,
     createdBy: null,
+    backendUuid: r.backend_uuid ?? null,
+    slug: r.slug ?? null,
   };
 }
 
@@ -102,8 +108,8 @@ export async function getCanvasFromSqlite(id: number | string): Promise<CanvasDt
   const numId = typeof id === "number" ? id : Number(id);
   const strId = String(id);
   const rows: LocalCanvas[] = await db.select(
-    "SELECT * FROM canvas WHERE (backend_id = ? OR local_id = ? OR local_id = ?) AND deleted = 0 LIMIT 1",
-    [numId || -1, strId, `canvas-${strId}`]
+    "SELECT * FROM canvas WHERE (backend_id = ? OR backend_uuid = ? OR slug = ? OR local_id = ? OR local_id = ?) AND deleted = 0 LIMIT 1",
+    [numId || -1, strId, strId, strId, `canvas-${strId}`]
   );
   if (!rows.length) return null;
   return rowToCanvasDto(rows[0]);
@@ -213,12 +219,20 @@ export async function upsertCanvasFromServerInSqlite(
   const metadata = req.metadata ?? null;
   const status = req.status ?? 1;
   const lastSynced = req.lastSync ?? ts;
+  const backendUuid = req.backendUuid ?? null;
+  const slug = req.slug ?? null;
   const hash = await computeCanvasHash({ title, scene, metadata });
 
   if (db) {
     const existing: LocalCanvas[] = await db.select(
-      "SELECT * FROM canvas WHERE backend_id = ? OR local_id = ? OR local_id = ? LIMIT 1",
-      [id, strId, localId]
+      `SELECT * FROM canvas
+       WHERE (? != '' AND backend_uuid = ?)
+          OR (? != '' AND slug = ?)
+          OR backend_id = ?
+          OR local_id = ?
+          OR local_id = ?
+       LIMIT 1`,
+      [backendUuid ?? "", backendUuid ?? "", slug ?? "", slug ?? "", id, strId, localId]
     );
     if (existing.length > 0) {
       await db.execute(
@@ -231,15 +245,28 @@ export async function upsertCanvasFromServerInSqlite(
            updated_at = ?,
            deleted = 0,
            is_dirty = 0,
-           content_hash = ?
+           content_hash = ?,
+           backend_uuid = COALESCE(?, backend_uuid),
+           slug = COALESCE(?, slug)
          WHERE local_id = ?`,
-        [title, scene, metadata, status, lastSynced, ts, hash, existing[0].local_id]
+        [title, scene, metadata, status, lastSynced, ts, hash, backendUuid, slug, existing[0].local_id]
       );
+      return {
+        id: existing[0].backend_id ?? id,
+        title,
+        scene,
+        metadata,
+        status: (status as 0 | 1) ?? 1,
+        lastSync: lastSynced,
+        createdBy: null,
+        backendUuid: backendUuid ?? existing[0].backend_uuid ?? null,
+        slug: slug ?? existing[0].slug ?? null,
+      };
     } else {
       await db.execute(
-        `INSERT INTO canvas (local_id, backend_id, title, scene, metadata, status, last_synced, updated_at, deleted, is_dirty, content_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)`,
-        [localId, id, title, scene, metadata, status, lastSynced, ts, hash]
+        `INSERT INTO canvas (local_id, backend_id, backend_uuid, slug, title, scene, metadata, status, last_synced, updated_at, deleted, is_dirty, content_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)`,
+        [localId, id, backendUuid, slug, title, scene, metadata, status, lastSynced, ts, hash]
       );
     }
   }
@@ -252,6 +279,8 @@ export async function upsertCanvasFromServerInSqlite(
     status: (status as 0 | 1) ?? 1,
     lastSync: lastSynced,
     createdBy: null,
+    backendUuid,
+    slug,
   };
 }
 

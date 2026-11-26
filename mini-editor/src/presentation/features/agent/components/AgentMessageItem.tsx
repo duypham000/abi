@@ -35,7 +35,9 @@ import {
 } from "@/infrastructure/agent";
 import { cn } from "@/lib/utils";
 import {
+  getToolName,
   isTextUIPart,
+  isToolUIPart,
   type FileUIPart,
   type SourceDocumentUIPart,
   type SourceUrlUIPart,
@@ -71,6 +73,7 @@ export interface AgentMessageItemProps {
   message: AgentUIMessage;
   isLastMessage: boolean;
   isStreaming: boolean;
+  hasFollowingUserMessage?: boolean;
   showTimestamp?: boolean;
   branchInfo: MessageBranchInfo | null;
   onApproveTool: (approvalId: string, reason?: string) => void;
@@ -157,6 +160,7 @@ export const AgentMessageItem = memo(function AgentMessageItem({
   message,
   isLastMessage,
   isStreaming,
+  hasFollowingUserMessage,
   showTimestamp = false,
   branchInfo,
   onApproveTool,
@@ -165,6 +169,7 @@ export const AgentMessageItem = memo(function AgentMessageItem({
   onEditUserMessage,
   onSwitchBranch,
   onFeedback,
+  onSendFollowUp,
   onInsertToDoc,
 }: AgentMessageItemProps) {
   const isUser = message.role === "user";
@@ -184,6 +189,16 @@ export const AgentMessageItem = memo(function AgentMessageItem({
     () => message.parts.filter(isSourcePart),
     [message.parts]
   );
+
+  const lastUpdateStepsIdx = useMemo(() => {
+    for (let i = message.parts.length - 1; i >= 0; i -= 1) {
+      const part = message.parts[i];
+      if (isToolUIPart(part) && getToolName(part) === "update_steps") {
+        return i;
+      }
+    }
+    return -1;
+  }, [message.parts]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(plainText);
@@ -475,16 +490,26 @@ export const AgentMessageItem = memo(function AgentMessageItem({
             if (isSourcePart(part)) {
               return null;
             }
+            if (
+              isToolUIPart(part) &&
+              getToolName(part) === "update_steps" &&
+              idx !== lastUpdateStepsIdx
+            ) {
+              return null;
+            }
             return (
               <AgentErrorBoundary
                 key={`${message.id}-part-${idx}-${part.type}`}
                 title="Part failed to render"
               >
                 <AgentPartRenderer
+                  hasFollowingUserMessage={hasFollowingUserMessage}
                   isStreaming={isActiveStreaming}
                   messageId={message.id}
                   onApproveTool={onApproveTool}
                   onDenyTool={onDenyTool}
+                  onInsertToDoc={onInsertToDoc}
+                  onSendFollowUp={onSendFollowUp}
                   part={part}
                   partIndex={idx}
                   suppressSources

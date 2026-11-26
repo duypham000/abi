@@ -195,6 +195,9 @@ export function AgentConversationView({
             {messages.map((message, index) => (
               <AgentMessageItem
                 branchInfo={getBranchInfoForMessage(message.id)}
+                hasFollowingUserMessage={messages
+                  .slice(index + 1)
+                  .some((m) => m.role === "user")}
                 isLastMessage={index === messages.length - 1}
                 isStreaming={isStreaming && index === messages.length - 1}
                 key={message.id}
