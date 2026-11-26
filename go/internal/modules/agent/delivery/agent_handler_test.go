@@ -83,7 +83,9 @@ func TestAgentHandler_RestEndpointsAndChatStream(t *testing.T) {
 		case r.Method == http.MethodDelete && r.URL.Path == "/agy/prompts/p1":
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "deleted", "id": "p1"})
 		case r.Method == http.MethodPost && r.URL.Path == "/agy/command":
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{"stdout": "ok"})
+			var cmdReq dto.GemOpsCustomCommandRequest
+			_ = json.NewDecoder(r.Body).Decode(&cmdReq)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"stdout": "ok", "mode": cmdReq.Mode, "command": cmdReq.Command})
 		case r.Method == http.MethodPost && r.URL.Path == "/harnesses":
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "h2"})

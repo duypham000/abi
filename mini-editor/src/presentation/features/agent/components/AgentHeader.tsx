@@ -1,15 +1,3 @@
-import {
-  Context,
-  ContextCacheUsage,
-  ContextContent,
-  ContextContentBody,
-  ContextContentFooter,
-  ContextContentHeader,
-  ContextInputUsage,
-  ContextOutputUsage,
-  ContextReasoningUsage,
-  ContextTrigger,
-} from "@/components/ai-elements/context";
 import { messagesToMarkdown } from "@/components/ai-elements/conversation";
 import {
   OpenIn,
@@ -35,23 +23,33 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  DEFAULT_MODELS,
   type AgentPersonaState,
   type AgentRuntimeConfig,
   type AgentSession,
   type AgentUIMessage,
 } from "@/core/interfaces/agent";
-import type { AgentBackendStatus } from "@/infrastructure/agent";
+import type {
+  AgentBackendInfo,
+  AgentBackendStatus,
+  AgentUsageResponse,
+} from "@/infrastructure/agent";
 import { cn } from "@/lib/utils";
 import { isTextUIPart } from "ai";
 import {
+  ActivityIcon,
   CheckIcon,
   ChevronDownIcon,
   CopyIcon,
@@ -61,6 +59,7 @@ import {
   PanelRightIcon,
   PencilIcon,
   PlusIcon,
+  RefreshCwIcon,
   Share2Icon,
   SlidersHorizontalIcon,
   XIcon,
@@ -87,6 +86,9 @@ export interface AgentHeaderProps {
   activeViewTab: AgentViewTab;
   isHistoryOpen: boolean;
   backendStatus: AgentBackendStatus | null;
+  backendInfo: AgentBackendInfo | null;
+  backendUsage: AgentUsageResponse | null;
+  isRefreshingUsage?: boolean;
   backendError: string | null;
   presentationMode?: "dock" | "tab" | "popup";
   onToggleHistory: () => void;
@@ -95,22 +97,15 @@ export interface AgentHeaderProps {
   onRenameSession: (sessionId: string, title: string) => void;
   onSelectViewTab: (tab: AgentViewTab) => void;
   onOpenInspectorRuntime: () => void;
+  onRefreshUsage?: () => void;
   onCloseDock?: () => void;
   onSwitchToTab?: () => void;
   onDockRight?: () => void;
 }
 
-const TOKENLENS_MODEL_MAP: Record<string, string> = {
-  "gpt-4o": "gpt-4o",
-  "claude-sonnet-4-5": "anthropic/claude-sonnet-4",
-  "gemini-2.5-pro": "google/gemini-2.5-pro",
-  "o3-mini": "o3-mini",
-  "deepseek-r1": "deepseek/deepseek-r1",
-  "qwen-2.5-coder": "qwen/qwen-2.5-coder-32b-instruct",
-};
-
-function mapModelIdForTokenLens(modelId: string): string {
-  return TOKENLENS_MODEL_MAP[modelId] ?? modelId;
+function formatCompactCount(n?: number): string {
+  if (n === undefined || !Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("en-US", { notation: "compact" }).format(n);
 }
 
 function buildConversationQuery(
@@ -154,6 +149,9 @@ export function AgentHeader({
   activeViewTab,
   isHistoryOpen,
   backendStatus,
+  backendInfo,
+  backendUsage,
+  isRefreshingUsage = false,
   backendError,
   presentationMode = "dock",
   onToggleHistory,
@@ -162,6 +160,7 @@ export function AgentHeader({
   onRenameSession,
   onSelectViewTab,
   onOpenInspectorRuntime,
+  onRefreshUsage,
   onCloseDock,
   onSwitchToTab,
   onDockRight,
@@ -251,15 +250,6 @@ export function AgentHeader({
     }
   }, [activeSession.title, messages]);
 
-  const activeModelMeta = useMemo(
-    () => DEFAULT_MODELS.find((m) => m.id === contextUsage.modelId),
-    [contextUsage.modelId]
-  );
-  const mappedTokenLensModel = useMemo(
-    () => mapModelIdForTokenLens(contextUsage.modelId),
-    [contextUsage.modelId]
-  );
-
   const selectedHarness =
     config.harnessId || backendStatus?.activeHarnessId || "common";
   const statusLabel = backendStatus
@@ -267,6 +257,29 @@ export function AgentHeader({
     : backendError
       ? "GemOps Offline"
       : "GemOps";
+
+  const quotaGroups = Array.isArray(backendUsage?.quota?.groups)
+    ? backendUsage.quota.groups
+    : [];
+  const primaryBucketPct = (() => {
+    const firstBucket = quotaGroups[0]?.buckets?.[0];
+    if (typeof firstBucket?.remaining_fraction === "number") {
+      return Math.max(0, Math.min(100, Math.round(firstBucket.remaining_fraction * 100)));
+    }
+    return null;
+  })();
+  const contextRatioPct =
+    contextUsage.maxTokens > 0 && contextUsage.usedTokens > 0
+      ? Math.min(100, (contextUsage.usedTokens / contextUsage.maxTokens) * 100)
+      : null;
+  const triggerLabel =
+    contextRatioPct !== null
+      ? `${contextRatioPct.toFixed(1)}%`
+      : primaryBucketPct !== null
+        ? `${primaryBucketPct}%`
+        : contextUsage.hasRealTokenUsage
+          ? formatCompactCount(contextUsage.usedTokens)
+          : "Usage";
 
   const statusDotClass = !backendStatus
     ? "bg-red-500"
@@ -441,39 +454,194 @@ export function AgentHeader({
             <TooltipContent side="bottom">New Agent Chat</TooltipContent>
           </Tooltip>
 
-          <Context
-            maxTokens={contextUsage.maxTokens}
-            modelId={mappedTokenLensModel}
-            usage={contextUsage.usage}
-            usedTokens={contextUsage.usedTokens}
-          >
-            <ContextTrigger className="h-7 gap-1 px-1 text-xs" />
-            <ContextContent align="end" className="w-60 max-w-[90vw]">
-              <ContextContentHeader />
-              <ContextContentBody className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
+          <HoverCard closeDelay={80} openDelay={120}>
+            <HoverCardTrigger asChild>
+              <Button
+                aria-label="GemOps usage, quota, and session context"
+                className="h-7 gap-1 px-1.5 text-xs"
+                size="xs"
+                type="button"
+                variant="ghost"
+              >
+                <ActivityIcon className="size-3.5 text-primary" />
+                <span className="agent-xs-hide font-mono text-[11px] font-medium text-muted-foreground">
+                  {triggerLabel}
+                </span>
+              </Button>
+            </HoverCardTrigger>
+            <HoverCardContent
+              align="end"
+              className="w-72 max-w-[92vw] divide-y overflow-hidden p-0"
+            >
+              <div className="flex items-center justify-between gap-2 p-3">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-foreground">
+                    GemOps Usage &amp; Runtime
+                  </div>
+                  <div className="truncate font-mono text-[10px] text-muted-foreground">
+                    {backendInfo?.version
+                      ? `${backendInfo.binary || "agy"} v${backendInfo.version}`
+                      : backendStatus
+                        ? `Harness: ${selectedHarness}`
+                        : "Waiting for GemOps"}
+                  </div>
+                </div>
+                {onRefreshUsage && (
+                  <Button
+                    aria-label="Refresh GemOps usage"
+                    className="size-6 shrink-0"
+                    disabled={isRefreshingUsage}
+                    onClick={onRefreshUsage}
+                    size="icon-xs"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <RefreshCwIcon
+                      className={cn(
+                        "size-3",
+                        isRefreshingUsage && "animate-spin"
+                      )}
+                    />
+                  </Button>
+                )}
+              </div>
+
+              <div className="space-y-1.5 p-3 text-xs">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">Model</span>
-                  <span className="font-mono font-medium">
-                    {activeModelMeta?.name ?? contextUsage.modelId}
+                  <span className="max-w-[165px] truncate font-mono font-medium">
+                    {contextUsage.modelLabel}
                   </span>
                 </div>
-                <ContextInputUsage />
-                <ContextOutputUsage />
-                <ContextReasoningUsage />
-                <ContextCacheUsage />
-              </ContextContentBody>
-              {contextUsage.usedTokens === 0 ? (
-                <ContextContentFooter>
-                  <span className="text-muted-foreground">Context ready</span>
-                  <span className="font-mono text-muted-foreground">
-                    GemOps
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Mode</span>
+                  <span className="font-mono font-medium">
+                    {contextUsage.mode}
                   </span>
-                </ContextContentFooter>
-              ) : (
-                <ContextContentFooter />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Thinking</span>
+                  <span className="font-mono font-medium capitalize">
+                    {contextUsage.effort || "default"}
+                  </span>
+                </div>
+                {backendUsage?.credits?.remaining_credits !== undefined && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">AI Credits</span>
+                    <span className="font-mono font-semibold text-primary">
+                      {String(backendUsage.credits.remaining_credits)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {contextUsage.hasRealTokenUsage && (
+                <div className="space-y-1.5 p-3 text-xs">
+                  <div className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Latest Turn Tokens
+                  </div>
+                  {contextUsage.maxTokens > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between font-mono text-[11px]">
+                        <span>{contextRatioPct?.toFixed(1)}%</span>
+                        <span className="text-muted-foreground">
+                          {formatCompactCount(contextUsage.usedTokens)} /{" "}
+                          {formatCompactCount(contextUsage.maxTokens)}
+                        </span>
+                      </div>
+                      <Progress
+                        className="h-1.5 bg-muted"
+                        value={contextRatioPct ?? 0}
+                      />
+                    </div>
+                  )}
+                  {contextUsage.inputTokens !== undefined && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Input</span>
+                      <span className="font-mono">
+                        {formatCompactCount(contextUsage.inputTokens)}
+                      </span>
+                    </div>
+                  )}
+                  {contextUsage.outputTokens !== undefined && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Output</span>
+                      <span className="font-mono">
+                        {formatCompactCount(contextUsage.outputTokens)}
+                      </span>
+                    </div>
+                  )}
+                  {contextUsage.reasoningTokens !== undefined &&
+                    contextUsage.reasoningTokens > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Thinking</span>
+                        <span className="font-mono">
+                          {formatCompactCount(contextUsage.reasoningTokens)}
+                        </span>
+                      </div>
+                    )}
+                  {contextUsage.cachedInputTokens !== undefined &&
+                    contextUsage.cachedInputTokens > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Cache Read</span>
+                        <span className="font-mono">
+                          {formatCompactCount(contextUsage.cachedInputTokens)}
+                        </span>
+                      </div>
+                    )}
+                  {contextUsage.totalTokens !== undefined && (
+                    <div className="flex items-center justify-between font-medium">
+                      <span className="text-muted-foreground">Total</span>
+                      <span className="font-mono">
+                        {formatCompactCount(contextUsage.totalTokens)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               )}
-            </ContextContent>
-          </Context>
+
+              {quotaGroups.length > 0 && (
+                <div className="max-h-52 space-y-2.5 overflow-y-auto p-3 text-xs">
+                  <div className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    AGY Quota
+                  </div>
+                  {quotaGroups.map((group) => (
+                    <div className="space-y-1.5" key={group.name}>
+                      <div className="text-[11px] font-medium text-foreground">
+                        {group.name}
+                      </div>
+                      {(group.buckets ?? []).map((bucket) => {
+                        const pct =
+                          typeof bucket.remaining_fraction === "number"
+                            ? Math.max(
+                                0,
+                                Math.min(
+                                  100,
+                                  Math.round(bucket.remaining_fraction * 100)
+                                )
+                              )
+                            : 0;
+                        return (
+                          <div className="space-y-0.5" key={bucket.id}>
+                            <div className="flex items-center justify-between gap-1 text-[11px]">
+                              <span className="truncate text-muted-foreground">
+                                {bucket.name}
+                                {bucket.window ? ` (${bucket.window})` : ""}
+                              </span>
+                              <span className="shrink-0 font-mono font-semibold">
+                                {pct}%
+                              </span>
+                            </div>
+                            <Progress className="h-1.5 bg-muted" value={pct} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </HoverCardContent>
+          </HoverCard>
 
           <OpenIn query={openInQuery}>
             <OpenInTrigger>

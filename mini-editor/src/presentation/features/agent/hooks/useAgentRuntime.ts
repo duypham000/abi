@@ -5,16 +5,15 @@ import {
   isTextUIPart,
   type DynamicToolUIPart,
   type FileUIPart,
-  type LanguageModelUsage,
 } from "ai";
 import { syncBackendToFrontend } from "@/infrastructure/agent/workspace/miniEditorWorkspaceBridge";
 import {
-  DEFAULT_MODELS,
   type AgentPersonaState,
   type AgentScenarioId,
   type AgentSession,
   type AgentUIMessage,
   type CheckpointSnapshot,
+  type GemOpsLanguageModelUsage,
   type QueueTodoItem,
   type QueuedPromptItem,
   type WorkspaceContextItem,
@@ -22,18 +21,27 @@ import {
 import {
   cancelAgentTurn,
   createAgentTransport,
+  fetchAgentAgyConfig,
   fetchAgentHarnesses,
   fetchAgentInfo,
+  fetchAgentPrompts,
   fetchAgentStatus,
+  fetchAgentUsage,
   resetAgentSession,
   resolveAgentPermission,
+  runAgentAgyCommand,
   speakText,
   stopSpeaking,
+  updateAgentAgyConfig,
   updateAgentSessionConfig,
+  type AgentAgySettingsResponse,
   type AgentBackendInfo,
   type AgentBackendSessionConfig,
   type AgentBackendStatus,
+  type AgentCustomCommandResponse,
   type AgentHarnessSummary,
+  type AgentPromptPreset,
+  type AgentUsageResponse,
 } from "@/infrastructure/agent";
 import { useAgentStore } from "../store/agentStore";
 
@@ -47,8 +55,18 @@ export interface SendPromptParams {
 export interface AgentContextUsage {
   usedTokens: number;
   maxTokens: number;
-  usage: LanguageModelUsage | undefined;
+  inputTokens?: number;
+  outputTokens?: number;
+  reasoningTokens?: number;
+  cachedInputTokens?: number;
+  totalTokens?: number;
+  cost?: unknown;
+  hasRealTokenUsage: boolean;
+  usage: GemOpsLanguageModelUsage | undefined;
   modelId: string;
+  modelLabel: string;
+  mode: string;
+  effort: string;
 }
 
 export interface MessageBranchInfo {
@@ -163,91 +181,135 @@ function mergeContextItems(
   return deduped;
 }
 
-function computeContextUsage(
+function toOptionalNumber(val: unknown): number | undefined {
+  return typeof val === "number" && Number.isFinite(val) ? val : undefined;
+}
+
+function extractRealContextUsage(
   messages: AgentUIMessage[],
-  modelId: string,
-  backendStatus?: AgentBackendStatus | null
+  selectedModelId: string,
+  selectedMode: string,
+  selectedEffort: string,
+  backendStatus?: AgentBackendStatus | null,
+  backendUsage?: AgentUsageResponse | null,
+  backendInfo?: AgentBackendInfo | null
 ): AgentContextUsage {
-  const matchedModel = DEFAULT_MODELS.find((m) => m.id === modelId);
-  const statusWindow =
-    typeof backendStatus?.lastUsage?.size === "number" &&
-    backendStatus.lastUsage.size > 0
-      ? backendStatus.lastUsage.size
-      : undefined;
-  let maxTokens =
-    statusWindow ??
-    matchedModel?.contextWindow ??
-    (modelId === "" ? 1_000_000 : 128_000);
+  let latestMsgUsage: GemOpsLanguageModelUsage | undefined;
+  let latestMsgContextWindow: number | undefined;
+  let latestMsgModelId: string | undefined;
 
-  let hasUsage = false;
-  let inputTokens = 0;
-  let noCacheTokens = 0;
-  let cacheReadTokens = 0;
-  let cacheWriteTokens = 0;
-  let outputTokens = 0;
-  let textTokens = 0;
-  let reasoningTokens = 0;
-  let totalTokens = 0;
-
-  for (const msg of messages) {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
     if (msg.role !== "assistant") continue;
+    if (!latestMsgModelId && msg.metadata?.modelId) {
+      latestMsgModelId = msg.metadata.modelId;
+    }
     if (
+      latestMsgContextWindow === undefined &&
       typeof msg.metadata?.contextWindow === "number" &&
       msg.metadata.contextWindow > 0
     ) {
-      maxTokens = msg.metadata.contextWindow;
+      latestMsgContextWindow = msg.metadata.contextWindow;
     }
-    const u = msg.metadata?.usage;
-    if (!u) continue;
-    hasUsage = true;
-
-    const msgInput = u.inputTokens ?? 0;
-    const msgOutput = u.outputTokens ?? 0;
-    const msgCacheRead =
-      u.inputTokenDetails?.cacheReadTokens ?? u.cachedInputTokens ?? 0;
-    const msgCacheWrite = u.inputTokenDetails?.cacheWriteTokens ?? 0;
-    const msgNoCache =
-      u.inputTokenDetails?.noCacheTokens ?? Math.max(0, msgInput - msgCacheRead);
-    const msgReasoning =
-      u.outputTokenDetails?.reasoningTokens ?? u.reasoningTokens ?? 0;
-    const msgText =
-      u.outputTokenDetails?.textTokens ?? Math.max(0, msgOutput - msgReasoning);
-    const msgTotal = u.totalTokens ?? msgInput + msgOutput;
-
-    inputTokens += msgInput;
-    noCacheTokens += msgNoCache;
-    cacheReadTokens += msgCacheRead;
-    cacheWriteTokens += msgCacheWrite;
-    outputTokens += msgOutput;
-    textTokens += msgText;
-    reasoningTokens += msgReasoning;
-    totalTokens += msgTotal;
+    if (msg.metadata?.usage && Object.keys(msg.metadata.usage).length > 0) {
+      latestMsgUsage = msg.metadata.usage;
+      break;
+    }
   }
 
-  const aggregatedUsage: LanguageModelUsage | undefined = hasUsage
-    ? {
-      inputTokens,
-      inputTokenDetails: {
-        noCacheTokens,
-        cacheReadTokens,
-        cacheWriteTokens,
-      },
-      outputTokens,
-      outputTokenDetails: {
-        textTokens,
-        reasoningTokens,
-      },
-      totalTokens,
-      cachedInputTokens: cacheReadTokens,
-      reasoningTokens,
-    }
-    : undefined;
+  const statusUsage =
+    backendStatus?.lastUsage && Object.keys(backendStatus.lastUsage).length > 0
+      ? (backendStatus.lastUsage as GemOpsLanguageModelUsage)
+      : undefined;
+
+  const rawUsage = latestMsgUsage ?? statusUsage;
+
+  const inputTokens = toOptionalNumber(
+    rawUsage?.inputTokens ?? rawUsage?.input_tokens
+  );
+  const outputTokens = toOptionalNumber(
+    rawUsage?.outputTokens ?? rawUsage?.output_tokens
+  );
+  const reasoningTokens = toOptionalNumber(
+    rawUsage?.reasoningTokens ??
+      rawUsage?.thinkingTokens ??
+      rawUsage?.thinking_tokens ??
+      rawUsage?.reasoning_tokens
+  );
+  const cachedInputTokens = toOptionalNumber(
+    rawUsage?.cachedInputTokens ??
+      rawUsage?.cacheReadTokens ??
+      rawUsage?.cache_read_tokens
+  );
+  const totalTokens = toOptionalNumber(
+    rawUsage?.totalTokens ?? rawUsage?.total_tokens
+  );
+  const usedFromRaw = toOptionalNumber(rawUsage?.used);
+  const maxTokens =
+    latestMsgContextWindow ??
+    toOptionalNumber(
+      rawUsage?.size ??
+        rawUsage?.contextWindow ??
+        rawUsage?.context_window ??
+        rawUsage?.maxTokens ??
+        rawUsage?.max_tokens
+    ) ??
+    0;
+
+  const hasRealTokenUsage =
+    inputTokens !== undefined ||
+    outputTokens !== undefined ||
+    reasoningTokens !== undefined ||
+    cachedInputTokens !== undefined ||
+    totalTokens !== undefined ||
+    usedFromRaw !== undefined;
+
+  const usedTokens =
+    usedFromRaw ??
+    totalTokens ??
+    ((inputTokens ?? 0) + (outputTokens ?? 0));
+
+  const resolvedModelId =
+    selectedModelId ||
+    latestMsgModelId ||
+    backendStatus?.sessionConfig?.model ||
+    backendUsage?.currentModel?.id ||
+    "";
+
+  const matchedInfoModel = backendInfo?.models?.find(
+    (m) => m.id === resolvedModelId
+  );
+  const resolvedModelLabel =
+    matchedInfoModel?.label ||
+    (backendUsage?.currentModel?.id === resolvedModelId || !selectedModelId
+      ? backendUsage?.currentModel?.label
+      : undefined) ||
+    resolvedModelId ||
+    "Server Default";
+
+  const resolvedMode =
+    selectedMode || backendStatus?.sessionConfig?.mode || "default";
+  const resolvedEffort =
+    (selectedEffort && selectedEffort !== "off" ? selectedEffort : "") ||
+    backendStatus?.sessionConfig?.effort ||
+    backendUsage?.currentEffort?.current ||
+    "";
 
   return {
-    usedTokens: totalTokens,
+    usedTokens,
     maxTokens,
-    usage: aggregatedUsage,
-    modelId,
+    inputTokens,
+    outputTokens,
+    reasoningTokens,
+    cachedInputTokens,
+    totalTokens,
+    cost: rawUsage?.cost,
+    hasRealTokenUsage,
+    usage: rawUsage,
+    modelId: resolvedModelId,
+    modelLabel: resolvedModelLabel,
+    mode: resolvedMode,
+    effort: resolvedEffort,
   };
 }
 
@@ -355,9 +417,31 @@ export function useAgentRuntime() {
 
   const [backendStatus, setBackendStatus] = useState<AgentBackendStatus | null>(null);
   const [backendInfo, setBackendInfo] = useState<AgentBackendInfo | null>(null);
+  const [backendUsage, setBackendUsage] = useState<AgentUsageResponse | null>(null);
+  const [backendPrompts, setBackendPrompts] = useState<AgentPromptPreset[]>([]);
+  const [backendAgyConfig, setBackendAgyConfig] =
+    useState<AgentAgySettingsResponse | null>(null);
   const [harnesses, setHarnesses] = useState<AgentHarnessSummary[]>([]);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [isRefreshingMeta, setIsRefreshingMeta] = useState(false);
+  const [isRefreshingUsage, setIsRefreshingUsage] = useState(false);
+
+  const refreshAgentUsage = useCallback(async () => {
+    const currentCfg = useAgentStore.getState().config;
+    const opts = {
+      apiEndpoint: currentCfg.apiEndpoint,
+      apiKey: currentCfg.apiKey,
+    };
+    setIsRefreshingUsage(true);
+    try {
+      const usageRes = await fetchAgentUsage(opts);
+      setBackendUsage(usageRes);
+    } catch {
+      // keep previous usage if /agy/usage fails transiently
+    } finally {
+      setIsRefreshingUsage(false);
+    }
+  }, []);
 
   const refreshBackendMeta = useCallback(async () => {
     const currentCfg = useAgentStore.getState().config;
@@ -367,17 +451,23 @@ export function useAgentRuntime() {
     };
     setIsRefreshingMeta(true);
     try {
-      const [statusRes, infoRes, harnessesRes] = await Promise.allSettled([
-        fetchAgentStatus(opts),
-        fetchAgentInfo(opts),
-        fetchAgentHarnesses(opts),
-      ]);
+      const [statusRes, infoRes, harnessesRes, promptsRes, agyCfgRes] =
+        await Promise.allSettled([
+          fetchAgentStatus(opts),
+          fetchAgentInfo(opts),
+          fetchAgentHarnesses(opts),
+          fetchAgentPrompts(opts),
+          fetchAgentAgyConfig(opts),
+        ]);
 
       let firstErr: string | null = null;
       if (statusRes.status === "fulfilled") {
         setBackendStatus(statusRes.value);
       } else {
-        firstErr = statusRes.reason instanceof Error ? statusRes.reason.message : "Status unavailable";
+        firstErr =
+          statusRes.reason instanceof Error
+            ? statusRes.reason.message
+            : "Status unavailable";
       }
       if (infoRes.status === "fulfilled") {
         setBackendInfo(infoRes.value);
@@ -392,12 +482,26 @@ export function useAgentRuntime() {
           store.setSessionModel(activeSessionIdRef.current, "");
         }
       } else if (!firstErr) {
-        firstErr = infoRes.reason instanceof Error ? infoRes.reason.message : "Info unavailable";
+        firstErr =
+          infoRes.reason instanceof Error
+            ? infoRes.reason.message
+            : "Info unavailable";
       }
       if (harnessesRes.status === "fulfilled") {
         setHarnesses(harnessesRes.value.items ?? []);
       } else if (!firstErr) {
-        firstErr = harnessesRes.reason instanceof Error ? harnessesRes.reason.message : "Harnesses unavailable";
+        firstErr =
+          harnessesRes.reason instanceof Error
+            ? harnessesRes.reason.message
+            : "Harnesses unavailable";
+      }
+      if (promptsRes.status === "fulfilled") {
+        setBackendPrompts(
+          Array.isArray(promptsRes.value?.items) ? promptsRes.value.items : []
+        );
+      }
+      if (agyCfgRes.status === "fulfilled") {
+        setBackendAgyConfig(agyCfgRes.value);
       }
       setBackendError(firstErr);
     } finally {
@@ -408,7 +512,8 @@ export function useAgentRuntime() {
   useEffect(() => {
     if (!hydrated) return;
     void refreshBackendMeta();
-  }, [hydrated, config.apiEndpoint, refreshBackendMeta]);
+    void refreshAgentUsage();
+  }, [hydrated, config.apiEndpoint, refreshBackendMeta, refreshAgentUsage]);
 
   const {
     messages,
@@ -1123,6 +1228,41 @@ export function useAgentRuntime() {
     [refreshBackendMeta]
   );
 
+  const saveAgyConfig = useCallback(
+    async (settingsPatch: Record<string, unknown>) => {
+      const currentCfg = useAgentStore.getState().config;
+      const updated = await updateAgentAgyConfig(settingsPatch, {
+        apiEndpoint: currentCfg.apiEndpoint,
+        apiKey: currentCfg.apiKey,
+      });
+      setBackendAgyConfig(updated);
+      return updated;
+    },
+    []
+  );
+
+  const executeAgyCommand = useCallback(
+    async (req: {
+      mode?: "slash" | "cli";
+      command: string;
+      harnessId?: string;
+    }): Promise<AgentCustomCommandResponse> => {
+      const currentCfg = useAgentStore.getState().config;
+      return runAgentAgyCommand(
+        {
+          mode: req.mode,
+          command: req.command,
+          harnessId: req.harnessId || currentCfg.harnessId || undefined,
+        },
+        {
+          apiEndpoint: currentCfg.apiEndpoint,
+          apiKey: currentCfg.apiKey,
+        }
+      );
+    },
+    []
+  );
+
   const getBranchInfoForMessage = useCallback(
     (messageId: string): MessageBranchInfo | null => {
       const idx = messages.findIndex((msg) => msg.id === messageId);
@@ -1167,8 +1307,26 @@ export function useAgentRuntime() {
 
   const effectiveModelId = activeSession.modelId || config.modelId;
   const contextUsage = useMemo(
-    () => computeContextUsage(messages, effectiveModelId, backendStatus),
-    [messages, effectiveModelId, backendStatus]
+    () =>
+      extractRealContextUsage(
+        messages,
+        effectiveModelId,
+        activeSession.mode || config.mode,
+        config.reasoningEffort,
+        backendStatus,
+        backendUsage,
+        backendInfo
+      ),
+    [
+      messages,
+      effectiveModelId,
+      activeSession.mode,
+      config.mode,
+      config.reasoningEffort,
+      backendStatus,
+      backendUsage,
+      backendInfo,
+    ]
   );
 
   const sessionTodos: QueueTodoItem[] = activeSession.todos;
@@ -1208,11 +1366,18 @@ export function useAgentRuntime() {
     workflowGraph: null,
     backendStatus,
     backendInfo,
+    backendUsage,
+    backendPrompts,
+    backendAgyConfig,
     harnesses,
     backendError,
     isRefreshingMeta,
+    isRefreshingUsage,
     refreshBackendMeta,
+    refreshAgentUsage,
     resetBackendSession,
     applySessionConfig,
+    saveAgyConfig,
+    executeAgyCommand,
   };
 }

@@ -274,15 +274,22 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 
 	var sessionCfg *dto.GemOpsSessionConfig
 	var requestedModelID string
+	var requestedMode string
+	var requestedEffort string
 	if req.AgentConfig != nil {
 		requestedModelID = normalizeGemOpsModel(req.AgentConfig.ModelID)
+		requestedEffort = normalizeGemOpsEffort(req.AgentConfig.ReasoningEffort)
+		requestedMode = normalizeGemOpsMode(req.AgentConfig.Mode)
 		mapped := dto.GemOpsSessionConfig{
 			Model:              requestedModelID,
-			Effort:             normalizeGemOpsEffort(req.AgentConfig.ReasoningEffort),
-			Mode:               normalizeGemOpsMode(req.AgentConfig.Mode),
+			Effort:             requestedEffort,
+			Mode:               requestedMode,
+			SystemPromptID:     strings.TrimSpace(req.AgentConfig.SystemPromptID),
 			SystemPromptAppend: strings.TrimSpace(req.AgentConfig.SystemPromptAppend),
+			ReplaceDefaultRule: req.AgentConfig.ReplaceDefaultRule,
 		}
-		if mapped.Model != "" || mapped.Effort != "" || mapped.Mode != "" || mapped.SystemPromptAppend != "" {
+		if mapped.Model != "" || mapped.Effort != "" || mapped.Mode != "" ||
+			mapped.SystemPromptID != "" || mapped.SystemPromptAppend != "" || mapped.ReplaceDefaultRule {
 			sessionCfg = &mapped
 		}
 	}
@@ -371,17 +378,28 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 
 	acceptedTurnID := promptResp.TurnID
 	startTime := time.Now()
-	if requestedModelID == "" && harnessID != "" {
-		requestedModelID = harnessID
+	resolvedHarnessID := firstNonEmptyString(promptResp.HarnessID, harnessID)
+
+	startMeta := map[string]interface{}{
+		"createdAt": startTime.UTC().Format(time.RFC3339),
+	}
+	if requestedModelID != "" {
+		startMeta["modelId"] = requestedModelID
+	}
+	if resolvedHarnessID != "" {
+		startMeta["harnessId"] = resolvedHarnessID
+	}
+	if requestedMode != "" {
+		startMeta["mode"] = requestedMode
+	}
+	if requestedEffort != "" {
+		startMeta["effort"] = requestedEffort
 	}
 
 	if err := emit(map[string]interface{}{
-		"type":      "start",
-		"messageId": "msg-" + acceptedTurnID,
-		"messageMetadata": map[string]interface{}{
-			"createdAt": startTime.UTC().Format(time.RFC3339),
-			"modelId":   requestedModelID,
-		},
+		"type":            "start",
+		"messageId":       "msg-" + acceptedTurnID,
+		"messageMetadata": startMeta,
 	}); err != nil {
 		return err
 	}
@@ -392,6 +410,9 @@ func (s *AgentService) StreamChat(ctx context.Context, req dto.ChatRequest, acto
 	state := &streamTranslator{
 		acceptedTurnID:      acceptedTurnID,
 		modelID:             requestedModelID,
+		harnessID:           resolvedHarnessID,
+		mode:                requestedMode,
+		effort:              requestedEffort,
 		startTime:           startTime,
 		emit:                emit,
 		emittedTools:        make(map[string]bool),
@@ -547,6 +568,9 @@ func (s *AgentService) reconnectEventStream(
 type streamTranslator struct {
 	acceptedTurnID string
 	modelID        string
+	harnessID      string
+	mode           string
+	effort         string
 	startTime      time.Time
 	emit           ChunkEmitter
 
@@ -621,6 +645,15 @@ func (t *streamTranslator) buildFinishChunk(finishReason, finishDetail string) m
 	}
 	if t.modelID != "" {
 		meta["modelId"] = t.modelID
+	}
+	if t.harnessID != "" {
+		meta["harnessId"] = t.harnessID
+	}
+	if t.mode != "" {
+		meta["mode"] = t.mode
+	}
+	if t.effort != "" {
+		meta["effort"] = t.effort
 	}
 	if finishDetail != "" {
 		meta["stopReason"] = finishDetail
@@ -732,6 +765,16 @@ func (t *streamTranslator) handleEvent(ev *dto.GemOpsEvent) (bool, error) {
 			if cw := extractContextWindow(rawUsage); cw > 0 {
 				t.lastContextWindow = cw
 			}
+			meta := map[string]interface{}{
+				"usage": t.lastUsage,
+			}
+			if t.lastContextWindow > 0 {
+				meta["contextWindow"] = t.lastContextWindow
+			}
+			return false, t.emit(map[string]interface{}{
+				"type":            "message-metadata",
+				"messageMetadata": meta,
+			})
 		}
 		return false, nil
 
@@ -1008,8 +1051,7 @@ func buildPromptText(req dto.ChatRequest) string {
 func normalizeGemOpsModel(model string) string {
 	trimmed := strings.TrimSpace(model)
 	switch strings.ToLower(trimmed) {
-	case "", "default", "auto", "server-default",
-		"gpt-4o", "claude-sonnet-4-5", "gemini-2.5-pro", "o3-mini", "deepseek-r1", "qwen-2.5-coder":
+	case "", "default", "auto", "server-default":
 		return ""
 	default:
 		return trimmed
@@ -1017,62 +1059,60 @@ func normalizeGemOpsModel(model string) string {
 }
 
 func normalizeGemOpsMode(mode string) string {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
+	trimmed := strings.ToLower(strings.TrimSpace(mode))
+	switch trimmed {
 	case "":
 		return ""
-	case "agent", "ask", "debug", "default":
+	case "agent", "ask", "debug":
 		return "default"
-	case "accept-edits", "auto", "plan":
-		return strings.ToLower(strings.TrimSpace(mode))
 	default:
-		return strings.ToLower(strings.TrimSpace(mode))
+		return trimmed
 	}
 }
 
 func normalizeGemOpsEffort(effort string) string {
-	switch strings.ToLower(strings.TrimSpace(effort)) {
-	case "", "off":
+	trimmed := strings.ToLower(strings.TrimSpace(effort))
+	switch trimmed {
+	case "", "off", "default":
 		return ""
-	case "low", "medium", "high", "xhigh", "max":
-		return strings.ToLower(strings.TrimSpace(effort))
 	default:
-		return ""
+		return trimmed
 	}
 }
 
 func normalizeUsage(raw map[string]interface{}) map[string]interface{} {
-	inTokens := numberFromMap(raw, "inputTokens", "input_tokens", "used")
-	outTokens := numberFromMap(raw, "outputTokens", "output_tokens")
-	reasoningTokens := numberFromMap(raw, "thinkingTokens", "thinking_tokens", "reasoningTokens", "reasoning_tokens")
-	cacheReadTokens := numberFromMap(raw, "cacheReadTokens", "cache_read_tokens", "cachedInputTokens")
-	totalTokens := numberFromMap(raw, "totalTokens", "total_tokens")
-	if totalTokens == 0 && (inTokens > 0 || outTokens > 0) {
-		totalTokens = inTokens + outTokens
+	if raw == nil {
+		return nil
 	}
-	noCache := inTokens - cacheReadTokens
-	if noCache < 0 {
-		noCache = 0
+	out := make(map[string]interface{}, len(raw)+6)
+	for k, v := range raw {
+		out[k] = v
 	}
-	textTokens := outTokens - reasoningTokens
-	if textTokens < 0 {
-		textTokens = 0
+
+	if inTokens, ok := optionalNumberFromMap(raw, "inputTokens", "input_tokens"); ok {
+		out["inputTokens"] = inTokens
 	}
-	return map[string]interface{}{
-		"inputTokens": inTokens,
-		"inputTokenDetails": map[string]interface{}{
-			"noCacheTokens":    noCache,
-			"cacheReadTokens":  cacheReadTokens,
-			"cacheWriteTokens": 0,
-		},
-		"outputTokens": outTokens,
-		"outputTokenDetails": map[string]interface{}{
-			"textTokens":      textTokens,
-			"reasoningTokens": reasoningTokens,
-		},
-		"totalTokens":       totalTokens,
-		"cachedInputTokens": cacheReadTokens,
-		"reasoningTokens":   reasoningTokens,
+	if outTokens, ok := optionalNumberFromMap(raw, "outputTokens", "output_tokens"); ok {
+		out["outputTokens"] = outTokens
 	}
+	if reasoningTokens, ok := optionalNumberFromMap(raw, "thinkingTokens", "thinking_tokens", "reasoningTokens", "reasoning_tokens"); ok {
+		out["reasoningTokens"] = reasoningTokens
+		out["thinkingTokens"] = reasoningTokens
+	}
+	if cacheReadTokens, ok := optionalNumberFromMap(raw, "cacheReadTokens", "cache_read_tokens", "cachedInputTokens"); ok {
+		out["cachedInputTokens"] = cacheReadTokens
+		out["cacheReadTokens"] = cacheReadTokens
+	}
+	if totalTokens, ok := optionalNumberFromMap(raw, "totalTokens", "total_tokens"); ok {
+		out["totalTokens"] = totalTokens
+	}
+	if used, ok := optionalNumberFromMap(raw, "used"); ok {
+		out["used"] = used
+	}
+	if size, ok := optionalNumberFromMap(raw, "size", "contextWindow", "context_window", "maxTokens", "max_tokens"); ok {
+		out["size"] = size
+	}
+	return out
 }
 
 func extractContextWindow(raw map[string]interface{}) int64 {
@@ -1118,7 +1158,7 @@ func isTextLikeMediaType(mediaType string) bool {
 	}
 }
 
-func numberFromMap(m map[string]interface{}, keys ...string) int64 {
+func optionalNumberFromMap(m map[string]interface{}, keys ...string) (int64, bool) {
 	for _, k := range keys {
 		v, ok := m[k]
 		if !ok || v == nil {
@@ -1126,14 +1166,19 @@ func numberFromMap(m map[string]interface{}, keys ...string) int64 {
 		}
 		switch n := v.(type) {
 		case float64:
-			return int64(n)
+			return int64(n), true
 		case int64:
-			return n
+			return n, true
 		case int:
-			return int64(n)
+			return int64(n), true
 		}
 	}
-	return 0
+	return 0, false
+}
+
+func numberFromMap(m map[string]interface{}, keys ...string) int64 {
+	n, _ := optionalNumberFromMap(m, keys...)
+	return n
 }
 
 func extractRawUpdateMap(rawVal interface{}) map[string]interface{} {

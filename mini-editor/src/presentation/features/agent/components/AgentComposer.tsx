@@ -88,6 +88,8 @@ import {
   listWorkspaceContextItems,
   startSpeechDictation,
   type AgentBackendInfo,
+  type AgentBackendStatus,
+  type AgentUsageResponse,
 } from "@/infrastructure/agent";
 import { cn } from "@/lib/utils";
 import type { ChatStatus } from "ai";
@@ -135,6 +137,8 @@ export interface AgentComposerProps {
   sessionQueue: QueuedPromptItem[];
   pendingAskAI: AskAIRequest | null;
   backendInfo: AgentBackendInfo | null;
+  backendStatus?: AgentBackendStatus | null;
+  backendUsage?: AgentUsageResponse | null;
   onSendPrompt: (params: SendPromptParams) => Promise<void>;
   onStop: () => void | Promise<void>;
   onSetMode: (mode: AgentMode) => void;
@@ -174,21 +178,12 @@ const SLASH_COMMANDS: SlashCommandItem[] = [
   },
 ];
 
-const FALLBACK_MODES = ["default", "accept-edits", "auto", "plan"];
 const MODE_LABELS: Record<string, string> = {
   default: "Default",
   "accept-edits": "Accept Edits",
   auto: "Auto",
   plan: "Plan",
 };
-
-const FALLBACK_MODELS = [
-  { id: "gemini-4-neon-medium", label: "Gemini 4 Neon (Medium)" },
-  { id: "gemini-4-neon-high", label: "Gemini 4 Neon (High)" },
-  { id: "gemini-3.8-flash-medium", label: "Gemini 3.8 Flash (Medium)" },
-];
-
-const REASONING_ORDER: ReasoningEffort[] = ["off", "low", "medium", "high"];
 
 function inferProvider(modelId: string): string {
   const lower = modelId.toLowerCase();
@@ -223,6 +218,8 @@ function ComposerInner({
   sessionQueue,
   pendingAskAI,
   backendInfo,
+  backendStatus,
+  backendUsage,
   onSendPrompt,
   onStop,
   onSetMode,
@@ -438,53 +435,90 @@ function ComposerInner({
     });
   }, [controller, isVoiceListening, onSetVoiceListening, speechLang]);
 
+  const defaultModelLabel = useMemo(() => {
+    const serverLabel =
+      backendUsage?.currentModel?.label ||
+      backendUsage?.currentModel?.id ||
+      backendStatus?.sessionConfig?.model;
+    return serverLabel ? `Default (${serverLabel})` : "Default (Server)";
+  }, [backendUsage?.currentModel, backendStatus?.sessionConfig?.model]);
+
   const availableModels = useMemo(() => {
-    const raw = backendInfo?.models?.length ? backendInfo.models : FALLBACK_MODELS;
-    return [
-      { id: "", name: "Default (Server)", provider: "google" },
-      ...raw.map((m) => ({
+    const raw = backendInfo?.models ?? [];
+    const seen = new Set<string>([""]);
+    const list = [{ id: "", name: defaultModelLabel, provider: "google" }];
+    for (const m of raw) {
+      if (!m?.id || seen.has(m.id)) continue;
+      seen.add(m.id);
+      list.push({
         id: m.id,
         name: m.label || m.id,
         provider: inferProvider(m.id),
-      })),
-    ];
-  }, [backendInfo?.models]);
+      });
+    }
+    const currentServerId = backendUsage?.currentModel?.id;
+    if (currentServerId && !seen.has(currentServerId)) {
+      seen.add(currentServerId);
+      list.push({
+        id: currentServerId,
+        name: backendUsage?.currentModel?.label || currentServerId,
+        provider: inferProvider(currentServerId),
+      });
+    }
+    return list;
+  }, [backendInfo?.models, backendUsage?.currentModel, defaultModelLabel]);
 
   const activeModel = useMemo(
     () =>
       availableModels.find((m) => m.id === modelId) ?? {
         id: modelId,
-        name: modelId || "Default (Server)",
+        name: modelId || defaultModelLabel,
         provider: inferProvider(modelId),
       },
-    [availableModels, modelId]
+    [availableModels, modelId, defaultModelLabel]
   );
 
-  const availableModes = useMemo(
-    () => (backendInfo?.modes?.length ? backendInfo.modes : FALLBACK_MODES),
-    [backendInfo?.modes]
-  );
+  const availableModes = useMemo(() => {
+    if (backendInfo?.modes?.length) return backendInfo.modes;
+    const statusMode = backendStatus?.sessionConfig?.mode;
+    return statusMode && statusMode !== "default"
+      ? ["default", statusMode]
+      : ["default"];
+  }, [backendInfo?.modes, backendStatus?.sessionConfig?.mode]);
 
   const normalizedModeValue = useMemo(() => {
-    const raw = String(mode);
+    const raw = String(mode || backendStatus?.sessionConfig?.mode || "default");
     if (availableModes.includes(raw)) return raw;
     return availableModes[0] ?? "default";
-  }, [mode, availableModes]);
+  }, [mode, backendStatus?.sessionConfig?.mode, availableModes]);
 
-  const reasoningOrder = useMemo<ReasoningEffort[]>(() => {
-    const serverEfforts = (backendInfo?.efforts ?? []).filter(
-      (e): e is ReasoningEffort =>
-        ["low", "medium", "high", "xhigh", "max"].includes(e)
-    );
-    return [
-      "off",
-      ...(serverEfforts.length > 0 ? serverEfforts : REASONING_ORDER.slice(1)),
-    ];
-  }, [backendInfo?.efforts]);
+  const effortAdjustable = backendUsage?.currentEffort?.adjustable !== false;
+  const serverDefaultEffort =
+    backendUsage?.currentEffort?.current ||
+    backendStatus?.sessionConfig?.effort ||
+    "";
+
+  const availableEfforts = useMemo(() => {
+    const fromUsage = backendUsage?.currentEffort?.available ?? [];
+    const fromInfo = backendInfo?.efforts ?? [];
+    const raw = fromUsage.length > 0 ? fromUsage : fromInfo;
+    return raw.filter((e): e is ReasoningEffort => Boolean(e && e.trim()));
+  }, [backendUsage?.currentEffort?.available, backendInfo?.efforts]);
+
+  const reasoningOrder = useMemo<ReasoningEffort[]>(
+    () => ["", ...availableEfforts],
+    [availableEfforts]
+  );
+
+  const normalizedEffortValue = useMemo(() => {
+    if (!reasoningEffort || reasoningEffort === "off") return "__default__";
+    return reasoningEffort;
+  }, [reasoningEffort]);
 
   const nextReasoningEffort = useMemo(() => {
-    const idx = reasoningOrder.indexOf(reasoningEffort);
-    return reasoningOrder[(idx + 1) % reasoningOrder.length];
+    const cur = reasoningEffort === "off" ? "" : reasoningEffort;
+    const idx = reasoningOrder.indexOf(cur);
+    return reasoningOrder[(idx + 1) % reasoningOrder.length] ?? "";
   }, [reasoningEffort, reasoningOrder]);
 
   const isGenerating = status === "submitted" || status === "streaming";
@@ -784,12 +818,15 @@ function ComposerInner({
                     Session Commands (/)
                   </PromptInputActionMenuItem>
                   <PromptInputActionMenuItem
+                    disabled={!effortAdjustable}
                     onSelect={() => onCycleReasoningEffort(nextReasoningEffort)}
                   >
                     <BrainIcon className="mr-2 size-4 text-primary" />
-                    Reasoning Effort
+                    Thinking Effort
                     <Badge className="ml-auto px-1.5 py-0 text-[10px] capitalize" variant="secondary">
-                      {reasoningEffort}
+                      {reasoningEffort && reasoningEffort !== "off"
+                        ? reasoningEffort
+                        : serverDefaultEffort || "default"}
                     </Badge>
                   </PromptInputActionMenuItem>
                 </PromptInputActionMenuContent>
@@ -862,19 +899,53 @@ function ComposerInner({
               </PromptInputSelect>
 
               <span className="agent-xs-hide">
-                <PromptInputButton
-                  className={cn(
-                    "h-7 shrink-0 gap-1 px-1.5 text-[11px]",
-                    reasoningEffort !== "off" && "bg-primary/12 text-primary"
-                  )}
-                  onClick={() => onCycleReasoningEffort(nextReasoningEffort)}
-                  size="sm"
-                  tooltip={`Reasoning Effort: ${reasoningEffort} (click to cycle)`}
-                  variant={reasoningEffort !== "off" ? "secondary" : "ghost"}
+                <PromptInputSelect
+                  disabled={!effortAdjustable}
+                  onValueChange={(val) =>
+                    onCycleReasoningEffort(
+                      (val === "__default__" ? "" : val) as ReasoningEffort
+                    )
+                  }
+                  value={normalizedEffortValue}
                 >
-                  <BrainIcon className="size-3.5 shrink-0" />
-                  <span className="agent-wide-only capitalize">{reasoningEffort}</span>
-                </PromptInputButton>
+                  <PromptInputSelectTrigger
+                    aria-label="Thinking effort"
+                    className={cn(
+                      "h-7 w-auto shrink-0 gap-1 px-1.5 text-[11px]",
+                      normalizedEffortValue !== "__default__" &&
+                      "bg-primary/12 text-primary"
+                    )}
+                    size="sm"
+                    title={
+                      effortAdjustable
+                        ? `Thinking Effort: ${normalizedEffortValue === "__default__" ? serverDefaultEffort || "default" : normalizedEffortValue}`
+                        : `Thinking Effort locked by model (${serverDefaultEffort || "fixed"})`
+                    }
+                  >
+                    <BrainIcon className="size-3.5 shrink-0" />
+                    <span className="agent-wide-only capitalize">
+                      {normalizedEffortValue === "__default__"
+                        ? serverDefaultEffort
+                          ? `${serverDefaultEffort} (auto)`
+                          : "Default"
+                        : normalizedEffortValue}
+                    </span>
+                  </PromptInputSelectTrigger>
+                  <PromptInputSelectContent>
+                    <PromptInputSelectItem value="__default__">
+                      <span className="font-medium">
+                        {serverDefaultEffort
+                          ? `Default (${serverDefaultEffort})`
+                          : "Default (Server)"}
+                      </span>
+                    </PromptInputSelectItem>
+                    {availableEfforts.map((eff) => (
+                      <PromptInputSelectItem key={eff} value={eff}>
+                        <span className="font-medium capitalize">{eff}</span>
+                      </PromptInputSelectItem>
+                    ))}
+                  </PromptInputSelectContent>
+                </PromptInputSelect>
               </span>
 
               <span className="agent-sm-only">
@@ -959,9 +1030,9 @@ function ComposerInner({
                                     device.label
                                       ? device
                                       : ({
-                                          ...device,
-                                          label: `Microphone ${index + 1}`,
-                                        } as MediaDeviceInfo)
+                                        ...device,
+                                        label: `Microphone ${index + 1}`,
+                                      } as MediaDeviceInfo)
                                   }
                                 />
                               </MicSelectorItem>
@@ -997,7 +1068,7 @@ function ComposerInner({
                   className={cn(
                     "size-7 shrink-0 rounded-full",
                     isVoiceListening &&
-                      "bg-destructive text-white hover:bg-destructive/90"
+                    "bg-destructive text-white hover:bg-destructive/90"
                   )}
                   onClick={handleFallbackDictationToggle}
                   size="icon-sm"

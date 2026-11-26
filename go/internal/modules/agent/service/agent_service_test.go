@@ -126,7 +126,14 @@ func newFakeGemOpsServer(onPrompt func(s *fakeGemOpsServer, turnID string)) *fak
 			"activeConversationId": "sess_conv_1",
 			"count":                1,
 			"sessions": []dto.GemOpsSessionInfo{
-				{ConversationID: "sess_conv_1", HarnessID: "abi", Turns: 2, EstimatedChars: 420},
+				{
+					Key:            "abi::sess_conv_1",
+					ConversationID: "sess_conv_1",
+					HarnessID:      "abi",
+					SessionID:      "acp_sess_1",
+					TurnCount:      2,
+					SessionConfig:  &dto.GemOpsSessionConfig{Model: "gemini-4-neon-medium", Mode: "plan", Effort: "high"},
+				},
 			},
 		})
 	})
@@ -145,7 +152,14 @@ func newFakeGemOpsServer(onPrompt func(s *fakeGemOpsServer, turnID string)) *fak
 			ActiveConversationID: "sess_conv_1",
 			SessionsCount:        1,
 			Sessions: []dto.GemOpsSessionInfo{
-				{ConversationID: "sess_conv_1", HarnessID: "abi", Turns: 2, EstimatedChars: 420},
+				{
+					Key:            "abi::sess_conv_1",
+					ConversationID: "sess_conv_1",
+					HarnessID:      "abi",
+					SessionID:      "acp_sess_1",
+					TurnCount:      2,
+					SessionConfig:  &dto.GemOpsSessionConfig{Model: "gemini-4-neon-medium", Mode: "plan", Effort: "high"},
+				},
 			},
 			GeminiPID:   1234,
 			GeminiRSSMB: 95,
@@ -297,6 +311,7 @@ func TestStreamChat_TextReasoningToolUsage(t *testing.T) {
 		"text-start",
 		"text-delta",
 		"text-delta",
+		"message-metadata",
 		"text-end",
 		"finish-step",
 		"finish",
@@ -310,8 +325,14 @@ func TestStreamChat_TextReasoningToolUsage(t *testing.T) {
 	if usage["totalTokens"] != int64(150) {
 		t.Fatalf("expected totalTokens=150, got %#v", usage["totalTokens"])
 	}
+	if _, hasFabricatedNoCache := usage["inputTokenDetails"]; hasFabricatedNoCache {
+		t.Fatalf("expected no fabricated inputTokenDetails, got %#v", usage["inputTokenDetails"])
+	}
 	if meta["contextWindow"] != int64(1048576) {
 		t.Fatalf("expected contextWindow=1048576, got %#v", meta["contextWindow"])
+	}
+	if meta["harnessId"] != "common" {
+		t.Fatalf("expected harnessId='common', got %#v", meta["harnessId"])
 	}
 }
 
@@ -387,8 +408,9 @@ func TestAgentService_SessionsAndResetFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetStatus failed: %v", err)
 	}
-	if st.SessionsCount != 1 || len(st.Sessions) != 1 || st.Sessions[0].ConversationID != "sess_conv_1" {
-		t.Fatalf("expected status.sessions preserved, got %+v", st)
+	if st.SessionsCount != 1 || len(st.Sessions) != 1 || st.Sessions[0].ConversationID != "sess_conv_1" ||
+		st.Sessions[0].TurnCount != 2 || st.Sessions[0].SessionID != "acp_sess_1" || st.Sessions[0].SessionConfig == nil {
+		t.Fatalf("expected status.sessions preserved with turnCount/sessionId/sessionConfig, got %+v", st)
 	}
 
 	if _, err := svc.Reset(context.Background(), true, true, "abi", "sess_conv_1"); err != nil {

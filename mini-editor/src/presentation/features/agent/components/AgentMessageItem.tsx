@@ -617,6 +617,16 @@ export const AgentMessageItem = memo(function AgentMessageItem({
             {message.metadata.modelId}
           </Badge>
         )}
+        {message.metadata?.effort && (
+          <Badge className="font-mono text-[10px] capitalize" variant="secondary">
+            {message.metadata.effort}
+          </Badge>
+        )}
+        {message.metadata?.mode && message.metadata.mode !== "default" && (
+          <Badge className="font-mono text-[10px]" variant="secondary">
+            {message.metadata.mode}
+          </Badge>
+        )}
         {formattedTime && (
           <span className="text-[11px] text-muted-foreground">
             {formattedTime}

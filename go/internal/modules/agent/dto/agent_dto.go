@@ -36,7 +36,9 @@ type ClientAgentConfig struct {
 	Mode               string          `json:"mode,omitempty"`
 	ReasoningEffort    string          `json:"reasoningEffort,omitempty"`
 	HarnessID          string          `json:"harnessId,omitempty"`
+	SystemPromptID     string          `json:"systemPromptId,omitempty"`
 	SystemPromptAppend string          `json:"systemPromptAppend,omitempty"`
+	ReplaceDefaultRule bool            `json:"replaceDefaultRule,omitempty"`
 	ApprovalPolicy     string          `json:"approvalPolicy,omitempty"`
 	ToolPermissions    map[string]bool `json:"toolPermissions,omitempty"`
 }
@@ -90,6 +92,7 @@ type GemOpsSavePromptRequest struct {
 
 // GemOpsCustomCommandRequest is sent to gemops POST /agy/command.
 type GemOpsCustomCommandRequest struct {
+	Mode       string   `json:"mode,omitempty"`
 	Command    string   `json:"command"`
 	Args       []string `json:"args,omitempty"`
 	HarnessID  string   `json:"harnessId,omitempty"`
@@ -147,14 +150,20 @@ type GemOpsPendingApproval struct {
 
 // GemOpsSessionInfo mirrors one warm conversation entry from gemops GET /status or GET /sessions.
 type GemOpsSessionInfo struct {
-	ConversationID  string `json:"conversationId"`
-	ACPSessionID    string `json:"acpSessionId,omitempty"`
-	HarnessID       string `json:"harnessId,omitempty"`
-	Turns           int    `json:"turns"`
-	EstimatedChars  int    `json:"estimatedChars"`
-	CreatedAt       string `json:"createdAt,omitempty"`
-	LastUsedAt      string `json:"lastUsedAt,omitempty"`
-	NeedsNewSession bool   `json:"needsNewSession,omitempty"`
+	Key             string               `json:"key,omitempty"`
+	ConversationID  string               `json:"conversationId"`
+	ACPSessionID    string               `json:"acpSessionId,omitempty"`
+	HarnessID       string               `json:"harnessId,omitempty"`
+	HarnessRevision string               `json:"harnessRevision,omitempty"`
+	SessionID       string               `json:"sessionId,omitempty"`
+	TurnCount       int                  `json:"turnCount"`
+	Turns           int                  `json:"turns,omitempty"`
+	SessionConfig   *GemOpsSessionConfig `json:"sessionConfig,omitempty"`
+	EstimatedChars  int                  `json:"estimatedChars,omitempty"`
+	CreatedAt       string               `json:"createdAt,omitempty"`
+	UpdatedAt       string               `json:"updatedAt,omitempty"`
+	LastUsedAt      string               `json:"lastUsedAt,omitempty"`
+	NeedsNewSession bool                 `json:"needsNewSession,omitempty"`
 }
 
 // GemOpsStatusResponse mirrors gemops GET /status.

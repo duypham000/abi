@@ -12,6 +12,7 @@ export type AgentMode =
 export type ApprovalPolicy = "ask" | "auto-safe" | "auto-all";
 
 export type ReasoningEffort =
+  | ""
   | "off"
   | "low"
   | "medium"
@@ -36,7 +37,10 @@ export function normalizeReasoningEffort(
 ): ReasoningEffort {
   const trimmed = (effort ?? "").trim().toLowerCase();
   switch (trimmed) {
+    case "":
+    case "default":
     case "off":
+      return "";
     case "low":
     case "medium":
     case "high":
@@ -44,7 +48,7 @@ export function normalizeReasoningEffort(
     case "max":
       return trimmed;
     default:
-      return "medium";
+      return "";
   }
 }
 
@@ -119,7 +123,9 @@ export interface AgentRuntimeConfig {
   apiEndpoint: string;
   apiKey?: string;
   harnessId: string;
+  systemPromptId?: string;
   systemPromptAppend: string;
+  replaceDefaultRule?: boolean;
   modelId: string;
   mode: AgentMode;
   approvalPolicy: ApprovalPolicy;
@@ -387,11 +393,13 @@ export const DEFAULT_RUNTIME_CONFIG: AgentRuntimeConfig = {
   apiEndpoint: "/api/v1/agent/chat",
   apiKey: "",
   harnessId: "",
+  systemPromptId: "default",
   systemPromptAppend: "",
+  replaceDefaultRule: false,
   modelId: "",
   mode: "default",
   approvalPolicy: "ask",
-  reasoningEffort: "medium",
+  reasoningEffort: "",
   mockSpeed: "fast",
   simulateError: false,
   personaVariant: "obsidian",

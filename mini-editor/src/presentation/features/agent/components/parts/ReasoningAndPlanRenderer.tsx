@@ -93,8 +93,16 @@ export function ReasoningBlock({ part }: { part: ReasoningUIPart }) {
   const textContent = part.text.trim() ? part.text : "Thinking...";
 
   return (
-    <Reasoning className="mb-2" isStreaming={isStreaming}>
-      <ReasoningTrigger />
+    <Reasoning className="mb-2" defaultOpen isStreaming={isStreaming}>
+      <ReasoningTrigger
+        getThinkingMessage={(streaming) =>
+          streaming ? (
+            <Shimmer duration={1}>Thinking...</Shimmer>
+          ) : (
+            <p>Thinking Process</p>
+          )
+        }
+      />
       <ReasoningContent>{textContent}</ReasoningContent>
     </Reasoning>
   );

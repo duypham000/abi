@@ -52,14 +52,27 @@ export interface AskUserToolOutput {
   answeredAt: string;
 }
 
+export type GemOpsLanguageModelUsage = LanguageModelUsage & {
+  used?: number;
+  size?: number;
+  thinkingTokens?: number;
+  cacheReadTokens?: number;
+  cost?: unknown;
+  [key: string]: unknown;
+};
+
 export interface AgentMessageMetadata {
   modelId?: string;
+  harnessId?: string;
+  mode?: string;
+  effort?: string;
   provider?: string;
   createdAt?: string;
   durationMs?: number;
-  usage?: LanguageModelUsage;
+  usage?: GemOpsLanguageModelUsage;
   contextWindow?: number;
   finishReason?: string;
+  stopReason?: string;
   stoppedByUser?: boolean;
   branchGroupId?: string;
   parentMessageId?: string;

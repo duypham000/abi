@@ -92,12 +92,19 @@ export function AgentPanelPage({
     sessionQueue,
     backendStatus,
     backendInfo,
+    backendUsage,
+    backendPrompts,
+    backendAgyConfig,
     harnesses,
     backendError,
     isRefreshingMeta,
+    isRefreshingUsage,
     refreshBackendMeta,
+    refreshAgentUsage,
     resetBackendSession,
     applySessionConfig,
+    saveAgyConfig,
+    executeAgyCommand,
   } = useAgentRuntime();
 
   const isGenerating = status === "submitted" || status === "streaming";
@@ -147,10 +154,13 @@ export function AgentPanelPage({
           activeSession={activeSession}
           activeViewTab={effectiveTab}
           backendError={backendError}
+          backendInfo={backendInfo}
           backendStatus={backendStatus}
+          backendUsage={backendUsage}
           config={config}
           contextUsage={contextUsage}
           isHistoryOpen={isHistoryOpen}
+          isRefreshingUsage={isRefreshingUsage}
           messages={messages}
           onCloseDock={onCloseDock}
           onCreateSession={() => {
@@ -158,6 +168,9 @@ export function AgentPanelPage({
           }}
           onDockRight={onDockRight}
           onOpenInspectorRuntime={handleOpenInspectorRuntime}
+          onRefreshUsage={() => {
+            void refreshAgentUsage();
+          }}
           onRenameSession={renameSession}
           onSelectSession={selectSession}
           onSelectViewTab={handleSelectViewTab}
@@ -241,6 +254,8 @@ export function AgentPanelPage({
 
                 <AgentComposer
                   backendInfo={backendInfo}
+                  backendStatus={backendStatus}
+                  backendUsage={backendUsage}
                   isVoiceListening={isVoiceListening}
                   micDeviceId={micDeviceId}
                   mode={activeSession.mode}
@@ -301,17 +316,24 @@ export function AgentPanelPage({
                 }
               >
                 <AgentInspectorDrawer
+                  backendAgyConfig={backendAgyConfig}
                   backendError={backendError}
                   backendInfo={backendInfo}
+                  backendPrompts={backendPrompts}
                   backendStatus={backendStatus}
+                  backendUsage={backendUsage}
                   config={config}
                   harnesses={harnesses}
                   initialTab={inspectorTab}
                   isRefreshingMeta={isRefreshingMeta}
+                  isRefreshingUsage={isRefreshingUsage}
                   onApplySessionConfig={applySessionConfig}
+                  onRefreshAgentUsage={refreshAgentUsage}
                   onRefreshBackendMeta={refreshBackendMeta}
                   onResetBackendSession={resetBackendSession}
                   onResetConfig={resetConfig}
+                  onRunAgyCommand={executeAgyCommand}
+                  onSaveAgyConfig={saveAgyConfig}
                   onUpdateConfig={updateConfig}
                 />
               </Suspense>

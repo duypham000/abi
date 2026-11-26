@@ -27,12 +27,18 @@ export interface AgentBackendSessionConfig {
 }
 
 export interface AgentBackendSessionInfo {
+  key?: string;
   conversationId: string;
   acpSessionId?: string;
+  sessionId?: string;
   harnessId?: string;
-  turns: number;
-  estimatedChars: number;
+  harnessRevision?: string;
+  turnCount?: number;
+  turns?: number;
+  sessionConfig?: AgentBackendSessionConfig;
+  estimatedChars?: number;
   createdAt?: string;
+  updatedAt?: string;
   lastUsedAt?: string;
   needsNewSession?: boolean;
 }
@@ -76,6 +82,87 @@ export interface AgentBackendInfo {
   efforts: string[];
   modes: string[];
   note?: string;
+}
+
+export interface AgentQuotaBucket {
+  id: string;
+  name: string;
+  description?: string;
+  window?: string;
+  remaining_fraction?: number;
+  reset_time?: string;
+  [key: string]: unknown;
+}
+
+export interface AgentQuotaGroup {
+  name: string;
+  description?: string;
+  buckets?: AgentQuotaBucket[];
+  [key: string]: unknown;
+}
+
+export interface AgentCreditsInfo {
+  remaining_credits?: number;
+  upgrade_uri?: string;
+  [key: string]: unknown;
+}
+
+export interface AgentCurrentModelInfo {
+  id?: string;
+  label?: string;
+  effort?: string;
+  is_default?: boolean;
+  [key: string]: unknown;
+}
+
+export interface AgentCurrentEffortInfo {
+  adjustable?: boolean;
+  current?: string;
+  available?: string[];
+  [key: string]: unknown;
+}
+
+export interface AgentUsageResponse {
+  timestamp?: string;
+  binary?: string;
+  version?: string;
+  currentModel?: AgentCurrentModelInfo;
+  currentEffort?: AgentCurrentEffortInfo;
+  quota?: {
+    description?: string;
+    groups?: AgentQuotaGroup[];
+    [key: string]: unknown;
+  };
+  credits?: AgentCreditsInfo;
+  warnings?: string[];
+}
+
+export interface AgentPromptPreset {
+  id: string;
+  name: string;
+  path?: string;
+  content: string;
+  isDefault?: boolean;
+  updatedAt?: string;
+}
+
+export interface AgentAgySettingsResponse {
+  path: string;
+  exists: boolean;
+  settings: Record<string, unknown>;
+  editableKeys?: string[];
+}
+
+export interface AgentCustomCommandResponse {
+  harnessId?: string;
+  mode: string;
+  command: string;
+  args?: string[];
+  exitCode: number;
+  durationMs: number;
+  stdout: string;
+  stderr?: string;
+  parsedJson?: unknown;
 }
 
 export interface AgentHarnessSummary {
@@ -311,8 +398,8 @@ export async function fetchAgentSessions(opts?: {
 export function fetchAgentUsage(opts?: {
   apiEndpoint?: string;
   apiKey?: string;
-}): Promise<Record<string, unknown>> {
-  return requestJson<Record<string, unknown>>("/agy/usage", opts);
+}): Promise<AgentUsageResponse> {
+  return requestJson<AgentUsageResponse>("/agy/usage", opts);
 }
 
 export function deleteAgentBackendSession(
@@ -387,15 +474,15 @@ export function startAgentPrompt(
 export function fetchAgentAgyConfig(opts?: {
   apiEndpoint?: string;
   apiKey?: string;
-}): Promise<Record<string, unknown>> {
-  return requestJson<Record<string, unknown>>("/agy/config", opts);
+}): Promise<AgentAgySettingsResponse> {
+  return requestJson<AgentAgySettingsResponse>("/agy/config", opts);
 }
 
 export function updateAgentAgyConfig(
   settings: Record<string, unknown>,
   opts?: { apiEndpoint?: string; apiKey?: string }
-): Promise<Record<string, unknown>> {
-  return requestJson<Record<string, unknown>>("/agy/config", {
+): Promise<AgentAgySettingsResponse> {
+  return requestJson<AgentAgySettingsResponse>("/agy/config", {
     ...opts,
     method: "PUT",
     body: settings,
@@ -405,15 +492,15 @@ export function updateAgentAgyConfig(
 export function fetchAgentPrompts(opts?: {
   apiEndpoint?: string;
   apiKey?: string;
-}): Promise<{ items: Record<string, unknown>[] }> {
-  return requestJson<{ items: Record<string, unknown>[] }>("/agy/prompts", opts);
+}): Promise<{ items: AgentPromptPreset[] }> {
+  return requestJson<{ items: AgentPromptPreset[] }>("/agy/prompts", opts);
 }
 
 export function saveAgentPrompt(
   prompt: { id: string; content: string },
   opts?: { apiEndpoint?: string; apiKey?: string }
-): Promise<Record<string, unknown>> {
-  return requestJson<Record<string, unknown>>("/agy/prompts", {
+): Promise<AgentPromptPreset> {
+  return requestJson<AgentPromptPreset>("/agy/prompts", {
     ...opts,
     method: "POST",
     body: prompt,
@@ -435,18 +522,19 @@ export function deleteAgentPrompt(
 
 export function runAgentAgyCommand(
   req: {
+    mode?: "slash" | "cli";
     command: string;
     args?: string[];
     harnessId?: string;
     timeoutSec?: number;
   },
   opts?: { apiEndpoint?: string; apiKey?: string }
-): Promise<Record<string, unknown>> {
+): Promise<AgentCustomCommandResponse> {
   const headers: Record<string, string> = {};
   if (req.harnessId && req.harnessId.trim()) {
     headers["X-Harness-Id"] = req.harnessId.trim();
   }
-  return requestJson<Record<string, unknown>>("/agy/command", {
+  return requestJson<AgentCustomCommandResponse>("/agy/command", {
     ...opts,
     headers,
     method: "POST",

@@ -108,9 +108,14 @@ export class HttpAgentTransport implements ChatTransport<AgentUIMessage> {
             agentConfig: {
               modelId: resolvedModelId,
               mode: resolvedMode,
-              reasoningEffort: currentConfig.reasoningEffort,
+              reasoningEffort:
+                currentConfig.reasoningEffort === "off"
+                  ? ""
+                  : currentConfig.reasoningEffort,
               harnessId: currentConfig.harnessId,
+              systemPromptId: currentConfig.systemPromptId,
               systemPromptAppend: currentConfig.systemPromptAppend,
+              replaceDefaultRule: currentConfig.replaceDefaultRule,
               approvalPolicy: currentConfig.approvalPolicy,
               toolPermissions: currentConfig.toolPermissions,
             },
