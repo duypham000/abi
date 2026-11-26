@@ -425,6 +425,13 @@ test('extractAuthCredentials and GoClient support X-Api-Key and TOMO_API_KEY', a
   );
   assert.deepEqual(fromConfigFallback, { apiKey: 'tomo_ak_env789', authToken: '' });
 
+  const fromPlaceholderFallback = extractAuthCredentials(
+    { 'x-api-key': '${SECRET:TOMO_API_KEY}' },
+    {},
+    { apiKey: 'tomo_ak_env789', authToken: '' },
+  );
+  assert.deepEqual(fromPlaceholderFallback, { apiKey: 'tomo_ak_env789', authToken: '' });
+
   let capturedHeaders = null;
   const origFetch = globalThis.fetch;
   globalThis.fetch = async (_url, init) => {

@@ -15,6 +15,10 @@ function firstHeaderString(val: string | string[] | undefined): string {
   return '';
 }
 
+function isUnexpandedPlaceholder(val: string): boolean {
+  return /^\$\{[^}]+\}$/.test(val.trim());
+}
+
 export function extractAuthCredentials(
   headers: Record<string, string | string[] | undefined>,
   query: Record<string, unknown>,
@@ -24,18 +28,18 @@ export function extractAuthCredentials(
     firstHeaderString(headers['x-api-key']) ||
     firstHeaderString(headers['x-agent-api-key']) ||
     (typeof query.api_key === 'string' ? query.api_key.trim() : '');
-  if (xApiKey) {
+  if (xApiKey && !isUnexpandedPlaceholder(xApiKey)) {
     return { apiKey: xApiKey, authToken: '' };
   }
 
   const authHeader = firstHeaderString(headers.authorization);
   if (authHeader) {
     const apiKeyMatch = authHeader.match(/^ApiKey\s+(.+)$/i);
-    if (apiKeyMatch && apiKeyMatch[1].trim()) {
+    if (apiKeyMatch && apiKeyMatch[1].trim() && !isUnexpandedPlaceholder(apiKeyMatch[1])) {
       return { apiKey: apiKeyMatch[1].trim(), authToken: '' };
     }
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (token) {
+    if (token && !isUnexpandedPlaceholder(token)) {
       if (token.startsWith('tomo_ak_')) {
         return { apiKey: token, authToken: '' };
       }
@@ -45,10 +49,12 @@ export function extractAuthCredentials(
 
   if (typeof query.token === 'string' && query.token.trim()) {
     const token = query.token.trim();
-    if (token.startsWith('tomo_ak_')) {
-      return { apiKey: token, authToken: '' };
+    if (!isUnexpandedPlaceholder(token)) {
+      if (token.startsWith('tomo_ak_')) {
+        return { apiKey: token, authToken: '' };
+      }
+      return { apiKey: '', authToken: token };
     }
-    return { apiKey: '', authToken: token };
   }
 
   if (cfg.apiKey) {
