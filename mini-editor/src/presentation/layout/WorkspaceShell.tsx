@@ -36,6 +36,13 @@ import type { RootState } from "@/presentation/store";
 import { useAgentStore } from "@/presentation/features/agent/store/agentStore";
 import { useAgentKeyboardShortcuts } from "@/presentation/features/agent/hooks";
 import { scheduleBackgroundAgentPreload } from "@/presentation/features/agent/preloadAgentResources";
+import {
+  AGENT_DEEPLINK_NAVIGATE_EVENT,
+  AGENT_OPEN_ITEM_EVENT,
+  resolveAndOpenAgentDeeplink,
+  type AgentDeeplinkTarget,
+} from "@/infrastructure/agent";
+import type { WorkspaceContextItem } from "@/core/interfaces/agent";
 import "golden-layout/dist/css/goldenlayout-base.css";
 import "./golden/golden-layout-theme.css";
 import "./WorkspaceShell.scss";
@@ -110,6 +117,54 @@ export function WorkspaceShell() {
       }).then((fn) => { unlisten = fn; });
     });
     return () => { unlisten?.(); };
+  }, [openPanel]);
+
+  // Listen for Agent deeplink navigation and workspace item open events
+  useEffect(() => {
+    const onDeeplinkNavigate = (event: Event) => {
+      const target = (event as CustomEvent<AgentDeeplinkTarget>).detail;
+      if (!target || target.resolvedId == null) return;
+      if (target.kind === "doc") {
+        openPanel(
+          PANEL_TYPES.DOC_EDITOR,
+          { id: target.resolvedId },
+          { title: target.title || `Doc #${target.resolvedId}`, singleton: true }
+        );
+      } else if (target.kind === "canvas") {
+        openPanel(
+          PANEL_TYPES.CANVAS_EDITOR,
+          { id: target.resolvedId },
+          { title: target.title || `Canvas #${target.resolvedId}`, singleton: true }
+        );
+      }
+    };
+
+    const onAgentOpenItem = (event: Event) => {
+      const item = (event as CustomEvent<WorkspaceContextItem>).detail;
+      if (!item) return;
+      if (item.kind === "doc") {
+        void resolveAndOpenAgentDeeplink({
+          kind: "doc",
+          rawRef: String(item.sourceId ?? item.id),
+          resolvedId: typeof item.sourceId === "number" ? item.sourceId : undefined,
+          title: item.title,
+        });
+      } else if (item.kind === "canvas") {
+        void resolveAndOpenAgentDeeplink({
+          kind: "canvas",
+          rawRef: String(item.sourceId ?? item.id),
+          resolvedId: typeof item.sourceId === "number" ? item.sourceId : undefined,
+          title: item.title,
+        });
+      }
+    };
+
+    window.addEventListener(AGENT_DEEPLINK_NAVIGATE_EVENT, onDeeplinkNavigate);
+    window.addEventListener(AGENT_OPEN_ITEM_EVENT, onAgentOpenItem);
+    return () => {
+      window.removeEventListener(AGENT_DEEPLINK_NAVIGATE_EVENT, onDeeplinkNavigate);
+      window.removeEventListener(AGENT_OPEN_ITEM_EVENT, onAgentOpenItem);
+    };
   }, [openPanel]);
 
   const ctxValue = useMemo(() => ({

@@ -105,6 +105,11 @@ import {
   useState,
   type ComponentProps,
 } from "react";
+import {
+  isAgentDeeplinkHref,
+  openAgentDeeplinkFromHref,
+  resolveAndOpenAgentDeeplink,
+} from "@/infrastructure/agent";
 import { AgentErrorBoundary } from "../AgentErrorBoundary";
 
 const EMPTY_UINT8_ARRAY = new Uint8Array(0);
@@ -214,21 +219,52 @@ export function MessageSourcesBlock({
       <SourcesContent className="w-full">
         {sources.map((src, index) => {
           if (src.type === "source-url") {
+            const isDeeplink = isAgentDeeplinkHref(src.url);
             return (
               <Source
                 className="flex items-center gap-2 text-xs text-primary hover:underline"
                 href={src.url}
                 key={`${src.sourceId}-${index}`}
+                onClick={
+                  isDeeplink
+                    ? (e) => {
+                        e.preventDefault();
+                        void openAgentDeeplinkFromHref(src.url);
+                      }
+                    : undefined
+                }
                 title={src.title ?? src.url}
               />
             );
           }
 
+          const docMatch = src.filename?.match(/(?:docs\/)?doc-([A-Za-z0-9-]+)(?:\.(?:md|json))?/i);
+          const canvasMatch = src.filename?.match(/(?:canvases\/)?canvas-([A-Za-z0-9-]+)(?:\.(?:json|excalidraw))?/i);
+          const canOpenInternal = Boolean(docMatch || canvasMatch);
+
           return (
             <Source
-              className="flex items-center gap-2 text-xs text-foreground"
+              className={cn(
+                "flex items-center gap-2 text-xs",
+                canOpenInternal ? "cursor-pointer text-primary hover:underline" : "text-foreground"
+              )}
               key={`${src.sourceId}-${index}`}
-              onClick={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                if (docMatch) {
+                  void resolveAndOpenAgentDeeplink({
+                    kind: "doc",
+                    rawRef: docMatch[1],
+                    title: src.title,
+                  });
+                } else if (canvasMatch) {
+                  void resolveAndOpenAgentDeeplink({
+                    kind: "canvas",
+                    rawRef: canvasMatch[1],
+                    title: src.title,
+                  });
+                }
+              }}
               title={src.title}
             >
               <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />

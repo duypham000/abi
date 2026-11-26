@@ -44,6 +44,11 @@ import {
   AGENT_BACKEND_SYNCED_EVENT,
   type AgentBackendSyncedDetail,
 } from "@/infrastructure/agent/workspace/miniEditorWorkspaceBridge";
+import {
+  AGENT_DEEPLINK_NAVIGATE_EVENT,
+  consumePendingDeeplink,
+  type AgentDeeplinkTarget,
+} from "@/infrastructure/agent/workspace/agentDeeplink";
 import "./DocEditorPage.scss";
 
 export interface EditorSettings {
@@ -72,6 +77,71 @@ function parseInitialBlocks(content: string | null | undefined): unknown[] {
   } catch {
     return [{ type: "paragraph", content: [{ type: "text", text: content, styles: {} }] }];
   }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractBlockPlainText(block: any): string {
+  if (!block) return "";
+  if (typeof block.text === "string") return block.text;
+  const content = block.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((c: any) => (typeof c === "string" ? c : typeof c?.text === "string" ? c.text : ""))
+      .join("");
+  }
+  return "";
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function findBlockRecursive(blocks: any[], predicate: (b: any) => boolean): any | null {
+  if (!Array.isArray(blocks)) return null;
+  for (const b of blocks) {
+    if (predicate(b)) return b;
+    if (Array.isArray(b.children) && b.children.length > 0) {
+      const childMatch = findBlockRecursive(b.children, predicate);
+      if (childMatch) return childMatch;
+    }
+  }
+  return null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function findLineTargetInDocument(blocks: any[], targetLine: number): { block: any; codeLineOffset?: number } | null {
+  if (!Array.isArray(blocks) || blocks.length === 0) return null;
+  let lineCursor = 1;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let lastBlock: any = null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const walk = (list: any[]): { block: any; codeLineOffset?: number } | null => {
+    for (const b of list) {
+      lastBlock = b;
+      if (b.type === "codeBlock") {
+        const text = extractBlockPlainText(b);
+        const lineCount = Math.max(1, text.split(/\r?\n/).length);
+        const blockStart = lineCursor;
+        const blockEnd = lineCursor + lineCount - 1;
+        if (targetLine >= blockStart && targetLine <= blockEnd) {
+          return { block: b, codeLineOffset: targetLine - blockStart };
+        }
+        lineCursor += lineCount;
+      } else {
+        if (lineCursor === targetLine) {
+          return { block: b };
+        }
+        lineCursor += 1;
+      }
+      if (Array.isArray(b.children) && b.children.length > 0) {
+        const childRes = walk(b.children);
+        if (childRes) return childRes;
+      }
+    }
+    return null;
+  };
+
+  return walk(blocks) ?? (lastBlock ? { block: lastBlock } : null);
 }
 
 interface DocEditorPageProps {
@@ -597,6 +667,150 @@ export default function DocEditorPage({ panelMode, docIdProp }: DocEditorPagePro
       message.error(err?.data?.message || "Khôi phục từ Server thất bại");
     }
   }
+
+  const highlightTimerRef = useRef<number | null>(null);
+
+  const navigateToDocDeeplinkTarget = useCallback(
+    (target: AgentDeeplinkTarget) => {
+      const ed = editorRef.current;
+      if (!ed) return;
+      const blocks = ed.document ?? [];
+      if (!Array.isArray(blocks) || blocks.length === 0) return;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let matchedBlock: any = null;
+      let codeLineOffset: number | undefined;
+
+      if (target.blockId) {
+        const bid = target.blockId.trim();
+        matchedBlock =
+          findBlockRecursive(blocks, (b) => b.id === bid) ??
+          findBlockRecursive(blocks, (b) => typeof b.id === "string" && b.id.startsWith(bid));
+        if (matchedBlock && matchedBlock.type === "codeBlock" && target.startLine != null) {
+          codeLineOffset = Math.max(0, target.startLine - 1);
+        }
+      }
+
+      if (!matchedBlock && target.heading) {
+        const needle = target.heading.trim().toLowerCase();
+        if (needle) {
+          matchedBlock =
+            findBlockRecursive(
+              blocks,
+              (b) => b.type === "heading" && extractBlockPlainText(b).toLowerCase().includes(needle)
+            ) ??
+            findBlockRecursive(blocks, (b) => extractBlockPlainText(b).toLowerCase().includes(needle));
+        }
+      }
+
+      if (!matchedBlock && target.startLine != null) {
+        const lineHit = findLineTargetInDocument(blocks, target.startLine);
+        if (lineHit) {
+          matchedBlock = lineHit.block;
+          codeLineOffset = lineHit.codeLineOffset;
+        }
+      }
+
+      if (!matchedBlock && target.searchText) {
+        const needle = target.searchText.trim().toLowerCase();
+        if (needle) {
+          matchedBlock = findBlockRecursive(blocks, (b) =>
+            extractBlockPlainText(b).toLowerCase().includes(needle)
+          );
+        }
+      }
+
+      if (!matchedBlock) return;
+
+      try {
+        ed.setTextCursorPosition(matchedBlock, "start");
+        ed.focus();
+      } catch {
+        // ignore cursor placement errors
+      }
+
+      // If jumping to a specific line inside a code block or searchText, position ProseMirror selection
+      const tt = ed._tiptapEditor;
+      if (tt && (codeLineOffset !== undefined || target.searchText)) {
+        try {
+          const textToFind =
+            codeLineOffset !== undefined && matchedBlock.type === "codeBlock"
+              ? extractBlockPlainText(matchedBlock).split(/\r?\n/)[codeLineOffset]?.trim()
+              : target.searchText?.trim();
+          if (textToFind) {
+            let foundPos: { from: number; to: number } | null = null;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            tt.state.doc.descendants((node: any, pos: number) => {
+              if (foundPos || !node.isText || !node.text) return;
+              const idx = (node.text as string).toLowerCase().indexOf(textToFind.toLowerCase());
+              if (idx !== -1) {
+                foundPos = { from: pos + idx, to: pos + idx + textToFind.length };
+              }
+            });
+            if (foundPos) {
+              tt.chain().setTextSelection(foundPos).run();
+            }
+          }
+        } catch {
+          // ignore selection errors
+        }
+      }
+
+      requestAnimationFrame(() => {
+        const scope = editorAreaRef.current ?? document;
+        const el = scope.querySelector(`[data-id="${matchedBlock.id}"]`) as HTMLElement | null;
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.remove("doc-deeplink-highlight");
+        // Force reflow so animation restarts on repeated clicks
+        void el.offsetWidth;
+        el.classList.add("doc-deeplink-highlight");
+        if (highlightTimerRef.current !== null) {
+          window.clearTimeout(highlightTimerRef.current);
+        }
+        highlightTimerRef.current = window.setTimeout(() => {
+          el.classList.remove("doc-deeplink-highlight");
+          highlightTimerRef.current = null;
+        }, 2300);
+      });
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (effectivelyLoading || !editor || !docId) return;
+
+    const pending = consumePendingDeeplink("doc", docId, [doc?.backendUuid, doc?.slug]);
+    if (pending) {
+      const t = window.setTimeout(() => navigateToDocDeeplinkTarget(pending), 120);
+      return () => window.clearTimeout(t);
+    }
+  }, [effectivelyLoading, editor, docId, doc?.backendUuid, doc?.slug, navigateToDocDeeplinkTarget]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onDeeplink = (event: Event) => {
+      const target = (event as CustomEvent<AgentDeeplinkTarget>).detail;
+      if (!target || target.kind !== "doc") return;
+      const matchesDoc =
+        target.resolvedId === docId ||
+        target.rawRef === String(docId) ||
+        target.rawRef === `doc-${docId}` ||
+        (doc?.backendUuid && target.rawRef === doc.backendUuid) ||
+        (doc?.slug && target.rawRef === doc.slug);
+      if (!matchesDoc) return;
+
+      consumePendingDeeplink("doc", docId, [doc?.backendUuid, doc?.slug]);
+      window.setTimeout(() => navigateToDocDeeplinkTarget(target), 60);
+    };
+    window.addEventListener(AGENT_DEEPLINK_NAVIGATE_EVENT, onDeeplink);
+    return () => {
+      window.removeEventListener(AGENT_DEEPLINK_NAVIGATE_EVENT, onDeeplink);
+      if (highlightTimerRef.current !== null) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
+    };
+  }, [docId, doc?.backendUuid, doc?.slug, navigateToDocDeeplinkTarget]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

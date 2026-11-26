@@ -213,6 +213,7 @@ export type MicSelectorTriggerProps = ComponentProps<typeof Button>;
 
 export const MicSelectorTrigger = ({
   children,
+  className,
   ...props
 }: MicSelectorTriggerProps) => {
   const { setWidth } = useContext(MicSelectorContext);
@@ -241,11 +242,16 @@ export const MicSelectorTrigger = ({
 
   return (
     <PopoverTrigger asChild>
-      <Button variant="outline" {...props} ref={ref}>
+      <Button
+        className={cn("min-w-0 justify-between overflow-hidden", className)}
+        variant="outline"
+        {...props}
+        ref={ref}
+      >
         {children}
         <ChevronsUpDownIcon
           className="shrink-0 text-muted-foreground"
-          size={16}
+          size={14}
         />
       </Button>
     </PopoverTrigger>
@@ -364,7 +370,10 @@ export const MicSelectorValue = ({
 
   if (!currentDevice) {
     return (
-      <span className={cn("flex-1 text-left", className)} {...props}>
+      <span
+        className={cn("min-w-0 flex-1 truncate text-left", className)}
+        {...props}
+      >
         Select microphone...
       </span>
     );
@@ -372,7 +381,7 @@ export const MicSelectorValue = ({
 
   return (
     <MicSelectorLabel
-      className={cn("flex-1 text-left", className)}
+      className={cn("min-w-0 flex-1 truncate text-left", className)}
       device={currentDevice}
       {...props}
     />

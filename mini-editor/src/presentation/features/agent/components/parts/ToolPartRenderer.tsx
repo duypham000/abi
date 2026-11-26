@@ -25,6 +25,10 @@ import {
   hasMeaningfulOutput,
   isArtifactWriteFile,
 } from "./GemOpsToolRenderers";
+import {
+  ToolDeeplinkButton,
+  extractToolDeeplinkTarget,
+} from "../AgentDeeplinkChip";
 
 export type SupportedToolPart = AgentToolPart | DynamicToolUIPart;
 
@@ -178,6 +182,12 @@ export function ToolPartRenderer({
     part.state === "output-error" ||
     (part.state === "output-available" && hasMeaningfulOutput(part.output));
 
+  const deeplinkTarget = extractToolDeeplinkTarget(
+    toolName,
+    part.input,
+    part.state === "output-available" ? part.output : undefined
+  );
+
   return (
     <Tool className="mb-2" defaultOpen={shouldDefaultOpen}>
       {part.type === "dynamic-tool" ? (
@@ -195,6 +205,11 @@ export function ToolPartRenderer({
         />
       )}
       <ToolContent className="space-y-3 pt-0">
+        {deeplinkTarget && (
+          <div className="flex items-center justify-end px-3 pt-2">
+            <ToolDeeplinkButton target={deeplinkTarget} />
+          </div>
+        )}
         {approvalNode}
         {part.input !== undefined && <ToolInput input={part.input} />}
         {showOutput && (

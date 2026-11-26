@@ -97,7 +97,10 @@ export function useOpenPanel(layout: GoldenLayout | null) {
           const sameType = (comp.componentType as string) === type;
           const cs = comp.toConfig().componentState as Record<string, unknown> | undefined;
           let sameId = false;
-          sameId = existingId == null || cs?.id === existingId;
+          sameId =
+            existingId == null ||
+            cs?.id === existingId ||
+            (cs?.id != null && String(cs.id) === String(existingId));
           if (sameType && sameId) found = comp;
         });
         if (found) { layout.focusComponent(found); return; }

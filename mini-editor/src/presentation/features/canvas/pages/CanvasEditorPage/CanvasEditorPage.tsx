@@ -42,6 +42,11 @@ import {
   AGENT_BACKEND_SYNCED_EVENT,
   type AgentBackendSyncedDetail,
 } from "@/infrastructure/agent/workspace/miniEditorWorkspaceBridge";
+import {
+  AGENT_DEEPLINK_NAVIGATE_EVENT,
+  consumePendingDeeplink,
+  type AgentDeeplinkTarget,
+} from "@/infrastructure/agent/workspace/agentDeeplink";
 import "./CanvasEditorPage.scss";
 
 const TOMO_DOC_PREFIX = "tomo://doc/";
@@ -90,6 +95,98 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
     setApiState(null);
     setExcalidrawAPIStore(null);
   }, [canvasId, setExcalidrawAPIStore]);
+
+  const navigateToCanvasDeeplinkTarget = useCallback((target: AgentDeeplinkTarget) => {
+    const activeApi = excalidrawAPIRef.current;
+    if (!activeApi) return;
+
+    const elements = activeApi.getSceneElements().filter((el: any) => !el.isDeleted);
+    let matched: any[] = [];
+
+    if (target.elementIds && target.elementIds.length > 0) {
+      const idSet = new Set(target.elementIds);
+      matched = elements.filter((el: any) => idSet.has(el.id));
+    }
+
+    if (matched.length === 0 && target.label) {
+      const needle = target.label.trim().toLowerCase();
+      if (needle) {
+        matched = elements.filter((el: any) => {
+          const txt = typeof el.text === "string" ? el.text : typeof el.originalText === "string" ? el.originalText : "";
+          return txt.toLowerCase().includes(needle);
+        });
+      }
+    }
+
+    if (matched.length > 0) {
+      // Include parent container shapes if a bound text element matched
+      const expanded = new Map<string, any>();
+      for (const el of matched) {
+        expanded.set(el.id, el);
+        if (el.containerId) {
+          const parent = elements.find((p: any) => p.id === el.containerId);
+          if (parent) expanded.set(parent.id, parent);
+        }
+      }
+      const finalMatched = Array.from(expanded.values());
+      const selectedElementIds: Record<string, true> = {};
+      for (const el of finalMatched) {
+        selectedElementIds[el.id] = true;
+      }
+      activeApi.updateScene({ appState: { selectedElementIds } as any });
+      try {
+        activeApi.scrollToContent(finalMatched as any, {
+          fitToViewport: true,
+          viewportZoomFactor: finalMatched.length === 1 ? 0.55 : 0.78,
+          animate: true,
+        });
+      } catch {
+        // Fallback manual centering
+        const first = finalMatched[0];
+        const appState = activeApi.getAppState() as any;
+        const zoom = appState?.zoom?.value ?? 1;
+        const cx = (first.x ?? 0) + (first.width ?? 0) / 2;
+        const cy = (first.y ?? 0) + (first.height ?? 0) / 2;
+        activeApi.updateScene({
+          appState: {
+            scrollX: (appState?.width ?? 800) / (2 * zoom) - cx,
+            scrollY: (appState?.height ?? 600) / (2 * zoom) - cy,
+            selectedElementIds,
+          } as any,
+        });
+      }
+      return;
+    }
+
+    if (typeof target.x === "number" && typeof target.y === "number") {
+      const appState = activeApi.getAppState() as any;
+      const nextZoom =
+        typeof target.zoom === "number" && target.zoom > 0
+          ? Math.min(4, Math.max(0.1, target.zoom))
+          : (appState?.zoom?.value ?? 1);
+      const cx = target.x + (target.width ?? 0) / 2;
+      const cy = target.y + (target.height ?? 0) / 2;
+      const vw = appState?.width ?? 800;
+      const vh = appState?.height ?? 600;
+
+      const hit = elements.find((el: any) => {
+        const x1 = Math.min(el.x ?? 0, (el.x ?? 0) + (el.width ?? 0));
+        const x2 = Math.max(el.x ?? 0, (el.x ?? 0) + (el.width ?? 0));
+        const y1 = Math.min(el.y ?? 0, (el.y ?? 0) + (el.height ?? 0));
+        const y2 = Math.max(el.y ?? 0, (el.y ?? 0) + (el.height ?? 0));
+        return cx >= x1 && cx <= x2 && cy >= y1 && cy <= y2;
+      });
+
+      activeApi.updateScene({
+        appState: {
+          scrollX: vw / (2 * nextZoom) - cx,
+          scrollY: vh / (2 * nextZoom) - cy,
+          zoom: { value: nextZoom },
+          ...(hit ? { selectedElementIds: { [hit.id]: true } } : {}),
+        } as any,
+      });
+    }
+  }, []);
 
   const authUser = useSelector((state: RootState) => state.auth.user);
   const { collaboration, isResolved } = useCanvasYjsCollaboration(
@@ -215,6 +312,40 @@ export default function CanvasEditorPage({ panelMode, canvasIdProp }: CanvasEdit
       },
     });
   }, [canvasId, restoreCanvasesFromServer]);
+
+  useEffect(() => {
+    if (!api || !isResolved || !canvasId) return;
+    const pending = consumePendingDeeplink("canvas", canvasId, [
+      canvas?.backendUuid,
+      canvas?.slug,
+    ]);
+    if (pending) {
+      const t = window.setTimeout(() => navigateToCanvasDeeplinkTarget(pending), 150);
+      return () => window.clearTimeout(t);
+    }
+  }, [api, isResolved, canvasId, canvas?.backendUuid, canvas?.slug, navigateToCanvasDeeplinkTarget]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onDeeplink = (event: Event) => {
+      const target = (event as CustomEvent<AgentDeeplinkTarget>).detail;
+      if (!target || target.kind !== "canvas") return;
+      const matchesCanvas =
+        target.resolvedId === canvasId ||
+        target.rawRef === String(canvasId) ||
+        target.rawRef === `canvas-${canvasId}` ||
+        (canvas?.backendUuid && target.rawRef === canvas.backendUuid) ||
+        (canvas?.slug && target.rawRef === canvas.slug);
+      if (!matchesCanvas) return;
+
+      consumePendingDeeplink("canvas", canvasId, [canvas?.backendUuid, canvas?.slug]);
+      window.setTimeout(() => navigateToCanvasDeeplinkTarget(target), 80);
+    };
+    window.addEventListener(AGENT_DEEPLINK_NAVIGATE_EVENT, onDeeplink);
+    return () => {
+      window.removeEventListener(AGENT_DEEPLINK_NAVIGATE_EVENT, onDeeplink);
+    };
+  }, [canvasId, canvas?.backendUuid, canvas?.slug, navigateToCanvasDeeplinkTarget]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

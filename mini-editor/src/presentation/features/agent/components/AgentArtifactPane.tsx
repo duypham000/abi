@@ -26,7 +26,7 @@ import {
   JSXPreviewContent,
   JSXPreviewError,
 } from "@/components/ai-elements/jsx-preview";
-import { MessageResponse } from "@/components/ai-elements/message";
+import { AgentMarkdownResponse } from "./AgentDeeplinkChip";
 import {
   WebPreview,
   WebPreviewBody,
@@ -540,7 +540,7 @@ export function AgentArtifactPane({
 
         {activeArtifact.kind === "markdown" && (
           <div className="prose prose-sm max-w-none flex-1 overflow-auto rounded-lg border border-border bg-card p-4 dark:prose-invert">
-            <MessageResponse>{activeArtifact.content}</MessageResponse>
+            <AgentMarkdownResponse>{activeArtifact.content}</AgentMarkdownResponse>
           </div>
         )}
       </ArtifactContent>

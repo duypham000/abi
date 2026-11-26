@@ -2,7 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { insertMarkdownSnippet } from "@/infrastructure/agent";
+import { insertMarkdownSnippet, isAgentDeeplinkHref, openAgentDeeplinkFromHref } from "@/infrastructure/agent";
+import { AgentDeeplinkChip } from "../components/AgentDeeplinkChip";
 import { cn } from "@/lib/utils";
 import { getToolName, isToolUIPart } from "ai";
 import {
@@ -181,14 +182,27 @@ function renderInlineMarkdown(text: string): ReactNode {
     const token = match[0];
     keyIdx += 1;
     if (token.startsWith("`") && token.endsWith("`")) {
-      parts.push(
-        <code
-          className="rounded-sm border border-border/50 bg-muted/75 px-1.5 py-0.5 font-mono text-[12.5px] text-primary"
-          key={keyIdx}
-        >
-          {token.slice(1, -1)}
-        </code>
-      );
+      const inner = token.slice(1, -1);
+      const codeRefMatch = /^(?:docs\/)?(doc-\d+)(?:#L(\d+)(?:-L?(\d+))?)?$|^(?:canvases\/)?(canvas-\d+)(?:#([A-Za-z0-9_-]+))?$/i.exec(inner.trim());
+      if (codeRefMatch) {
+        const href = codeRefMatch[1]
+          ? `tomo://doc/${codeRefMatch[1]}${codeRefMatch[2] ? `?line=${codeRefMatch[2]}${codeRefMatch[3] ? `-${codeRefMatch[3]}` : ""}` : ""}`
+          : `tomo://canvas/${codeRefMatch[4]}${codeRefMatch[5] ? `?element=${codeRefMatch[5]}` : ""}`;
+        parts.push(
+          <AgentDeeplinkChip className="font-mono text-[12px]" href={href} key={keyIdx}>
+            {inner}
+          </AgentDeeplinkChip>
+        );
+      } else {
+        parts.push(
+          <code
+            className="rounded-sm border border-border/50 bg-muted/75 px-1.5 py-0.5 font-mono text-[12.5px] text-primary"
+            key={keyIdx}
+          >
+            {inner}
+          </code>
+        );
+      }
     } else if (token.startsWith("**") && token.endsWith("**")) {
       parts.push(
         <strong className="font-semibold text-foreground" key={keyIdx}>
@@ -210,15 +224,32 @@ function renderInlineMarkdown(text: string): ReactNode {
     } else if (token.startsWith("[")) {
       const linkMatch = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
       if (linkMatch) {
-        parts.push(
-          <span
-            className="font-medium text-primary underline decoration-primary/40 underline-offset-3"
-            key={keyIdx}
-            title={linkMatch[2]}
-          >
-            {linkMatch[1]}
-          </span>
-        );
+        const href = linkMatch[2].trim();
+        if (isAgentDeeplinkHref(href)) {
+          parts.push(
+            <AgentDeeplinkChip href={href} key={keyIdx}>
+              {linkMatch[1]}
+            </AgentDeeplinkChip>
+          );
+        } else {
+          parts.push(
+            <button
+              className="cursor-pointer font-medium text-primary underline decoration-primary/40 underline-offset-3"
+              key={keyIdx}
+              onClick={() => {
+                if (/^https?:\/\//i.test(href) && typeof window !== "undefined") {
+                  window.open(href, "_blank", "noopener,noreferrer");
+                } else {
+                  void openAgentDeeplinkFromHref(href);
+                }
+              }}
+              title={href}
+              type="button"
+            >
+              {linkMatch[1]}
+            </button>
+          );
+        }
       } else {
         parts.push(token);
       }

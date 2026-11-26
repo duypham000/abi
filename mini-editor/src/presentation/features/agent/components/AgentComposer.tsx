@@ -163,6 +163,14 @@ interface SlashCommandItem {
   action: "clear" | "compact";
 }
 
+const DEFAULT_EFFORT_LEVELS: ReasoningEffort[] = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
+
 const SLASH_COMMANDS: SlashCommandItem[] = [
   {
     command: "/compact",
@@ -386,20 +394,31 @@ function ComposerInner({
   );
 
   const handleSubmit = useCallback(
-    async (msg: PromptInputMessage) => {
-      const trimmed = msg.text.trim().toLowerCase();
-      if (trimmed === "/clear") {
+    (msg: PromptInputMessage) => {
+      const rawText = msg.text;
+      const trimmed = rawText.trim();
+      const hasFiles = Boolean(msg.files && msg.files.length > 0);
+      if (!trimmed && !hasFiles) {
+        return;
+      }
+      const lower = trimmed.toLowerCase();
+      if (lower === "/clear") {
         executeSlashAction("clear");
         return;
       }
-      if (trimmed === "/compact") {
+      if (lower === "/compact") {
         executeSlashAction("compact");
         return;
       }
+      controller.textInput.clear();
       setCommandMode(null);
-      await onSendPrompt({ text: msg.text });
+      setCommandFilter("");
+      void onSendPrompt({
+        text: rawText,
+        ...(hasFiles ? { files: msg.files } : {}),
+      });
     },
-    [executeSlashAction, onSendPrompt]
+    [controller, executeSlashAction, onSendPrompt]
   );
 
   const handleFallbackDictationToggle = useCallback(() => {
@@ -501,9 +520,31 @@ function ComposerInner({
   const availableEfforts = useMemo(() => {
     const fromUsage = backendUsage?.currentEffort?.available ?? [];
     const fromInfo = backendInfo?.efforts ?? [];
-    const raw = fromUsage.length > 0 ? fromUsage : fromInfo;
-    return raw.filter((e): e is ReasoningEffort => Boolean(e && e.trim()));
-  }, [backendUsage?.currentEffort?.available, backendInfo?.efforts]);
+    const base =
+      fromUsage.length > 0
+        ? fromUsage
+        : fromInfo.length > 0
+          ? fromInfo
+          : DEFAULT_EFFORT_LEVELS;
+    const list: ReasoningEffort[] = [];
+    for (const e of base) {
+      if (e && e.trim() && !list.includes(e as ReasoningEffort)) {
+        list.push(e as ReasoningEffort);
+      }
+    }
+    if (
+      reasoningEffort &&
+      reasoningEffort !== "off" &&
+      !list.includes(reasoningEffort)
+    ) {
+      list.push(reasoningEffort);
+    }
+    return list;
+  }, [
+    backendUsage?.currentEffort?.available,
+    backendInfo?.efforts,
+    reasoningEffort,
+  ]);
 
   const reasoningOrder = useMemo<ReasoningEffort[]>(
     () => ["", ...availableEfforts],
@@ -792,8 +833,8 @@ function ComposerInner({
             />
           </PromptInputBody>
 
-          <PromptInputFooter className="items-center justify-between gap-1 border-t border-border/40 px-1.5 py-1">
-            <PromptInputTools className="min-w-0 flex-1 flex-nowrap items-center gap-0.5 overflow-x-auto scrollbar-hide">
+          <PromptInputFooter className="items-center justify-between gap-2 border-t border-border/40 px-2.5 !py-1.5">
+            <PromptInputTools className="min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto py-0.5 scrollbar-hide">
               <PromptInputActionMenu>
                 <PromptInputActionMenuTrigger
                   className="size-7 shrink-0"
@@ -838,7 +879,7 @@ function ComposerInner({
               >
                 <ModelSelectorTrigger asChild>
                   <PromptInputButton
-                    className="h-7 max-w-[140px] min-w-0 shrink gap-1 px-1.5 text-xs"
+                    className="h-7 max-w-[136px] min-w-0 shrink justify-start gap-1.5 overflow-hidden px-2 text-xs sm:max-w-[180px]"
                     size="sm"
                     tooltip={`Model: ${activeModel.name}`}
                     variant="ghost"
@@ -882,7 +923,7 @@ function ComposerInner({
               >
                 <PromptInputSelectTrigger
                   aria-label="Execution mode"
-                  className="h-7 w-auto shrink-0 gap-1 px-1.5 text-[11px]"
+                  className="h-7 w-auto shrink-0 gap-1 px-2 text-[11px]"
                   size="sm"
                 >
                   <PromptInputSelectValue />
@@ -898,61 +939,70 @@ function ComposerInner({
                 </PromptInputSelectContent>
               </PromptInputSelect>
 
-              <span className="agent-xs-hide">
-                <PromptInputSelect
-                  disabled={!effortAdjustable}
-                  onValueChange={(val) =>
-                    onCycleReasoningEffort(
-                      (val === "__default__" ? "" : val) as ReasoningEffort
-                    )
-                  }
-                  value={normalizedEffortValue}
-                >
-                  <PromptInputSelectTrigger
+              <span className="agent-xs-hide shrink-0 items-center">
+                <PromptInputActionMenu>
+                  <PromptInputActionMenuTrigger
                     aria-label="Thinking effort"
                     className={cn(
-                      "h-7 w-auto shrink-0 gap-1 px-1.5 text-[11px]",
+                      "h-7 shrink-0 gap-1 px-2 text-[11px]",
                       normalizedEffortValue !== "__default__" &&
                       "bg-primary/12 text-primary"
                     )}
                     size="sm"
-                    title={
+                    tooltip={
                       effortAdjustable
                         ? `Thinking Effort: ${normalizedEffortValue === "__default__" ? serverDefaultEffort || "default" : normalizedEffortValue}`
                         : `Thinking Effort locked by model (${serverDefaultEffort || "fixed"})`
                     }
+                    variant="ghost"
                   >
                     <BrainIcon className="size-3.5 shrink-0" />
-                    <span className="agent-wide-only capitalize">
+                    <span className="capitalize">
                       {normalizedEffortValue === "__default__"
-                        ? serverDefaultEffort
-                          ? `${serverDefaultEffort} (auto)`
-                          : "Default"
+                        ? serverDefaultEffort || "Auto"
                         : normalizedEffortValue}
                     </span>
-                  </PromptInputSelectTrigger>
-                  <PromptInputSelectContent>
-                    <PromptInputSelectItem value="__default__">
+                    <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
+                  </PromptInputActionMenuTrigger>
+                  <PromptInputActionMenuContent align="start" className="w-48">
+                    {!effortAdjustable && (
+                      <div className="px-2 py-1.5 text-[10px] text-muted-foreground">
+                        Thinking locked by current model (
+                        {serverDefaultEffort || "fixed"})
+                      </div>
+                    )}
+                    <PromptInputActionMenuItem
+                      onSelect={() => onCycleReasoningEffort("")}
+                    >
                       <span className="font-medium">
                         {serverDefaultEffort
                           ? `Default (${serverDefaultEffort})`
                           : "Default (Server)"}
                       </span>
-                    </PromptInputSelectItem>
+                      {normalizedEffortValue === "__default__" && (
+                        <CheckIcon className="ml-auto size-3.5 text-primary" />
+                      )}
+                    </PromptInputActionMenuItem>
                     {availableEfforts.map((eff) => (
-                      <PromptInputSelectItem key={eff} value={eff}>
+                      <PromptInputActionMenuItem
+                        key={eff}
+                        onSelect={() => onCycleReasoningEffort(eff)}
+                      >
                         <span className="font-medium capitalize">{eff}</span>
-                      </PromptInputSelectItem>
+                        {normalizedEffortValue === eff && (
+                          <CheckIcon className="ml-auto size-3.5 text-primary" />
+                        )}
+                      </PromptInputActionMenuItem>
                     ))}
-                  </PromptInputSelectContent>
-                </PromptInputSelect>
+                  </PromptInputActionMenuContent>
+                </PromptInputActionMenu>
               </span>
 
-              <span className="agent-sm-only">
+              <span className="agent-sm-only shrink-0 items-center">
                 <PromptInputHoverCard>
                   <PromptInputHoverCardTrigger asChild>
                     <PromptInputButton
-                      className="h-7 shrink-0 gap-1 px-1.5 text-[11px]"
+                      className="h-7 shrink-0 gap-1 px-2 text-[11px]"
                       onClick={() => openCommandMenu("at")}
                       size="sm"
                       variant="ghost"
@@ -1007,7 +1057,7 @@ function ComposerInner({
                     value={micDeviceId}
                   >
                     <MicSelectorTrigger
-                      className="h-7 max-w-[125px] gap-1 border-none bg-transparent px-1.5 text-[11px] font-normal text-muted-foreground shadow-none hover:bg-accent hover:text-foreground"
+                      className="h-7 max-w-[130px] min-w-0 shrink-0 gap-1 overflow-hidden border-none bg-transparent px-2 text-[11px] font-normal text-muted-foreground shadow-none hover:bg-accent hover:text-foreground"
                       size="sm"
                     >
                       <MicIcon className="size-3.5 shrink-0" />

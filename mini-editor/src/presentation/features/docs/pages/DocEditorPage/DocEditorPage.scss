@@ -38,3 +38,23 @@
   border: 1px solid var(--border-color, #e4e4e7);
   pointer-events: none;
 }
+
+@keyframes doc-deeplink-pulse {
+  0% {
+    background-color: rgba(59, 130, 246, 0.24);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45);
+  }
+  70% {
+    background-color: rgba(59, 130, 246, 0.12);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.doc-deeplink-highlight {
+  border-radius: 6px;
+  animation: doc-deeplink-pulse 2.2s ease-out forwards;
+}

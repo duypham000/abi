@@ -5,9 +5,9 @@ import {
   AttachmentPreview,
   Attachments,
 } from "@/components/ai-elements/attachments";
-import { MessageResponse } from "@/components/ai-elements/message";
 import type { AgentUIMessagePart } from "@/core/interfaces/agent";
 import { isToolUIPart } from "ai";
+import { AgentMarkdownResponse } from "../AgentDeeplinkChip";
 import {
   CommitCard,
   EnvVarsCard,
@@ -74,12 +74,12 @@ export function AgentPartRenderer({
   switch (part.type) {
     case "text":
       return (
-        <MessageResponse
+        <AgentMarkdownResponse
           className="text-sm leading-relaxed"
           isAnimating={isStreaming && part.state !== "done"}
         >
           {part.text}
-        </MessageResponse>
+        </AgentMarkdownResponse>
       );
 
     case "reasoning":
