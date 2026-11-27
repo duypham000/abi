@@ -23,6 +23,7 @@ import {
   createAgentTransport,
   fetchAgentAgyConfig,
   fetchAgentHarnesses,
+  fetchAgentHealth,
   fetchAgentInfo,
   fetchAgentPrompts,
   fetchAgentStatus,
@@ -425,6 +426,8 @@ export function useAgentRuntime() {
   const [backendError, setBackendError] = useState<string | null>(null);
   const [isRefreshingMeta, setIsRefreshingMeta] = useState(false);
   const [isRefreshingUsage, setIsRefreshingUsage] = useState(false);
+  const backendStatusRef = useRef<AgentBackendStatus | null>(null);
+  backendStatusRef.current = backendStatus;
 
   const refreshAgentUsage = useCallback(async () => {
     const currentCfg = useAgentStore.getState().config;
@@ -434,6 +437,13 @@ export function useAgentRuntime() {
     };
     setIsRefreshingUsage(true);
     try {
+      if (!backendStatusRef.current) {
+        const health = await fetchAgentHealth(opts).catch(() => null);
+        if (health && health.agentReachable === false) {
+          setBackendError(health.agentError || "GemOps agent service is offline on server.");
+          return;
+        }
+      }
       const usageRes = await fetchAgentUsage(opts);
       setBackendUsage(usageRes);
     } catch {
@@ -443,7 +453,7 @@ export function useAgentRuntime() {
     }
   }, []);
 
-  const refreshBackendMeta = useCallback(async () => {
+  const probeAndRefreshBackendMeta = useCallback(async (): Promise<boolean> => {
     const currentCfg = useAgentStore.getState().config;
     const opts = {
       apiEndpoint: currentCfg.apiEndpoint,
@@ -451,6 +461,13 @@ export function useAgentRuntime() {
     };
     setIsRefreshingMeta(true);
     try {
+      const health = await fetchAgentHealth(opts).catch(() => null);
+      if (health && health.agentReachable === false) {
+        setBackendStatus(null);
+        setBackendError(health.agentError || "GemOps agent service is offline on server.");
+        return false;
+      }
+
       const [statusRes, infoRes, harnessesRes, promptsRes, agyCfgRes] =
         await Promise.allSettled([
           fetchAgentStatus(opts),
@@ -464,6 +481,7 @@ export function useAgentRuntime() {
       if (statusRes.status === "fulfilled") {
         setBackendStatus(statusRes.value);
       } else {
+        setBackendStatus(null);
         firstErr =
           statusRes.reason instanceof Error
             ? statusRes.reason.message
@@ -504,16 +522,28 @@ export function useAgentRuntime() {
         setBackendAgyConfig(agyCfgRes.value);
       }
       setBackendError(firstErr);
+      return statusRes.status === "fulfilled";
     } finally {
       setIsRefreshingMeta(false);
     }
   }, []);
 
+  const refreshBackendMeta = useCallback(async (): Promise<void> => {
+    await probeAndRefreshBackendMeta();
+  }, [probeAndRefreshBackendMeta]);
+
   useEffect(() => {
     if (!hydrated) return;
-    void refreshBackendMeta();
-    void refreshAgentUsage();
-  }, [hydrated, config.apiEndpoint, refreshBackendMeta, refreshAgentUsage]);
+    let cancelled = false;
+    void probeAndRefreshBackendMeta().then((reachable) => {
+      if (!cancelled && reachable) {
+        void refreshAgentUsage();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, config.apiEndpoint, probeAndRefreshBackendMeta, refreshAgentUsage]);
 
   const {
     messages,

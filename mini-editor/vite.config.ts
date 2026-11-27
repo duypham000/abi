@@ -148,6 +148,13 @@ export default defineConfig(async ({ mode }) => {
           headers,
           secure,
         },
+        "/go": {
+          target: goParsed.origin,
+          rewrite: (p) => (goParsed.basePath ? `${goParsed.basePath}${p.replace(/^\/go/, "")}` : p),
+          changeOrigin,
+          headers,
+          secure,
+        },
         "/ws/yjs": {
           target: wsTarget,
           ws: true,

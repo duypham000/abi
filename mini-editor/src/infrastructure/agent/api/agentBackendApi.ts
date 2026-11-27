@@ -187,6 +187,21 @@ export interface AgentHarnessSummary {
   hookCount: number;
 }
 
+export interface AgentGatewayHealth {
+  status?: string;
+  service?: string;
+  timestamp?: string;
+  transport?: {
+    mode?: string;
+    target?: string;
+    socketPath?: string;
+    tcpUrl?: string;
+  };
+  agentReachable?: boolean;
+  agentStatus?: number;
+  agentError?: string;
+}
+
 export interface AgentHarnessesResponse {
   defaultHarnessId: string;
   activeHarnessId: string;
@@ -285,6 +300,11 @@ async function requestJson<T>(
     | null;
 
   if (!res.ok) {
+    if (!payload && (res.status === 502 || res.status === 503 || res.status === 504)) {
+      throw new Error(
+        `GemOps Agent daemon chưa chạy hoặc không kết nối được trên server (HTTP ${res.status})`
+      );
+    }
     const errMsg =
       payload?.message || payload?.error || `HTTP ${res.status} ${res.statusText}`;
     throw new Error(errMsg);
@@ -449,8 +469,8 @@ export function deleteAgentBackendSession(
 export function fetchAgentHealth(opts?: {
   apiEndpoint?: string;
   apiKey?: string;
-}): Promise<Record<string, unknown>> {
-  return requestJson<Record<string, unknown>>("/healthz", opts);
+}): Promise<AgentGatewayHealth> {
+  return requestJson<AgentGatewayHealth>("/healthz", opts);
 }
 
 export function fetchAgentMeta(opts?: {
