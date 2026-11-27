@@ -108,7 +108,14 @@ jobs:
         run: |
           if [ -f .env.production ]; then
             cp .env.production .env
-            echo "Successfully overridden .env with .env.production"
+            while IFS= read -r line || [ -n "$line" ]; do
+              line="${line%$'\r'}"
+              case "$line" in
+                ""|\#*) continue ;;
+                *=*) echo "$line" >> "$GITHUB_ENV" ;;
+              esac
+            done < .env.production
+            echo "Successfully overridden .env with .env.production and exported to GITHUB_ENV"
           else
             echo "Warning: .env.production not found"
           fi

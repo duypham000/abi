@@ -56,7 +56,10 @@ export function useConnectivityManager() {
       // Slow polling while online — detect silent disconnect
       clearPoll();
       pollingRef.current = setInterval(async () => {
-        const alive = await pingServer(3000);
+        let alive = await pingServer(5000);
+        if (!alive) {
+          alive = await pingServer(5000);
+        }
         if (!alive) {
           dispatch(connectionLost());
         }

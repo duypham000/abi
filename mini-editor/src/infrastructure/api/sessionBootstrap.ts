@@ -15,6 +15,7 @@ export async function pingServer(timeoutMs = 4000): Promise<boolean> {
 
       const res = await fetch(url, {
         method: "GET",
+        cache: "no-store",
         signal: controller.signal,
       });
       clearTimeout(timer);

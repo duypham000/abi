@@ -9,6 +9,7 @@ import { setOnline, connectionLost } from "@/presentation/store/appSlice";
 import { setUser } from "@/presentation/store/authSlice";
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
 import { getGoApiBaseUrl, getGoRootUrl } from "./apiConfig";
+import { pingServer } from "./sessionBootstrap";
 
 export { getGoApiBaseUrl as resolveGoApiBaseUrl, getGoRootUrl as resolveGoRootUrl };
 
@@ -88,14 +89,17 @@ const baseQueryWithTransform: BaseQueryFn<
 > = async (args, api, extraOptions) => {
   const result = await baseQueryWithReauth(args, api, extraOptions);
 
-  const isOfflineStatus =
-    result.error?.status === "FETCH_ERROR" ||
-    (typeof result.error?.status === "number" &&
-      result.error.status >= 502 &&
-      result.error.status <= 504);
+  const status = result.error?.status;
+  const isNetworkFailure = status === "FETCH_ERROR" || status === "TIMEOUT_ERROR";
+  const isGatewayFailure = typeof status === "number" && status >= 502 && status <= 504;
 
-  if (isOfflineStatus) {
+  if (isNetworkFailure) {
     api.dispatch(connectionLost());
+  } else if (isGatewayFailure) {
+    const alive = await pingServer(2500);
+    if (!alive) {
+      api.dispatch(connectionLost());
+    }
   } else if (!result.error) {
     api.dispatch(setOnline(true));
   }

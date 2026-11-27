@@ -21,16 +21,26 @@ function trimTrailingSlashes(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
+export function upgradeLegacyProdHttp(url: string): string {
+  return url.replace(/^http:\/\/api\.tomoo\.uk(?=\/|$)/i, "https://api.tomoo.uk");
+}
+
+function isTauriPackagedOrigin(): boolean {
+  if (typeof window === "undefined") return false;
+  const { protocol, hostname } = window.location;
+  return protocol === "tauri:" || hostname === "tauri.localhost" || "__TAURI_INTERNALS__" in window;
+}
+
 function getRuntimeOverrideUrl(): string | null {
   if (typeof window === "undefined") return null;
   const winCfg = (window as RuntimeConfigWindow).__TOMO_CONFIG__?.apiUrl;
   if (winCfg && /^https?:\/\//i.test(winCfg.trim())) {
-    return trimTrailingSlashes(winCfg.trim());
+    return upgradeLegacyProdHttp(trimTrailingSlashes(winCfg.trim()));
   }
   try {
     const stored = window.localStorage?.getItem(RUNTIME_API_URL_KEY);
     if (stored && /^https?:\/\//i.test(stored.trim())) {
-      return trimTrailingSlashes(stored.trim());
+      return upgradeLegacyProdHttp(trimTrailingSlashes(stored.trim()));
     }
   } catch {
     // ignore storage access errors
@@ -115,12 +125,12 @@ function resolveConfiguredServerUrl(): string | null {
 
   const viteGoUrl = (import.meta.env.VITE_GO_API_URL as string | undefined)?.trim();
   if (viteGoUrl && /^https?:\/\//i.test(viteGoUrl)) {
-    return trimTrailingSlashes(viteGoUrl);
+    return upgradeLegacyProdHttp(trimTrailingSlashes(viteGoUrl));
   }
 
   const tomoApiBase = (import.meta.env.TOMO_API_BASE as string | undefined)?.trim();
   if (tomoApiBase && /^https?:\/\//i.test(tomoApiBase)) {
-    return trimTrailingSlashes(tomoApiBase);
+    return upgradeLegacyProdHttp(trimTrailingSlashes(tomoApiBase));
   }
 
   return null;
@@ -143,6 +153,9 @@ export function getGoAbsoluteApiBaseUrl(): string {
   ) {
     return buildApiBaseUrl(window.location.origin, apiPath);
   }
+  if (!import.meta.env.DEV && isTauriPackagedOrigin()) {
+    return buildApiBaseUrl("https://api.tomoo.uk/go", apiPath);
+  }
   return buildApiBaseUrl("http://127.0.0.1:8080", apiPath);
 }
 
@@ -164,6 +177,9 @@ export function getGoApiBaseUrl(): string {
   }
   if (typeof window !== "undefined" && /^https?:$/i.test(window.location.protocol) && window.location.hostname !== "tauri.localhost") {
     return `${window.location.origin}${apiPath}`;
+  }
+  if (!import.meta.env.DEV && isTauriPackagedOrigin()) {
+    return buildApiBaseUrl("https://api.tomoo.uk/go", apiPath);
   }
   return apiPath;
 }

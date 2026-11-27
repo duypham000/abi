@@ -64,6 +64,20 @@ pub struct AuthCore {
     refresh_lock: tokio::sync::Mutex<()>,
 }
 
+fn normalize_api_base(raw: &str) -> String {
+    let mut trimmed = raw.trim().trim_end_matches('/').to_string();
+    if let Some(rest) = trimmed.strip_prefix("http://api.tomoo.uk") {
+        trimmed = format!("https://api.tomoo.uk{rest}");
+    }
+    if trimmed.ends_with("/api/v1") {
+        trimmed
+    } else if let Some(prefix) = trimmed.strip_suffix("/v1") {
+        format!("{prefix}/api/v1")
+    } else {
+        format!("{trimmed}/api/v1")
+    }
+}
+
 impl AuthCore {
     pub fn new() -> Self {
         // Load environment files if present.
@@ -84,28 +98,22 @@ impl AuthCore {
         let default_base = "http://127.0.0.1:8080/api/v1";
         #[cfg(not(feature = "local"))]
         let default_base = option_env!("TOMO_API_BASE")
-            .unwrap_or("http://api.tomoo.uk/go/api/v1");
-        let api_base = std::env::var("TOMO_API_BASE")
-            .or_else(|_| {
-                std::env::var("VITE_GO_API_URL").map(|u| {
-                    let trimmed = u.trim_end_matches('/');
-                    if trimmed.ends_with("/api/v1") {
-                        trimmed.to_string()
-                    } else {
-                        format!("{trimmed}/api/v1")
-                    }
-                })
+            .unwrap_or("https://api.tomoo.uk/go/api/v1");
+        let raw_base = std::env::var("TOMO_API_BASE")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                std::env::var("VITE_GO_API_URL")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
             })
-            .unwrap_or_else(|_| {
-                if let Some(vite_go) = option_env!("VITE_GO_API_URL") {
-                    let trimmed = vite_go.trim_end_matches('/');
-                    if trimmed.ends_with("/api/v1") {
-                        return trimmed.to_string();
-                    }
-                    return format!("{trimmed}/api/v1");
-                }
-                default_base.to_string()
-            });
+            .or_else(|| {
+                option_env!("VITE_GO_API_URL")
+                    .map(|s| s.to_string())
+                    .filter(|s| !s.trim().is_empty())
+            })
+            .unwrap_or_else(|| default_base.to_string());
+        let api_base = normalize_api_base(&raw_base);
         // Always bound network calls so a slow/unreachable backend can never hang
         // a window's bootstrap indefinitely.
         let mut builder = reqwest::Client::builder()
@@ -128,6 +136,15 @@ impl AuthCore {
 
     pub fn set_api_base(&self, base: String) {
         *self.api_base.lock().unwrap() = base;
+    }
+
+    pub fn update_api_base_if_valid(&self, api_base: Option<String>) {
+        if let Some(base) = api_base {
+            let trimmed = base.trim();
+            if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+                self.set_api_base(normalize_api_base(trimmed));
+            }
+        }
     }
 
     /// Returns the cached access token if it is still comfortably valid.
@@ -300,12 +317,7 @@ pub async fn auth_login(
     password: String,
     api_base: Option<String>,
 ) -> Result<String, String> {
-    if let Some(base) = api_base {
-        let trimmed = base.trim();
-        if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-            core.set_api_base(trimmed.to_string());
-        }
-    }
+    core.update_api_base_if_valid(api_base);
     let base_url = core.get_api_base();
     let res = core
         .http
@@ -335,7 +347,9 @@ pub async fn auth_login(
 pub async fn auth_access_token(
     app: AppHandle,
     core: State<'_, AuthCore>,
+    api_base: Option<String>,
 ) -> Result<Option<String>, String> {
+    core.update_api_base_if_valid(api_base);
     // Fast path: a still-valid cached access token.
     if let Some(tok) = core.valid_access() {
         return Ok(Some(tok));
@@ -402,7 +416,12 @@ pub async fn auth_peek_access_token(core: State<'_, AuthCore>) -> Result<Option<
 }
 
 #[tauri::command]
-pub async fn auth_logout(app: AppHandle, core: State<'_, AuthCore>) -> Result<(), String> {
+pub async fn auth_logout(
+    app: AppHandle,
+    core: State<'_, AuthCore>,
+    api_base: Option<String>,
+) -> Result<(), String> {
+    core.update_api_base_if_valid(api_base);
     // Best-effort server revoke using the current access token.
     if let Some(token) = core.valid_access() {
         let base_url = core.get_api_base();

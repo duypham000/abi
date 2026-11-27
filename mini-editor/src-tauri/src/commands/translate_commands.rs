@@ -315,12 +315,29 @@ pub async fn cmd_translate(
     let url = "https://translate.googleapis.com/translate_a/single";
     let mut last_err = String::new();
 
-    // 1. Try local Node.js translate microservice on port 8006 first
-    let node_url = "http://127.0.0.1:8006/api/v1/translate";
+    // 1. Try configured Node.js translate microservice (or local port 8006) first
+    let configured_node = std::env::var("VITE_NODE_API_URL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            option_env!("VITE_NODE_API_URL")
+                .map(|s| s.to_string())
+                .filter(|s| !s.trim().is_empty())
+        });
+    let (node_url, node_timeout_ms) = match configured_node {
+        Some(raw) => {
+            let mut base = raw.trim().trim_end_matches('/').to_string();
+            if let Some(rest) = base.strip_prefix("http://api.tomoo.uk") {
+                base = format!("https://api.tomoo.uk{rest}");
+            }
+            (format!("{base}/api/v1/translate"), 3000)
+        }
+        None => ("http://127.0.0.1:8006/api/v1/translate".to_string(), 1500),
+    };
     if let Ok(res) = client
-        .get(node_url)
+        .get(&node_url)
         .query(&[("q", query_trimmed), ("sl", &sl), ("tl", &tl)])
-        .timeout(Duration::from_millis(1500))
+        .timeout(Duration::from_millis(node_timeout_ms))
         .send()
         .await
     {

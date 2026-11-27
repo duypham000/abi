@@ -10,7 +10,8 @@ const TOKEN_KEY = "tomo_access_token";
 export async function getAccessToken(): Promise<string | null> {
   if (isTauri()) {
     try {
-      return await invoke<string | null>("auth_access_token");
+      const apiBase = getGoAbsoluteApiBaseUrl();
+      return await invoke<string | null>("auth_access_token", { apiBase });
     } catch (err) {
       console.warn("Tauri auth_access_token error:", err);
       return null;
@@ -76,7 +77,8 @@ export async function login(identifier: string, password: string): Promise<strin
 export async function logout(): Promise<void> {
   if (isTauri()) {
     try {
-      await invoke("auth_logout");
+      const apiBase = getGoAbsoluteApiBaseUrl();
+      await invoke("auth_logout", { apiBase });
     } catch (err) {
       console.warn("Tauri auth_logout error:", err);
     }

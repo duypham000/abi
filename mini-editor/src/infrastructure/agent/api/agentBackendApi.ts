@@ -1,5 +1,10 @@
 import { getAccessToken } from "@/infrastructure/tauri/authBridge";
-import { getGoRootUrl, isProxiedDevEnvironment } from "@/infrastructure/api/apiConfig";
+import {
+  getGoApiBaseUrl,
+  getGoRootUrl,
+  isProxiedDevEnvironment,
+  upgradeLegacyProdHttp,
+} from "@/infrastructure/api/apiConfig";
 
 export interface AgentBackendPendingApproval {
   id: string;
@@ -190,11 +195,29 @@ export interface AgentHarnessesResponse {
 }
 
 export function resolveAgentApiEndpoint(endpoint?: string): string {
-  const trimmed = (endpoint ?? "").trim() || "/api/v1/agent/chat";
+  const trimmed = upgradeLegacyProdHttp((endpoint ?? "").trim() || "/api/v1/agent/chat");
   if (/^https?:\/\//i.test(trimmed)) {
     return trimmed;
   }
-  if (!isProxiedDevEnvironment() && (trimmed.startsWith("/api/") || trimmed.startsWith("/go/"))) {
+  if (!isProxiedDevEnvironment() && trimmed.startsWith("/")) {
+    const apiBase = getGoApiBaseUrl();
+    if (/^https?:\/\//i.test(apiBase)) {
+      if (trimmed.startsWith("/api/v1/")) {
+        return `${apiBase}${trimmed.slice("/api/v1".length)}`;
+      }
+      if (trimmed === "/api/v1") {
+        return apiBase;
+      }
+      if (trimmed.startsWith("/go/api/v1/")) {
+        return `${apiBase}${trimmed.slice("/go/api/v1".length)}`;
+      }
+      if (trimmed.startsWith("/go/v1/")) {
+        return `${apiBase}${trimmed.slice("/go/v1".length)}`;
+      }
+      if (trimmed.startsWith("/v1/")) {
+        return `${apiBase}${trimmed.slice("/v1".length)}`;
+      }
+    }
     const root = getGoRootUrl();
     if (root) {
       if (root.endsWith("/go") && trimmed.startsWith("/go/")) {
