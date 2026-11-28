@@ -4,16 +4,32 @@ import {
   isAutostartEnabled,
   setAutostart,
 } from "@/infrastructure/tauri/autostartService";
+import {
+  getCachedResourceSync,
+  RESOURCE_CACHE_KEYS,
+  RESOURCE_CACHE_TTLS,
+  setCachedResource,
+} from "@/infrastructure/tauri/resourceCacheService";
 import "@/presentation/features/settings/pages/SettingsPage/SettingsPage.scss";
 
 export default function GeneralSection() {
-  const [autostart, setAutostartState] = useState(false);
+  const [autostart, setAutostartState] = useState<boolean>(
+    () => getCachedResourceSync<boolean>(RESOURCE_CACHE_KEYS.SETTINGS_AUTOSTART)?.data ?? false
+  );
   const [busy, setBusy] = useState(false);
 
-  // Seed the toggle from the live OS state (the registry is the source of truth).
+  // Seed the toggle from the live OS state (the registry is the source of truth)
+  // and update SQLite resource_cache for instant display on next open.
   useEffect(() => {
     isAutostartEnabled()
-      .then(setAutostartState)
+      .then((enabled) => {
+        setAutostartState(enabled);
+        void setCachedResource(
+          RESOURCE_CACHE_KEYS.SETTINGS_AUTOSTART,
+          enabled,
+          RESOURCE_CACHE_TTLS.SETTINGS_AUTOSTART
+        );
+      })
       .catch(() => {});
   }, []);
 
@@ -22,6 +38,11 @@ export default function GeneralSection() {
     setAutostartState(next); // optimistic
     try {
       await setAutostart(next);
+      void setCachedResource(
+        RESOURCE_CACHE_KEYS.SETTINGS_AUTOSTART,
+        next,
+        RESOURCE_CACHE_TTLS.SETTINGS_AUTOSTART
+      );
     } catch {
       setAutostartState(!next); // revert on failure
     } finally {

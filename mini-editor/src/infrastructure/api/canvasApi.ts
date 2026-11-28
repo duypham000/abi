@@ -25,16 +25,149 @@ import {
 
 export type DeleteCanvasArg = number | { id: number; scope?: DeleteScope };
 
+const CANVAS_SYNC_COOLDOWN_MS = 30_000;
+let lastCanvasBgSyncAt = 0;
+let canvasBgSyncInFlight: Promise<void> | null = null;
+
+function warmCanvasThumbnails(items: CanvasDto[]): void {
+  for (const item of items) {
+    const meta = parseCanvasMetadata(item.metadata);
+    if (meta.thumbnail) {
+      setCachedCanvasThumbnail(item.id, meta.thumbnail);
+    }
+  }
+}
+
 export const canvasApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     listCanvas: builder.query<
       PageResult<CanvasDto>,
       { page?: number; size?: number; sortBy?: string; sortDirection?: string } | void
     >({
-      queryFn: async (args, _api, _extraOptions, fetchWithBaseQuery) => {
+      queryFn: async (args, api, _extraOptions, fetchWithBaseQuery) => {
         if (isTauri()) {
           try {
             const data = await listCanvasFromSqlite(args || undefined);
+            warmCanvasThumbnails(data.items);
+
+            const syncRemote = async () => {
+              if (canvasBgSyncInFlight) return canvasBgSyncInFlight;
+              if (Date.now() - lastCanvasBgSyncAt < CANVAS_SYNC_COOLDOWN_MS) return;
+
+              canvasBgSyncInFlight = (async () => {
+                try {
+                  const token = await getAccessToken();
+                  if (!token || token === "local-standalone-token") return;
+                  lastCanvasBgSyncAt = Date.now();
+
+                  let changed = false;
+                  const existingIds = new Set(data.items.map((c) => c.id));
+
+                  // Try REST /canvas first (if supported by active backend)
+                  const listRes = await fetchWithBaseQuery({
+                    url: "/canvas",
+                    params: { page: 1, page_size: 100 },
+                  });
+                  if (listRes.data && !listRes.error) {
+                    const rawData = listRes.data as { items?: unknown[] } | unknown[];
+                    const remoteItems = Array.isArray(rawData)
+                      ? rawData
+                      : Array.isArray(rawData?.items)
+                        ? rawData.items
+                        : [];
+                    for (const raw of remoteItems) {
+                      if (!raw || typeof raw !== "object") continue;
+                      const r = raw as Record<string, unknown>;
+                      const remoteId = String(r.id ?? "").trim();
+                      const slug = typeof r.slug === "string" && r.slug ? r.slug : null;
+                      const targetId = parseOrHashId(remoteId || slug || String(Date.now()), "canvas-");
+                      if (existingIds.has(targetId)) continue;
+                      const sceneStr =
+                        typeof r.scene === "string"
+                          ? r.scene
+                          : JSON.stringify(r.scene ?? { elements: [], appState: {}, files: {} });
+                      await upsertCanvasFromServerInSqlite(targetId, {
+                        title: typeof r.title === "string" && r.title ? r.title : "Untitled Canvas",
+                        scene: sceneStr,
+                        metadata:
+                          typeof r.metadata === "string"
+                            ? r.metadata
+                            : r.metadata != null
+                              ? JSON.stringify(r.metadata)
+                              : null,
+                        lastSync:
+                          typeof r.updated_at === "string"
+                            ? r.updated_at
+                            : new Date().toISOString(),
+                        status: r.status === 0 || r.status === 1 ? r.status : 1,
+                        backendUuid: remoteId && !/^\d+$/.test(remoteId) ? remoteId : null,
+                        slug,
+                      });
+                      changed = true;
+                    }
+                  } else {
+                    // Fallback: hydrate any missing canvases stored in Git workspace (`canvases/*.json`)
+                    const gitListRes = await fetchWithBaseQuery("/github/files/list?dir=canvases");
+                    const files = Array.isArray(gitListRes.data)
+                      ? (gitListRes.data as Array<{ path?: string; name?: string; isDir?: boolean; is_dir?: boolean }>)
+                      : [];
+                    for (const f of files) {
+                      if (f.isDir || f.is_dir || !f.path || !f.path.endsWith(".json")) continue;
+                      const base = f.path.split("/").pop()?.replace(/\.json$/i, "") ?? "";
+                      const numId = parseOrHashId(base, "canvas-");
+                      if (existingIds.has(numId)) continue;
+                      const fileRes = await fetchWithBaseQuery(
+                        `/github/files/get?path=${encodeURIComponent(f.path)}`
+                      );
+                      const rawContent = (fileRes.data as { content?: string } | undefined)?.content;
+                      if (!rawContent) continue;
+                      try {
+                        const parsed = JSON.parse(rawContent) as Record<string, unknown>;
+                        const sceneStr =
+                          typeof parsed.scene === "string"
+                            ? parsed.scene
+                            : JSON.stringify(parsed.scene ?? { elements: [], appState: {}, files: {} });
+                        await upsertCanvasFromServerInSqlite(numId, {
+                          title: typeof parsed.title === "string" ? parsed.title : base,
+                          scene: sceneStr,
+                          metadata:
+                            typeof parsed.metadata === "string"
+                              ? parsed.metadata
+                              : parsed.metadata != null
+                                ? JSON.stringify(parsed.metadata)
+                                : null,
+                          lastSync:
+                            typeof parsed.saved_at === "string"
+                              ? parsed.saved_at
+                              : new Date().toISOString(),
+                          status: 1,
+                          slug: typeof parsed.slug === "string" ? parsed.slug : base,
+                        });
+                        changed = true;
+                      } catch {
+                        // ignore malformed canvas git file
+                      }
+                    }
+                  }
+
+                  if (changed) {
+                    const fresh = await listCanvasFromSqlite(args || undefined);
+                    warmCanvasThumbnails(fresh.items);
+                    api.dispatch(canvasApi.util.upsertQueryData("listCanvas", args, fresh));
+                  }
+                } catch {
+                  // non-fatal offline sync
+                } finally {
+                  canvasBgSyncInFlight = null;
+                }
+              })();
+
+              return canvasBgSyncInFlight;
+            };
+
+            setTimeout(() => {
+              void syncRemote();
+            }, 0);
             return { data };
           } catch (err: unknown) {
             return { error: { status: 500, statusText: String(err), data: String(err) } };

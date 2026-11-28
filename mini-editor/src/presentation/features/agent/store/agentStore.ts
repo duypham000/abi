@@ -16,6 +16,37 @@ import {
   type WorkspaceContextItem,
 } from "@/core/interfaces/agent";
 import { agentStorage } from "@/infrastructure/agent";
+import {
+  fetchAgentAgyConfig,
+  fetchAgentHarnesses,
+  fetchAgentHealth,
+  fetchAgentInfo,
+  fetchAgentPrompts,
+  fetchAgentStatus,
+  fetchAgentUsage,
+  type AgentAgySettingsResponse,
+  type AgentBackendInfo,
+  type AgentBackendStatus,
+  type AgentHarnessSummary,
+  type AgentPromptPreset,
+  type AgentUsageResponse,
+} from "@/infrastructure/agent/api/agentBackendApi";
+import {
+  getCachedResource,
+  getCachedResourceSync,
+  RESOURCE_CACHE_KEYS,
+  RESOURCE_CACHE_TTLS,
+  setCachedResource,
+} from "@/infrastructure/tauri/resourceCacheService";
+
+export interface AgentBackendMetaCache {
+  backendStatus: AgentBackendStatus | null;
+  backendInfo: AgentBackendInfo | null;
+  backendUsage: AgentUsageResponse | null;
+  backendPrompts: AgentPromptPreset[];
+  backendAgyConfig: AgentAgySettingsResponse | null;
+  harnesses: AgentHarnessSummary[];
+}
 
 export type AgentViewTab = "chat" | "artifacts" | "inspector";
 
@@ -70,7 +101,22 @@ export interface AgentStoreState {
   pendingAskAI: AskAIRequest | null;
   planDocuments: Record<string, AgentPlanDocument>;
 
+  // Cached & preloaded backend metadata
+  backendStatus: AgentBackendStatus | null;
+  backendInfo: AgentBackendInfo | null;
+  backendUsage: AgentUsageResponse | null;
+  backendPrompts: AgentPromptPreset[];
+  backendAgyConfig: AgentAgySettingsResponse | null;
+  harnesses: AgentHarnessSummary[];
+  backendError: string | null;
+  backendMetaLoadedAt: number | null;
+  isRefreshingMeta: boolean;
+  isRefreshingUsage: boolean;
+
   hydrate: () => Promise<void>;
+  refreshBackendMeta: (opts?: { force?: boolean }) => Promise<boolean>;
+  refreshAgentUsage: () => Promise<void>;
+  setBackendAgyConfig: (cfg: AgentAgySettingsResponse | null) => void;
   createSession: (opts?: CreateSessionOptions) => AgentSession;
   selectSession: (sessionId: string) => void;
   renameSession: (sessionId: string, title: string) => void;
@@ -347,6 +393,28 @@ function createMinimalBootstrapSessions(): AgentSession[] {
 }
 
 const initialBootstrapSessions = createMinimalBootstrapSessions();
+let metaRefreshInFlight: Promise<boolean> | null = null;
+let usageRefreshInFlight: Promise<void> | null = null;
+
+function persistBackendMetaSnapshot(state: AgentStoreState): void {
+  const snapshot: AgentBackendMetaCache = {
+    backendStatus: state.backendStatus,
+    backendInfo: state.backendInfo,
+    backendUsage: state.backendUsage,
+    backendPrompts: state.backendPrompts,
+    backendAgyConfig: state.backendAgyConfig,
+    harnesses: state.harnesses,
+  };
+  void setCachedResource(
+    RESOURCE_CACHE_KEYS.AGENT_BACKEND_META,
+    snapshot,
+    RESOURCE_CACHE_TTLS.AGENT_BACKEND_META
+  );
+}
+
+const initialCachedMeta = getCachedResourceSync<AgentBackendMetaCache>(
+  RESOURCE_CACHE_KEYS.AGENT_BACKEND_META
+);
 
 export const useAgentStore = create<AgentStoreState>((set, get) => ({
   hydrated: false,
@@ -373,6 +441,17 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
   suggestionsBySession: {},
   pendingAskAI: null,
 
+  backendStatus: initialCachedMeta?.data.backendStatus ?? null,
+  backendInfo: initialCachedMeta?.data.backendInfo ?? null,
+  backendUsage: initialCachedMeta?.data.backendUsage ?? null,
+  backendPrompts: initialCachedMeta?.data.backendPrompts ?? [],
+  backendAgyConfig: initialCachedMeta?.data.backendAgyConfig ?? null,
+  harnesses: initialCachedMeta?.data.harnesses ?? [],
+  backendError: null,
+  backendMetaLoadedAt: initialCachedMeta?.updatedAt ?? null,
+  isRefreshingMeta: false,
+  isRefreshingUsage: false,
+
   hydrate: async () => {
     if (get().hydrated) return;
     if (hydrationInFlight) return hydrationInFlight;
@@ -385,10 +464,12 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
           persistedConfig,
           persistedSessions,
           persistedActiveId,
+          cachedMeta,
         ] = await Promise.all([
           agentStorage.loadConfig(),
           agentStorage.loadSessions(),
           agentStorage.loadActiveSessionId(),
+          getCachedResource<AgentBackendMetaCache>(RESOURCE_CACHE_KEYS.AGENT_BACKEND_META),
         ]);
 
         const cleanedPersisted = persistedSessions.filter(
@@ -452,6 +533,28 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
             resolvedActiveSession?.artifacts[0]?.id ??
             null,
           suggestionsBySession: mergedSuggestions,
+          ...(cachedMeta?.data
+            ? {
+                backendStatus: currentState.backendStatus ?? cachedMeta.data.backendStatus ?? null,
+                backendInfo: currentState.backendInfo ?? cachedMeta.data.backendInfo ?? null,
+                backendUsage: currentState.backendUsage ?? cachedMeta.data.backendUsage ?? null,
+                backendPrompts:
+                  currentState.backendPrompts.length > 0
+                    ? currentState.backendPrompts
+                    : Array.isArray(cachedMeta.data.backendPrompts)
+                      ? cachedMeta.data.backendPrompts
+                      : [],
+                backendAgyConfig:
+                  currentState.backendAgyConfig ?? cachedMeta.data.backendAgyConfig ?? null,
+                harnesses:
+                  currentState.harnesses.length > 0
+                    ? currentState.harnesses
+                    : Array.isArray(cachedMeta.data.harnesses)
+                      ? cachedMeta.data.harnesses
+                      : [],
+                backendMetaLoadedAt: currentState.backendMetaLoadedAt ?? cachedMeta.updatedAt ?? null,
+              }
+            : {}),
         });
       } catch {
         set({ hydrated: true, isHydrating: false });
@@ -461,6 +564,142 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
     })();
 
     return hydrationInFlight;
+  },
+
+  setBackendAgyConfig: (cfg) => {
+    set({ backendAgyConfig: cfg });
+    persistBackendMetaSnapshot(get());
+  },
+
+  refreshAgentUsage: async () => {
+    if (usageRefreshInFlight) return usageRefreshInFlight;
+    usageRefreshInFlight = (async () => {
+      const currentCfg = get().config;
+      const opts = {
+        apiEndpoint: currentCfg.apiEndpoint,
+        apiKey: currentCfg.apiKey,
+      };
+      set({ isRefreshingUsage: true });
+      try {
+        if (!get().backendStatus) {
+          const health = await fetchAgentHealth(opts).catch(() => null);
+          if (health && health.agentReachable === false) {
+            set({
+              backendError: health.agentError || "GemOps agent service is offline on server.",
+            });
+            return;
+          }
+        }
+        const usageRes = await fetchAgentUsage(opts);
+        set({ backendUsage: usageRes });
+        persistBackendMetaSnapshot(get());
+      } catch {
+        // keep cached usage if /agy/usage fails transiently
+      } finally {
+        set({ isRefreshingUsage: false });
+        usageRefreshInFlight = null;
+      }
+    })();
+    return usageRefreshInFlight;
+  },
+
+  refreshBackendMeta: async (metaOpts) => {
+    if (metaRefreshInFlight && !metaOpts?.force) return metaRefreshInFlight;
+    metaRefreshInFlight = (async () => {
+      const currentState = get();
+      const currentCfg = currentState.config;
+      const opts = {
+        apiEndpoint: currentCfg.apiEndpoint,
+        apiKey: currentCfg.apiKey,
+      };
+      set({ isRefreshingMeta: true });
+      try {
+        const health = await fetchAgentHealth(opts).catch(() => null);
+        if (health && health.agentReachable === false) {
+          set({
+            backendError: health.agentError || "GemOps agent service is offline on server.",
+          });
+          return false;
+        }
+
+        const [statusRes, infoRes, harnessesRes, promptsRes, agyCfgRes] =
+          await Promise.allSettled([
+            fetchAgentStatus(opts),
+            fetchAgentInfo(opts),
+            fetchAgentHarnesses(opts),
+            fetchAgentPrompts(opts),
+            fetchAgentAgyConfig(opts),
+          ]);
+
+        let firstErr: string | null = null;
+        const patch: Partial<AgentStoreState> = {};
+
+        if (statusRes.status === "fulfilled") {
+          patch.backendStatus = statusRes.value;
+        } else {
+          firstErr =
+            statusRes.reason instanceof Error
+              ? statusRes.reason.message
+              : "Status unavailable";
+        }
+
+        if (infoRes.status === "fulfilled") {
+          patch.backendInfo = infoRes.value;
+          const liveModels = infoRes.value.models ?? [];
+          if (
+            liveModels.length > 0 &&
+            currentCfg.modelId &&
+            !liveModels.some((m) => m.id === currentCfg.modelId)
+          ) {
+            get().updateConfig({ modelId: "" });
+            get().setSessionModel(get().activeSessionId, "");
+          }
+        } else if (!firstErr) {
+          firstErr =
+            infoRes.reason instanceof Error
+              ? infoRes.reason.message
+              : "Info unavailable";
+        }
+
+        if (harnessesRes.status === "fulfilled") {
+          patch.harnesses = harnessesRes.value.items ?? [];
+        } else if (!firstErr) {
+          firstErr =
+            harnessesRes.reason instanceof Error
+              ? harnessesRes.reason.message
+              : "Harnesses unavailable";
+        }
+
+        if (promptsRes.status === "fulfilled") {
+          patch.backendPrompts = Array.isArray(promptsRes.value?.items)
+            ? promptsRes.value.items
+            : [];
+        }
+        if (agyCfgRes.status === "fulfilled") {
+          patch.backendAgyConfig = agyCfgRes.value;
+        }
+
+        const anyOk =
+          statusRes.status === "fulfilled" ||
+          infoRes.status === "fulfilled" ||
+          harnessesRes.status === "fulfilled";
+
+        set({
+          ...patch,
+          backendError: anyOk ? null : firstErr,
+          ...(anyOk ? { backendMetaLoadedAt: Date.now() } : {}),
+        });
+
+        if (anyOk) {
+          persistBackendMetaSnapshot(get());
+        }
+        return statusRes.status === "fulfilled";
+      } finally {
+        set({ isRefreshingMeta: false });
+        metaRefreshInFlight = null;
+      }
+    })();
+    return metaRefreshInFlight;
   },
 
   createSession: (opts) => {

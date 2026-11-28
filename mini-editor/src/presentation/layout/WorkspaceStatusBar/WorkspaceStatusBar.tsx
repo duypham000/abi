@@ -1,10 +1,21 @@
 /**
  * WorkspaceStatusBar — VS Code-style status bar (24 px strip at the bottom).
- * Shows: panel count · saving state indicator · panel toggle button.
+ * Shows: panel count · saving state indicator · background preload progress · panel toggle button.
  */
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { PanelBottomIcon, SaveIcon, GitBranch } from "lucide-react";
-import { togglePanel, toggleActiveSidebar } from "@/presentation/store/appSlice";
+import {
+  PanelBottomIcon,
+  SaveIcon,
+  GitBranch,
+  Loader2,
+  CheckCircle2,
+} from "lucide-react";
+import {
+  togglePanel,
+  toggleActiveSidebar,
+  selectPreloadProgress,
+} from "@/presentation/store/appSlice";
 import type { RootState, AppDispatch } from "@/presentation/store";
 import { useGoldenLayout } from "../golden/GoldenLayoutContext";
 import { walkComponents } from "../golden/GoldenLayoutHost";
@@ -15,7 +26,9 @@ export function WorkspaceStatusBar() {
   const dispatch = useDispatch<AppDispatch>();
   const panelOpen = useSelector((s: RootState) => s.app.panelOpen);
   const activeSidebar = useSelector((s: RootState) => s.app.activeSidebar);
+  const preload = useSelector(selectPreloadProgress);
   const { layout } = useGoldenLayout();
+  const [showDoneBadge, setShowDoneBadge] = useState(false);
 
   const { data: user } = useGetGithubUserQuery();
   const activeRepoOwner = user?.activeRepoOwner || user?.active_repo_owner || "";
@@ -24,12 +37,28 @@ export function WorkspaceStatusBar() {
   const hasGit = user?.connected && !!activeRepoName;
   const { data: diffData } = useGetGitDiffQuery(undefined, { skip: !hasGit });
 
+  useEffect(() => {
+    if (!preload.active && preload.lastCompletedAt) {
+      setShowDoneBadge(true);
+      const timer = window.setTimeout(() => setShowDoneBadge(false), 3000);
+      return () => window.clearTimeout(timer);
+    }
+    if (preload.active) {
+      setShowDoneBadge(false);
+    }
+    return undefined;
+  }, [preload.active, preload.lastCompletedAt]);
+
   let panelCount = 0;
   if (layout?.rootItem) {
     walkComponents(layout.rootItem, () => { panelCount++; });
   }
 
   const hasSaved = Boolean(localStorage.getItem("tomo-gl-layout"));
+  const preloadPct =
+    preload.total > 0
+      ? Math.min(100, Math.round((preload.completed / preload.total) * 100))
+      : 0;
 
   return (
     <div className="workspace-statusbar" role="status" aria-label="Status bar">
@@ -67,8 +96,36 @@ export function WorkspaceStatusBar() {
         )}
       </div>
 
-      {/* Right: panel toggle */}
+      {/* Right: background preload progress + panel toggle */}
       <div className="wsb-right">
+        {preload.active && (
+          <span
+            className="wsb-preload"
+            title={`Đang nạp ngầm tài nguyên vào SQLite cache (${preload.completed}/${preload.total})`}
+          >
+            <Loader2 size={11} className="wsb-spin" />
+            <span className="wsb-preload__label">
+              Đang nạp: {preload.currentLabel} ({preload.completed}/{preload.total})
+            </span>
+            <span className="wsb-preload__bar" aria-hidden="true">
+              <span
+                className="wsb-preload__fill"
+                style={{ width: `${preloadPct}%` }}
+              />
+            </span>
+          </span>
+        )}
+
+        {!preload.active && showDoneBadge && (
+          <span
+            className="wsb-item wsb-preload--done"
+            title="Tài nguyên đã được đồng bộ và lưu vào SQLite cache"
+          >
+            <CheckCircle2 size={11} />
+            Đã nạp tài nguyên
+          </span>
+        )}
+
         <button
           className={`wsb-btn${panelOpen ? " is-active" : ""}`}
           title="Toggle bottom panel"

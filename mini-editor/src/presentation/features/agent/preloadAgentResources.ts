@@ -127,7 +127,14 @@ export function scheduleBackgroundAgentPreload(): () => void {
       .getState()
       .hydrate()
       .catch(() => undefined)
-      .then(() => (cancelled ? undefined : preloadAgentPanel()))
+      .then(() => {
+        if (cancelled) return undefined;
+        const store = useAgentStore.getState();
+        if (!store.backendInfo && !store.isRefreshingMeta) {
+          void store.refreshBackendMeta().catch(() => undefined);
+        }
+        return preloadAgentPanel();
+      })
       .finally(() => {
         if (cancelled) return;
         cancelStage = runWhenIdle(() => {

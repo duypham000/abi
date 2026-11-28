@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
 import {
   getToolName,
@@ -21,13 +21,6 @@ import {
 import {
   cancelAgentTurn,
   createAgentTransport,
-  fetchAgentAgyConfig,
-  fetchAgentHarnesses,
-  fetchAgentHealth,
-  fetchAgentInfo,
-  fetchAgentPrompts,
-  fetchAgentStatus,
-  fetchAgentUsage,
   resetAgentSession,
   resolveAgentPermission,
   runAgentAgyCommand,
@@ -35,13 +28,9 @@ import {
   stopSpeaking,
   updateAgentAgyConfig,
   updateAgentSessionConfig,
-  type AgentAgySettingsResponse,
   type AgentBackendInfo,
   type AgentBackendSessionConfig,
   type AgentBackendStatus,
-  type AgentCustomCommandResponse,
-  type AgentHarnessSummary,
-  type AgentPromptPreset,
   type AgentUsageResponse,
 } from "@/infrastructure/agent";
 import { useAgentStore } from "../store/agentStore";
@@ -416,134 +405,53 @@ export function useAgentRuntime() {
 
   const messagesRef = useRef<AgentUIMessage[]>(activeSession.messages);
 
-  const [backendStatus, setBackendStatus] = useState<AgentBackendStatus | null>(null);
-  const [backendInfo, setBackendInfo] = useState<AgentBackendInfo | null>(null);
-  const [backendUsage, setBackendUsage] = useState<AgentUsageResponse | null>(null);
-  const [backendPrompts, setBackendPrompts] = useState<AgentPromptPreset[]>([]);
-  const [backendAgyConfig, setBackendAgyConfig] =
-    useState<AgentAgySettingsResponse | null>(null);
-  const [harnesses, setHarnesses] = useState<AgentHarnessSummary[]>([]);
-  const [backendError, setBackendError] = useState<string | null>(null);
-  const [isRefreshingMeta, setIsRefreshingMeta] = useState(false);
-  const [isRefreshingUsage, setIsRefreshingUsage] = useState(false);
-  const backendStatusRef = useRef<AgentBackendStatus | null>(null);
-  backendStatusRef.current = backendStatus;
+  const backendStatus = useAgentStore((s) => s.backendStatus);
+  const backendInfo = useAgentStore((s) => s.backendInfo);
+  const backendUsage = useAgentStore((s) => s.backendUsage);
+  const backendPrompts = useAgentStore((s) => s.backendPrompts);
+  const backendAgyConfig = useAgentStore((s) => s.backendAgyConfig);
+  const harnesses = useAgentStore((s) => s.harnesses);
+  const backendError = useAgentStore((s) => s.backendError);
+  const isRefreshingMeta = useAgentStore((s) => s.isRefreshingMeta);
+  const isRefreshingUsage = useAgentStore((s) => s.isRefreshingUsage);
+  const refreshBackendMetaStore = useAgentStore((s) => s.refreshBackendMeta);
+  const refreshAgentUsageStore = useAgentStore((s) => s.refreshAgentUsage);
+  const setBackendAgyConfig = useAgentStore((s) => s.setBackendAgyConfig);
 
   const refreshAgentUsage = useCallback(async () => {
-    const currentCfg = useAgentStore.getState().config;
-    const opts = {
-      apiEndpoint: currentCfg.apiEndpoint,
-      apiKey: currentCfg.apiKey,
-    };
-    setIsRefreshingUsage(true);
-    try {
-      if (!backendStatusRef.current) {
-        const health = await fetchAgentHealth(opts).catch(() => null);
-        if (health && health.agentReachable === false) {
-          setBackendError(health.agentError || "GemOps agent service is offline on server.");
-          return;
-        }
-      }
-      const usageRes = await fetchAgentUsage(opts);
-      setBackendUsage(usageRes);
-    } catch {
-      // keep previous usage if /agy/usage fails transiently
-    } finally {
-      setIsRefreshingUsage(false);
-    }
-  }, []);
-
-  const probeAndRefreshBackendMeta = useCallback(async (): Promise<boolean> => {
-    const currentCfg = useAgentStore.getState().config;
-    const opts = {
-      apiEndpoint: currentCfg.apiEndpoint,
-      apiKey: currentCfg.apiKey,
-    };
-    setIsRefreshingMeta(true);
-    try {
-      const health = await fetchAgentHealth(opts).catch(() => null);
-      if (health && health.agentReachable === false) {
-        setBackendStatus(null);
-        setBackendError(health.agentError || "GemOps agent service is offline on server.");
-        return false;
-      }
-
-      const [statusRes, infoRes, harnessesRes, promptsRes, agyCfgRes] =
-        await Promise.allSettled([
-          fetchAgentStatus(opts),
-          fetchAgentInfo(opts),
-          fetchAgentHarnesses(opts),
-          fetchAgentPrompts(opts),
-          fetchAgentAgyConfig(opts),
-        ]);
-
-      let firstErr: string | null = null;
-      if (statusRes.status === "fulfilled") {
-        setBackendStatus(statusRes.value);
-      } else {
-        setBackendStatus(null);
-        firstErr =
-          statusRes.reason instanceof Error
-            ? statusRes.reason.message
-            : "Status unavailable";
-      }
-      if (infoRes.status === "fulfilled") {
-        setBackendInfo(infoRes.value);
-        const liveModels = infoRes.value.models ?? [];
-        if (
-          liveModels.length > 0 &&
-          currentCfg.modelId &&
-          !liveModels.some((m) => m.id === currentCfg.modelId)
-        ) {
-          const store = useAgentStore.getState();
-          store.updateConfig({ modelId: "" });
-          store.setSessionModel(activeSessionIdRef.current, "");
-        }
-      } else if (!firstErr) {
-        firstErr =
-          infoRes.reason instanceof Error
-            ? infoRes.reason.message
-            : "Info unavailable";
-      }
-      if (harnessesRes.status === "fulfilled") {
-        setHarnesses(harnessesRes.value.items ?? []);
-      } else if (!firstErr) {
-        firstErr =
-          harnessesRes.reason instanceof Error
-            ? harnessesRes.reason.message
-            : "Harnesses unavailable";
-      }
-      if (promptsRes.status === "fulfilled") {
-        setBackendPrompts(
-          Array.isArray(promptsRes.value?.items) ? promptsRes.value.items : []
-        );
-      }
-      if (agyCfgRes.status === "fulfilled") {
-        setBackendAgyConfig(agyCfgRes.value);
-      }
-      setBackendError(firstErr);
-      return statusRes.status === "fulfilled";
-    } finally {
-      setIsRefreshingMeta(false);
-    }
-  }, []);
+    await refreshAgentUsageStore();
+  }, [refreshAgentUsageStore]);
 
   const refreshBackendMeta = useCallback(async (): Promise<void> => {
-    await probeAndRefreshBackendMeta();
-  }, [probeAndRefreshBackendMeta]);
+    await refreshBackendMetaStore({ force: true });
+  }, [refreshBackendMetaStore]);
 
+  const prevEndpointRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!hydrated) return;
+    const endpointChanged =
+      prevEndpointRef.current !== undefined &&
+      prevEndpointRef.current !== config.apiEndpoint;
+    prevEndpointRef.current = config.apiEndpoint;
+
+    const loadedAt = useAgentStore.getState().backendMetaLoadedAt;
+    const isFresh =
+      !endpointChanged &&
+      loadedAt !== null &&
+      Date.now() - loadedAt < 60_000 &&
+      useAgentStore.getState().backendInfo !== null;
+    if (isFresh) return;
+
     let cancelled = false;
-    void probeAndRefreshBackendMeta().then((reachable) => {
+    void refreshBackendMetaStore({ force: endpointChanged }).then((reachable) => {
       if (!cancelled && reachable) {
-        void refreshAgentUsage();
+        void refreshAgentUsageStore();
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [hydrated, config.apiEndpoint, probeAndRefreshBackendMeta, refreshAgentUsage]);
+  }, [hydrated, config.apiEndpoint, refreshBackendMetaStore, refreshAgentUsageStore]);
 
   const {
     messages,
@@ -1268,7 +1176,7 @@ export function useAgentRuntime() {
       setBackendAgyConfig(updated);
       return updated;
     },
-    []
+    [setBackendAgyConfig]
   );
 
   const executeAgyCommand = useCallback(
@@ -1276,7 +1184,7 @@ export function useAgentRuntime() {
       mode?: "slash" | "cli";
       command: string;
       harnessId?: string;
-    }): Promise<AgentCustomCommandResponse> => {
+    }) => {
       const currentCfg = useAgentStore.getState().config;
       return runAgentAgyCommand(
         {

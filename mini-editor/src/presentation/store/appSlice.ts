@@ -11,6 +11,14 @@ export type SidebarKey = "features" | "docs" | "series" | "demo" | "git";
  */
 export type Connectivity = "online" | "connection-lost" | "offline" | "reconnecting";
 
+export interface PreloadProgressState {
+  active: boolean;
+  total: number;
+  completed: number;
+  currentLabel: string;
+  lastCompletedAt: number | null;
+}
+
 interface AppState {
   theme: "light";
   sidebarOpen: boolean;
@@ -19,6 +27,7 @@ interface AppState {
   panelOpen: boolean;
   pageTitle: string;
   connectivity: Connectivity;
+  preload: PreloadProgressState;
 }
 
 const initialState: AppState = {
@@ -29,6 +38,13 @@ const initialState: AppState = {
   panelOpen: false,
   pageTitle: "Dashboard",
   connectivity: typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "online",
+  preload: {
+    active: false,
+    total: 0,
+    completed: 0,
+    currentLabel: "",
+    lastCompletedAt: null,
+  },
 };
 
 const appSlice = createSlice({
@@ -125,6 +141,33 @@ const appSlice = createSlice({
         }
       }
     },
+
+    // Background resource preload progress
+    startPreload(state, action: PayloadAction<{ total: number; currentLabel: string }>) {
+      state.preload = {
+        active: true,
+        total: action.payload.total,
+        completed: 0,
+        currentLabel: action.payload.currentLabel,
+        lastCompletedAt: state.preload.lastCompletedAt,
+      };
+    },
+
+    advancePreload(state, action: PayloadAction<{ completed: number; currentLabel: string }>) {
+      state.preload.active = true;
+      state.preload.completed = action.payload.completed;
+      state.preload.currentLabel = action.payload.currentLabel;
+    },
+
+    finishPreload(state) {
+      state.preload = {
+        active: false,
+        total: state.preload.total,
+        completed: state.preload.total,
+        currentLabel: "",
+        lastCompletedAt: Date.now(),
+      };
+    },
   },
 });
 
@@ -135,6 +178,7 @@ export const {
   setPageTitle,
   setConnectivity, connectionLost, goOffline, startReconnecting, backOnline,
   setOnline,
+  startPreload, advancePreload, finishPreload,
 } = appSlice.actions;
 
 export default appSlice.reducer;
@@ -151,3 +195,5 @@ export const selectConnectivity = (s: RootState): Connectivity => s.app.connecti
 
 export const selectIsOfflineMode = (s: RootState): boolean =>
   s.app.connectivity === "offline" || s.app.connectivity === "reconnecting";
+
+export const selectPreloadProgress = (s: RootState): PreloadProgressState => s.app.preload;

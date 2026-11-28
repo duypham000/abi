@@ -53,3 +53,51 @@
     color: #ffffff;
   }
 }
+
+.wsb-preload {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  opacity: 0.95;
+
+  &__label {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__bar {
+    width: 48px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.28);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  &__fill {
+    display: block;
+    height: 100%;
+    background: #ffffff;
+    border-radius: 999px;
+    transition: width 0.2s ease;
+  }
+
+  &--done {
+    color: #dcfce7;
+    opacity: 0.95;
+  }
+}
+
+.wsb-spin {
+  animation: wsb-rotate 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes wsb-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
